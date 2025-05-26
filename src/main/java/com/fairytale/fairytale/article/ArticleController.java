@@ -11,7 +11,7 @@ public class ArticleController {
 
     @GetMapping("/")
     String root() {
-        System.out.println("dd");
+        System.out.println("dqweqwe");
         return "/";
     }
 }
