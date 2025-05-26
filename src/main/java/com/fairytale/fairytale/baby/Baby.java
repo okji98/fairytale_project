@@ -1,5 +1,6 @@
-package com.fairytale.fairytale.dto;
+package com.fairytale.fairytale.baby;
 
+import com.fairytale.fairytale.users.Users;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -1,11 +1,12 @@
-package com.fairytale.fairytale.dto;
+package com.fairytale.fairytale.article;
 
+import com.fairytale.fairytale.like.Like;
+import com.fairytale.fairytale.users.Users;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.security.core.userdetails.User;
 
 import java.util.ArrayList;
 import java.util.List;

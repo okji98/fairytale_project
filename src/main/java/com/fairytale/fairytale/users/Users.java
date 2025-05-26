@@ -1,5 +1,10 @@
-package com.fairytale.fairytale.dto;
+package com.fairytale.fairytale.users;
 
+import com.fairytale.fairytale.article.Article;
+import com.fairytale.fairytale.baby.Baby;
+import com.fairytale.fairytale.like.Like;
+import com.fairytale.fairytale.role.Role;
+import com.fairytale.fairytale.story.Story;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
