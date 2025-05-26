@@ -57,7 +57,7 @@ class _AIStoryPageState extends State<AIStoryPage> {
     return Scaffold(
         appBar: AppBar(
           title: const Text('AI 동화 생성기'),
-          backgroundColor: const Color(0xFFCF9595),
+          backgroundColor: const Color(0xFFE59C9C),
         ),
         body: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
