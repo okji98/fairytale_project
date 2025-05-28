@@ -42,7 +42,10 @@ public class Story {
     private String voiceContent;
 
     @Column(length = 255, nullable = false)
-    private String image;
+    private String colorImage;
+
+    @Column(length = 255, nullable = false)
+    private String blackImage;
 
     @CreationTimestamp
     @Column(updatable = false)
