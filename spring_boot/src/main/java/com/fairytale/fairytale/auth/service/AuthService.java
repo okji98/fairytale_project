@@ -6,6 +6,8 @@ import com.fairytale.fairytale.users.UsersRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -13,6 +15,7 @@ public class AuthService {
     private final SessionAuthStrategy sessionAuthStrategy;
 
     public String login(String email, String password) {
+        LocalDateTime now = LocalDateTime.now();
         // 1. 이메일로 유저 조회 (Users 객체 받아오기)
         Users user = usersRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("유효하지 않은 email입니다."));
@@ -23,7 +26,7 @@ public class AuthService {
         }
 
         // 3. 세션 생성 메서드 호출해서 세션ID 받기
-        String sessionId = sessionAuthStrategy.authenticate(user);
+        String sessionId = sessionAuthStrategy.authenticate(user, Long.parseLong(String.valueOf(now)));
 
         // 4. 세션ID 반환
         return sessionId;

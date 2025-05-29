@@ -21,7 +21,7 @@ public class SessionAuthStrategy implements AuthStrategy {
     // 사용자가 이후에 게시글 보기같은 요청을 보낼 때 유저정보를 찾아오기 위해 담아둠.
     Map<String, String> sessionInfo = new ConcurrentHashMap<>();
 
-    public String authenticate(Users user) {
+    public String authenticate(Users user, Long durationMs) {
         if (user == null) {
             throw new RuntimeException("유저 정보 없음!");
         }

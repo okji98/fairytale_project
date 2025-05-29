@@ -3,6 +3,7 @@ package com.fairytale.fairytale.auth.controller;
 import com.fairytale.fairytale.auth.dto.OAuthLoginRequest;
 import com.fairytale.fairytale.auth.dto.TokenResponse;
 import com.fairytale.fairytale.auth.service.OAuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +16,33 @@ public class OAuthController {
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> socialLogin(@RequestBody OAuthLoginRequest request) {
-        TokenResponse tokenResponse = oauthService.loginWithOauth(request);
+        TokenResponse tokenResponse = oauthService.loginWithAuthorizationCode(request);
         return ResponseEntity.ok(tokenResponse);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(HttpServletRequest request) {
+        String token = resolveToken(request);
+        if (token != null) {
+            oauthService.logout(token);
+            return ResponseEntity.ok("로그아웃 성공");
+        }
+        return ResponseEntity.badRequest().body("토큰이 없습니다.");
+    }
+
+    // 토큰 갱신 추가
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponse> refreshToken(@RequestBody RefreshTokenRequest request) {
+        TokenResponse newTokens = oauthService.refreshTokens(request.getRefreshToken());
+        return ResponseEntity.ok(newTokens);
+    }
+
+    // Authorization 헤더에서 토큰 추출
+    private String resolveToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
     }
 }
