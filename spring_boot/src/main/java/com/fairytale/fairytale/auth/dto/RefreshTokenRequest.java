@@ -5,7 +5,6 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class OAuthLoginRequest {
-    private String provider;
-    private String authorizationCode;
+public class RefreshTokenRequest {
+    private String refreshToken;
 }

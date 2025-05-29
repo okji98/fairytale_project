@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 public class AuthContext {
     private final AuthStrategy strategy;
 
-    public String authenticate(Users user) {
-        return strategy.authenticate(user);
+    public String authenticate(Users user, Long durationMs) {
+        return strategy.authenticate(user, durationMs);
     }
 }

@@ -1,24 +1,36 @@
 package com.fairytale.fairytale.auth.strategy;
 
+import com.fairytale.fairytale.auth.dto.TokenResponse;
 import com.fairytale.fairytale.users.Users;
+import com.fairytale.fairytale.users.UsersRepository;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 
 @Component("jwtAuthStrategy") // 스프링 빈으로 등록
 @RequiredArgsConstructor
 public class JwtAuthStrategy implements AuthStrategy {
+    private final UsersRepository usersRepository;
+
     @Value("${jwt.secret}") // application.yml에서 jwt.secret 값 주입
     private String secretKeyString;
 
-    @Value("${jwt.expiration}") // application.yml에서 만료시간 주입
-    private Long expirationTimeMs;
+    @Value("${jwt.expiration}") // application.yml에서 accessToken 만료시간 주입
+    private Long accessTokenExpirationTimeMs;
+
+    @Value("${jwt.refresh-expiration}")
+    private Long refreshTokenExpirationMs;
 
     private Key key; // 실제 JWT 서명에 쓰일 key 객체
 
@@ -29,11 +41,18 @@ public class JwtAuthStrategy implements AuthStrategy {
         this.key = Keys.hmacShaKeyFor(secretKeyString.getBytes());
     }
 
+    public TokenResponse generateTokens(Users user) {
+        String accessToken = authenticate(user, accessTokenExpirationTimeMs);
+        String refreshToken = authenticate(user, refreshTokenExpirationMs);
+
+        return new TokenResponse(accessToken, refreshToken);
+    }
+
     // 로그인 후 토큰 발급 로직
     @Override
-    public String authenticate(Users username) {
+    public String authenticate(Users username, Long durationMs) {
         Date now = new Date(); // 현재 시간 생성
-        Date expiry = new Date(now.getTime() + expirationTimeMs); // 만료 시간 계산
+        Date expiry = new Date(now.getTime() + durationMs); // 만료 시간 계산
 
         return Jwts.builder()
                 .setSubject(username.getUsername()) // 토큰의 사용자명 설정
@@ -56,6 +75,16 @@ public class JwtAuthStrategy implements AuthStrategy {
         }
     }
 
+    // 3. 토큰으로부터 Authentication 객체 얻기
+    public Authentication getAuthentication(String token) {
+        String username = getUsername(token);
+        Optional<Users> userOpt = usersRepository.findByUsername(username);
+        Users user = userOpt.orElseThrow(() -> new RuntimeException("유저 없음"));
+
+        // Spring Security가 쓰는 UserDetails 객체로 변환
+        User principal = new User(user.getUsername(), "", /* 권한 리스트 */ List.of());
+        return new UsernamePasswordAuthenticationToken(principal, token, principal.getAuthorities());
+    }
 
     // 토큰에서 사용자 정보 추출 로직
     @Override
