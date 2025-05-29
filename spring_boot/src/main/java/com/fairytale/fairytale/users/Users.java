@@ -54,9 +54,6 @@ public class Users {
     @Column(unique = true, length = 100)
     private String kakaoId;
 
-    @Column(unique = true, length = 100)
-    private String appleId;
-
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
