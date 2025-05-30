@@ -29,7 +29,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/main", "/home", "/share").permitAll()
+                        .requestMatchers("/main", "/home", "/share", "/stories", "/coloring-list", "coloring", "/lullabies", "/not-profile").permitAll()
                         .requestMatchers("/oauth/login", "/oauth/refresh").permitAll() // 로그인, 토큰 갱신 허용
                         .requestMatchers("/oauth/logout").authenticated() // 로그아웃은 인증 필요
                         .anyRequest().authenticated()
