@@ -1,3 +1,4 @@
+import 'package:app/profile_screen.dart';
 import 'package:flutter/material.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -56,7 +57,14 @@ class HomeScreen extends StatelessWidget {
                             width: screenWidth * 0.06,
                             height: screenWidth * 0.06,
                           ),
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ProfileScreen(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
