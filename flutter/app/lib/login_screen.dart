@@ -165,7 +165,7 @@ class LoginScreen extends StatelessWidget {
                       GestureDetector(
                         onTap: () => _loginWithGoogle(context),
                         child: SizedBox(
-                          width: MediaQuery.of(context).size.width * 0.8,  // 80%로 통일
+                          width: MediaQuery.of(context).size.width * 0.83,  // 80%로 통일
                           height: 48,
                           child: Image.asset(
                             'assets/google_login.png',

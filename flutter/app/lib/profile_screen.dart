@@ -2,7 +2,37 @@
 import 'package:flutter/material.dart';
 import 'main.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
+  @override
+  _ProfileScreenState createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  // TODO: Spring Boot API에서 가져올 데이터 - 현재는 더미 데이터
+  String _profileImagePath = 'assets/myphoto.png';
+  String _userName = '동글이';
+  String _userEmail = 'donggeul@example.com';
+
+  @override
+  void initState() {
+    super.initState();
+    // TODO: Spring Boot API에서 사용자 데이터 불러오기
+    _loadUserData();
+  }
+
+  // TODO: Spring Boot API에서 사용자 데이터 불러오기
+  Future<void> _loadUserData() async {
+    // API 호출 예시:
+    // final response = await http.get(Uri.parse('$baseUrl/api/user/profile'));
+    // if (response.statusCode == 200) {
+    //   final userData = json.decode(response.body);
+    //   setState(() {
+    //     _userName = userData['name'] ?? '동글이';
+    //     _userEmail = userData['email'] ?? 'donggeul@example.com';
+    //     _profileImagePath = userData['profileImage'] ?? 'assets/myphoto.png';
+    //   });
+    // }
+  }
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -62,28 +92,30 @@ class ProfileScreen extends StatelessWidget {
                           height: screenWidth * 0.3,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                Color(0xFF9C7CB8),
-                                Color(0xFFB8A5D1),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                            border: Border.all(
+                              color: Color(0xFFECA666),
+                              width: 2.0, // 얇은 테두리
                             ),
                           ),
-                          child: Center(
+                          child: ClipOval(
                             child: Container(
-                              width: screenWidth * 0.2,
-                              height: screenWidth * 0.2,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFFFDB5A6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '👶',
-                                  style: TextStyle(fontSize: screenWidth * 0.1),
-                                ),
+                              width: screenWidth * 0.3,
+                              height: screenWidth * 0.3,
+                              child: Image.asset(
+                                _profileImagePath,
+                                fit: BoxFit.cover,
+                                // TODO: 이미지 로드 실패 시 기본 이미지 표시
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Color(0xFFFDB5A6),
+                                    child: Center(
+                                      child: Text(
+                                        '👶',
+                                        style: TextStyle(fontSize: screenWidth * 0.1),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
@@ -118,7 +150,7 @@ class ProfileScreen extends StatelessWidget {
 
                     // 이름
                     Text(
-                      '동글이',
+                      _userName,
                       style: TextStyle(
                         fontSize: screenWidth * 0.06,
                         fontWeight: FontWeight.bold,
@@ -130,7 +162,7 @@ class ProfileScreen extends StatelessWidget {
 
                     // 이메일
                     Text(
-                      'donggeul@example.com',
+                      _userEmail,
                       style: TextStyle(
                         fontSize: screenWidth * 0.04,
                         color: Colors.black54,
@@ -150,9 +182,13 @@ class ProfileScreen extends StatelessWidget {
                         context,
                         icon: Icons.person,
                         title: 'Profile details',
-                        onTap: () {
-                          // TODO: Profile details 화면으로 이동
-                          Navigator.pushNamed(context, '/profile-details');
+                        onTap: () async {
+                          // TODO: Profile details 화면으로 이동하고 결과 받기
+                          final result = await Navigator.pushNamed(context, '/profile-details');
+                          if (result == true) {
+                            // 프로필이 수정되었으면 데이터 다시 로드
+                            _loadUserData();
+                          }
                         },
                       ),
 
@@ -318,15 +354,43 @@ class ProfileScreen extends StatelessWidget {
 
   // TODO: 카메라 촬영 기능 구현
   void _pickImageFromCamera() {
-    // image_picker 패키지 사용하여 카메라 촬영 구현 예정
+    // image_picker 패키지와 Spring Boot API 연동
+    // final picker = ImagePicker();
+    // final pickedFile = await picker.pickImage(source: ImageSource.camera);
+    // if (pickedFile != null) {
+    //   await _uploadImage(File(pickedFile.path));
+    // }
     print('카메라로 사진 촬영');
   }
 
   // TODO: 갤러리 선택 기능 구현
   void _pickImageFromGallery() {
-    // image_picker 패키지 사용하여 갤러리 선택 구현 예정
+    // image_picker 패키지와 Spring Boot API 연동
+    // final picker = ImagePicker();
+    // final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    // if (pickedFile != null) {
+    //   await _uploadImage(File(pickedFile.path));
+    // }
     print('갤러리에서 사진 선택');
   }
+
+  // TODO: Spring Boot API로 이미지 업로드
+  // Future<void> _uploadImage(File imageFile) async {
+  //   final request = http.MultipartRequest(
+  //     'POST',
+  //     Uri.parse('$baseUrl/api/user/profile/image'),
+  //   );
+  //   request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+  //
+  //   final response = await request.send();
+  //   if (response.statusCode == 200) {
+  //     final responseData = await response.stream.bytesToString();
+  //     final result = json.decode(responseData);
+  //     setState(() {
+  //       _profileImagePath = result['imageUrl'];
+  //     });
+  //   }
+  // }
 
   void _showLogoutDialog(BuildContext context) {
     showDialog(
