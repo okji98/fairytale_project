@@ -1,42 +1,21 @@
 // lib/main.dart
-import 'package:app/profile_details_screen.dart';
-import 'package:app/profile_screen.dart';
-import 'package:app/settings_screen.dart';
-import 'package:app/stories_screen.dart';
-import 'package:app/support_screen.dart';
+import 'package:app/screens/share/share_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart'; // Google Fonts 패키지 추가
+import 'package:google_fonts/google_fonts.dart';
 
-import 'coloring_screen.dart';
-import 'contacts_screen.dart';
-import 'onboarding_screen.dart';
-import 'login_screen.dart';
-import 'child_info_screen.dart';
-import 'home_screen.dart';
-
-// pubspec.yaml에 추가할 것들:
-// dependencies:
-//   google_fonts: ^6.1.0
-//
-// flutter:
-//   assets:
-//     - assets/bg_image.png
-//     - assets/bg_login.png
-//     - assets/bear.png
-//     - assets/book_bear.png
-//     - assets/kakao_icon.png
-//     - assets/google_icon.png
-//     - assets/stories_icon.png
-//     - assets/coloring_icon.png
-//     - assets/share_icon.png
-//     - assets/lullabies_icon.png
-//     - assets/myphoto.png
-//     - assets/logo.png
-//     - assets/rabbit.png
-//     - assets/profile_icon.png
-//     - assets/love.png
-//     - assets/cloud.png
-//     - assets/coloring_bear.png
+// Screens
+import 'screens/auth/onboarding_screen.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/child_info_screen.dart';
+import 'screens/home/home_screen.dart';
+import 'screens/stories/stories_screen.dart';
+import 'screens/coloring/coloring_screen.dart';
+import 'screens/profile/profile_screen.dart';
+import 'screens/profile/profile_details_screen.dart';
+import 'screens/profile/settings_screen.dart';
+import 'screens/profile/contacts_screen.dart';
+import 'screens/profile/support_screen.dart';
+import 'screens/lullaby/lullaby_screen.dart'; // 자장가 화면 import 추가
 
 void main() {
   runApp(MyApp());
@@ -206,10 +185,10 @@ class MyApp extends StatelessWidget {
         '/settings': (context) => SettingsScreen(),
         '/contacts': (context) => ContactsScreen(),
         '/support': (context) => SupportScreen(),
-        // TODO: 추가 필요한 라우트들
         '/coloring': (context) => ColoringScreen(),
-        '/share': (context) => Container(),    // ShareScreen(),
-        '/lullabies': (context) => Container(), // LullabiesScreen(),
+        '/share': (context) => ShareScreen(),
+        '/lullaby': (context) => LullabyScreen(), // 자장가 라우트 추가
+        // TODO: 추가 필요한 라우트들
       },
     );
   }

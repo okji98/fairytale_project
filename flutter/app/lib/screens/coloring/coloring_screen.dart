@@ -1,8 +1,11 @@
 // lib/coloring_screen.dart
-import 'package:flutter/material.dart';
+
 import 'dart:ui' as ui;
 import 'dart:typed_data';
-import 'main.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+
+import '../../main.dart';
 
 class ColoringScreen extends StatefulWidget {
   @override

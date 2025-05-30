@@ -1,6 +1,8 @@
 // lib/contacts_screen.dart
 import 'package:flutter/material.dart';
-import 'main.dart';
+
+import '../../main.dart';
+
 
 class ContactsScreen extends StatelessWidget {
   @override

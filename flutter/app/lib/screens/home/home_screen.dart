@@ -1,5 +1,6 @@
-import 'package:app/profile_screen.dart';
 import 'package:flutter/material.dart';
+
+import '../profile/profile_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -100,7 +101,11 @@ class HomeScreen extends StatelessWidget {
                           child: SizedBox(
                             height: cardHeight,
                             child: SquareCard(
-                              color: const Color(0xFF8E97FD),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF8E97FD), Color(0xFF6B73FF)], // ⭐ 보라색 그라데이션
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               iconPath: 'assets/rabbit.png',
                               iconSize: iconSizeLarge,
                               iconTopOffset: -iconSizeLarge / 3, // 더 작게 조정
@@ -116,7 +121,11 @@ class HomeScreen extends StatelessWidget {
                           child: SizedBox(
                             height: cardHeight,
                             child: SquareCard(
-                              color: const Color(0xFFFFD3A8),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFFD3A8), Color(0xFFFFB84D)], // ⭐ 오렌지색 그라데이션
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               iconPath: 'assets/coloring_bear.png',
                               iconSize: iconSizeSmall,
                               iconTopOffset: -iconSizeSmall / 3, // 더 작게 조정
@@ -139,7 +148,11 @@ class HomeScreen extends StatelessWidget {
                     child: SizedBox(
                       height: screenHeight * 0.12, // 10% -> 12%로 증가
                       child: WideCard(
-                        color: const Color(0xFFFF9F8D),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF9F8D), Color(0xFFFF6B9D)], // ⭐ 핑크-코랄 그라데이션
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         iconPath: 'assets/love.png',
                         title: '우리의 기록일지',
                         subtitle: '사랑스러운 동화, 함께 나눠요',
@@ -160,11 +173,15 @@ class HomeScreen extends StatelessWidget {
                     child: SizedBox(
                       height: screenHeight * 0.12, // 10% -> 12%로 증가 (우리의 기록일지와 동일)
                       child: DarkCard(
-                        color: const Color(0xFF555B6E),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF555B6E), Color(0xFF3A4160)], // ⭐ 다크 블루 그라데이션
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         iconPath: 'assets/cloud.png',
                         title: 'Sleep Music',
                         subtitle: '마음을 편안하게 해주는 수면 음악',
-                        onPressed: () => Navigator.pushNamed(context, '/lullabies'),
+                        onPressed: () => Navigator.pushNamed(context, '/lullaby'),
                         iconSize: cloudIconSize,
                         iconTopOffset: -cloudIconSize / 3, // 더 작게 조정
                         iconRightOffset: cloudIconRightOffset,
@@ -186,7 +203,7 @@ class HomeScreen extends StatelessWidget {
         selectedItemColor: const Color(0xFFF6B756),
         unselectedItemColor: const Color(0xFF9E9E9E),
         onTap: (index) {
-          final routes = ['/home', '/stories', '/coloring', '/share', '/lullabies'];
+          final routes = ['/home', '/stories', '/coloring', '/share', '/lullaby'];
           Navigator.pushReplacementNamed(context, routes[index]);
         },
         items: const [
@@ -201,9 +218,9 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// 카드 위젯 (전체 클릭 가능하고 START 버튼도 유지)
+/// 카드 위젯 (전체 클릭 가능하고 START 버튼도 유지) - ⭐ 그라데이션 적용
 class SquareCard extends StatelessWidget {
-  final Color color;
+  final LinearGradient gradient; // ⭐ Color -> LinearGradient로 변경
   final String iconPath;
   final String title;
   final String subtitle;
@@ -213,7 +230,7 @@ class SquareCard extends StatelessWidget {
   final Alignment buttonAlignment;
 
   const SquareCard({
-    required this.color,
+    required this.gradient, // ⭐ color -> gradient로 변경
     required this.iconPath,
     required this.title,
     required this.subtitle,
@@ -237,13 +254,13 @@ class SquareCard extends StatelessWidget {
                 top: iconTopOffset + iconSize / 2,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: color,
+                    gradient: gradient, // ⭐ 그라데이션 적용
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
+                        color: Colors.black.withOpacity(0.15), // ⭐ 그림자 강화
+                        blurRadius: 12, // ⭐ 블러 반경 증가
+                        offset: Offset(0, 6), // ⭐ 오프셋 증가
                       ),
                     ],
                   ),
@@ -289,14 +306,14 @@ class SquareCard extends StatelessWidget {
                                 horizontal: 16, // 24 -> 16으로 축소
                                 vertical: 6 // 8 -> 6으로 축소
                             ),
-                            elevation: 0,
+                            elevation: 2, // ⭐ 버튼에도 약간의 그림자
                             minimumSize: const Size(0, 0),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           child: Text(
                               'START',
                               style: TextStyle(
-                                color: color,
+                                color: gradient.colors.first, // ⭐ 그라데이션 첫 번째 색상 사용
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12, // 폰트 크기 명시
                               )
@@ -328,9 +345,9 @@ class SquareCard extends StatelessWidget {
   }
 }
 
-/// 넓은 배너 카드 (전체 클릭 가능하도록 개선)
+/// 넓은 배너 카드 (전체 클릭 가능하도록 개선) - ⭐ 그라데이션 적용
 class WideCard extends StatelessWidget {
-  final Color color;
+  final LinearGradient gradient; // ⭐ Color -> LinearGradient로 변경
   final String iconPath;
   final String title;
   final String subtitle;
@@ -341,7 +358,7 @@ class WideCard extends StatelessWidget {
   final double iconLeftOffset;
 
   const WideCard({
-    required this.color,
+    required this.gradient, // ⭐ color -> gradient로 변경
     required this.iconPath,
     required this.title,
     required this.subtitle,
@@ -364,13 +381,13 @@ class WideCard extends StatelessWidget {
             top: iconTopOffset + iconSize / 2,
             child: Container(
               decoration: BoxDecoration(
-                color: color,
+                gradient: gradient, // ⭐ 그라데이션 적용
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
+                    color: Colors.black.withOpacity(0.15), // ⭐ 그림자 강화
+                    blurRadius: 12, // ⭐ 블러 반경 증가
+                    offset: Offset(0, 6), // ⭐ 오프셋 증가
                   ),
                 ],
               ),
@@ -420,14 +437,14 @@ class WideCard extends StatelessWidget {
                           horizontal: 16, // 24 -> 16으로 축소
                           vertical: 6 // 8 -> 6으로 축소
                       ),
-                      elevation: 0,
+                      elevation: 2, // ⭐ 버튼에도 약간의 그림자
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: Text(
                       buttonText,
                       style: TextStyle(
-                        color: color,
+                        color: gradient.colors.first, // ⭐ 그라데이션 첫 번째 색상 사용
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -453,9 +470,9 @@ class WideCard extends StatelessWidget {
   }
 }
 
-/// 다크 배너 카드 (전체 클릭 가능하도록 개선)
+/// 다크 배너 카드 (전체 클릭 가능하도록 개선) - ⭐ 그라데이션 적용
 class DarkCard extends StatelessWidget {
-  final Color color;
+  final LinearGradient gradient; // ⭐ Color -> LinearGradient로 변경
   final String iconPath;
   final String title;
   final String subtitle;
@@ -466,7 +483,7 @@ class DarkCard extends StatelessWidget {
   final bool showButton;
 
   const DarkCard({
-    required this.color,
+    required this.gradient, // ⭐ color -> gradient로 변경
     required this.iconPath,
     required this.title,
     required this.subtitle,
@@ -489,13 +506,13 @@ class DarkCard extends StatelessWidget {
             top: iconTopOffset + iconSize / 2,
             child: Container(
               decoration: BoxDecoration(
-                color: color,
+                gradient: gradient, // ⭐ 그라데이션 적용
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
+                    color: Colors.black.withOpacity(0.15), // ⭐ 그림자 강화
+                    blurRadius: 12, // ⭐ 블러 반경 증가
+                    offset: Offset(0, 6), // ⭐ 오프셋 증가
                   ),
                 ],
               ),
@@ -545,14 +562,14 @@ class DarkCard extends StatelessWidget {
                             horizontal: 16, // 24 -> 16으로 축소
                             vertical: 6 // 8 -> 6으로 축소
                         ),
-                        elevation: 0,
+                        elevation: 2, // ⭐ 버튼에도 약간의 그림자
                         minimumSize: const Size(0, 0),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: Text(
                         'START',
                         style: TextStyle(
-                          color: color,
+                          color: gradient.colors.first, // ⭐ 그라데이션 첫 번째 색상 사용
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),

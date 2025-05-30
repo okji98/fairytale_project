@@ -1,6 +1,6 @@
 // lib/stories_screen.dart
 import 'package:flutter/material.dart';
-import 'main.dart'; // For BaseScaffold
+import '../../main.dart';
 
 class StoriesScreen extends StatefulWidget {
   @override
