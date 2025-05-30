@@ -13,7 +13,7 @@ class HomeScreen extends StatelessWidget {
     final cardHeight = screenHeight * 0.22; // 25% -> 22%로 줄임
     final iconSizeLarge = screenWidth * 0.25; // 35% -> 25%로 줄임
     final iconSizeSmall = screenWidth * 0.22; // 30% -> 22%로 줄임
-    final topLogoHeight = screenHeight * 0.20; // 12% -> 15%로 증가 (로고 크기 증가)
+    final topLogoHeight = screenHeight * 0.28; // 20% -> 28%로 크게 증가 (로고 크기 더 증가)
     final loveIconLeftOffset = screenWidth * 0.75; // 80% -> 75%로 조정
     final cloudIconSize = screenWidth * 0.20; // 25% -> 20%로 줄임
     final cloudIconRightOffset = screenWidth * 0.15; // 5% -> 15%로 증가 (더 왼쪽으로)
@@ -201,7 +201,7 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// 카드 위젯
+/// 카드 위젯 (전체 클릭 가능하고 START 버튼도 유지)
 class SquareCard extends StatelessWidget {
   final Color color;
   final String iconPath;
@@ -228,96 +228,107 @@ class SquareCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              top: iconTopOffset + iconSize / 2,
-              child: Container(
-                decoration: BoxDecoration(
+        return GestureDetector(
+          onTap: onPressed, // 카드 전체 클릭 가능
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                top: iconTopOffset + iconSize / 2,
+                child: Container(
+                  decoration: BoxDecoration(
                     color: color,
-                    borderRadius: BorderRadius.circular(16)
-                ),
-                padding: EdgeInsets.fromLTRB(12, iconSize / 2 + 4, 12, 12), // 상단 패딩을 12에서 4로 줄임
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                          fontSize: 16, // 텍스트가 안짤리도록 크기 유지
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
                       ),
-                      overflow: TextOverflow.visible, // 짤림 방지
-                      softWrap: true,
-                    ),
-                    const SizedBox(height: 2), // 4에서 2로 줄임
-                    Expanded(
-                      child: Text(
-                        subtitle,
+                    ],
+                  ),
+                  padding: EdgeInsets.fromLTRB(12, iconSize / 2 - 4, 12, 12), // 상단 패딩을 더 줄여서 글씨를 위로
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
                         style: const TextStyle(
-                            fontSize: 11, // 10 -> 11로 약간 증가
-                            color: Colors.white70
+                            fontSize: 16, // 텍스트가 안짤리도록 크기 유지
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white
                         ),
                         overflow: TextOverflow.visible, // 짤림 방지
                         softWrap: true,
-                        maxLines: 2, // 3에서 2로 다시 줄임
                       ),
-                    ),
-                    const SizedBox(height: 4), // 8에서 4로 줄임
-                    Align(
-                      alignment: buttonAlignment,
-                      child: ElevatedButton(
-                        onPressed: onPressed,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, // 24 -> 16으로 축소
-                              vertical: 6 // 8 -> 6으로 축소
-                          ),
-                          elevation: 0,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
+                      const SizedBox(height: 2), // 4에서 2로 줄임
+                      Expanded(
                         child: Text(
-                            'START',
-                            style: TextStyle(
-                              color: color,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12, // 폰트 크기 명시
-                            )
+                          subtitle,
+                          style: const TextStyle(
+                              fontSize: 11, // 10 -> 11로 약간 증가
+                              color: Colors.white70
+                          ),
+                          overflow: TextOverflow.visible, // 짤림 방지
+                          softWrap: true,
+                          maxLines: 2, // 3에서 2로 다시 줄임
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4), // 8에서 4로 줄임
+                      // START 버튼 복원
+                      Align(
+                        alignment: buttonAlignment,
+                        child: ElevatedButton(
+                          onPressed: onPressed,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, // 24 -> 16으로 축소
+                                vertical: 6 // 8 -> 6으로 축소
+                            ),
+                            elevation: 0,
+                            minimumSize: const Size(0, 0),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                              'START',
+                              style: TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12, // 폰트 크기 명시
+                              )
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              top: iconTopOffset,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Image.asset(
-                    iconPath,
-                    width: iconSize,
-                    height: iconSize,
-                    fit: BoxFit.contain
+              Positioned(
+                top: iconTopOffset,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Image.asset(
+                      iconPath,
+                      width: iconSize,
+                      height: iconSize,
+                      fit: BoxFit.contain
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
   }
 }
 
-/// 넓은 배너 카드
+/// 넓은 배너 카드 (전체 클릭 가능하도록 개선)
 class WideCard extends StatelessWidget {
   final Color color;
   final String iconPath;
@@ -344,94 +355,105 @@ class WideCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          top: iconTopOffset + iconSize / 2,
-          child: Container(
-            decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: onPressed, // 카드 전체 클릭 가능
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            top: iconTopOffset + iconSize / 2,
+            child: Container(
+              decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(16)
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // vertical 패딩 추가
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 15, // 14 -> 15로 증가
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // vertical 패딩 추가
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 15, // 14 -> 15로 증가
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          overflow: TextOverflow.visible, // 짤림 방지
+                          softWrap: true,
                         ),
-                        overflow: TextOverflow.visible, // 짤림 방지
-                        softWrap: true,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 11, // 10 -> 11로 증가
-                          color: Colors.white70,
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 11, // 10 -> 11로 증가
+                            color: Colors.white70,
+                          ),
+                          overflow: TextOverflow.visible, // 짤림 방지
+                          softWrap: true,
+                          maxLines: 2,
                         ),
-                        overflow: TextOverflow.visible, // 짤림 방지
-                        softWrap: true,
-                        maxLines: 2,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // START 버튼 복원
+                  ElevatedButton(
+                    onPressed: onPressed,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: onPressed,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, // 24 -> 16으로 축소
+                          vertical: 6 // 8 -> 6으로 축소
+                      ),
+                      elevation: 0,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, // 24 -> 16으로 축소
-                        vertical: 6 // 8 -> 6으로 축소
-                    ),
-                    elevation: 0,
-                    minimumSize: const Size(0, 0),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    buttonText,
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12, // 폰트 크기 명시
+                    child: Text(
+                      buttonText,
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        Positioned(
-          top: iconTopOffset,
-          left: iconLeftOffset,
-          child: Image.asset(
-            iconPath,
-            width: iconSize,
-            height: iconSize,
-            fit: BoxFit.contain,
+          Positioned(
+            top: iconTopOffset,
+            left: iconLeftOffset,
+            child: Image.asset(
+              iconPath,
+              width: iconSize,
+              height: iconSize,
+              fit: BoxFit.contain,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// 다크 배너 카드
+/// 다크 배너 카드 (전체 클릭 가능하도록 개선)
 class DarkCard extends StatelessWidget {
   final Color color;
   final String iconPath;
@@ -458,91 +480,101 @@ class DarkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          top: iconTopOffset + iconSize / 2,
-          child: Container(
-            decoration: BoxDecoration(
+    return GestureDetector(
+      onTap: onPressed, // 카드 전체 클릭 가능
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            top: iconTopOffset + iconSize / 2,
+            child: Container(
+              decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(16)
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // vertical 패딩 추가
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 15, // 14 -> 15로 증가
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        overflow: TextOverflow.visible, // 짤림 방지
-                        softWrap: true,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 11, // 10 -> 11로 증가
-                          color: Colors.white70,
-                        ),
-                        overflow: TextOverflow.visible, // 짤림 방지
-                        softWrap: true,
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-                ),
-                if (showButton) ...[
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: onPressed,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, // 24 -> 16으로 축소
-                          vertical: 6 // 8 -> 6으로 축소
-                      ),
-                      elevation: 0,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      'START',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12, // 폰트 크기 명시
-                      ),
-                    ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
                   ),
                 ],
-              ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // vertical 패딩 추가
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 15, // 14 -> 15로 증가
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          overflow: TextOverflow.visible, // 짤림 방지
+                          softWrap: true,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 11, // 10 -> 11로 증가
+                            color: Colors.white70,
+                          ),
+                          overflow: TextOverflow.visible, // 짤림 방지
+                          softWrap: true,
+                          maxLines: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (showButton) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: onPressed,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, // 24 -> 16으로 축소
+                            vertical: 6 // 8 -> 6으로 축소
+                        ),
+                        elevation: 0,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'START',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
-        ),
-        Positioned(
-          top: iconTopOffset,
-          right: iconRightOffset,
-          child: Image.asset(
-            iconPath,
-            width: iconSize,
-            height: iconSize,
-            fit: BoxFit.contain,
+          Positioned(
+            top: iconTopOffset,
+            right: iconRightOffset,
+            child: Image.asset(
+              iconPath,
+              width: iconSize,
+              height: iconSize,
+              fit: BoxFit.contain,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
