@@ -2,7 +2,7 @@ import 'dart:convert';                         // jsonEncode, jsonDecode 사용
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;      // add http: ^0.13.0 in pubspec.yaml
-import 'package:app/social_button.dart';
+import 'package:app/widgets/common/social_button.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});

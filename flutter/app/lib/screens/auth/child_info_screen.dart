@@ -1,6 +1,6 @@
 // lib/child_info_screen.dart
 import 'package:flutter/material.dart';
-import 'main.dart'; // Provides BaseScaffold
+import '../../main.dart';
 
 class ChildInfoScreen extends StatefulWidget {
   @override

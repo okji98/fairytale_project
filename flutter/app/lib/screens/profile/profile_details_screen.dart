@@ -1,6 +1,8 @@
 // lib/profile_details_screen.dart
 import 'package:flutter/material.dart';
-import 'main.dart';
+
+import '../../main.dart';
+
 
 class ProfileDetailsScreen extends StatefulWidget {
   @override

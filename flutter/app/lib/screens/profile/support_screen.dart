@@ -1,6 +1,8 @@
 // lib/support_screen.dart
 import 'package:flutter/material.dart';
-import 'main.dart';
+
+import '../../main.dart';
+
 
 class SupportScreen extends StatelessWidget {
   @override
