@@ -7,5 +7,5 @@ import lombok.Setter;
 @Setter
 public class OAuthLoginRequest {
     private String provider;
-    private String authorizationCode;
+    private String accessToken;
 }

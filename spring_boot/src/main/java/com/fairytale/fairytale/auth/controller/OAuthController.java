@@ -1,6 +1,7 @@
 package com.fairytale.fairytale.auth.controller;
 
 import com.fairytale.fairytale.auth.dto.OAuthLoginRequest;
+import com.fairytale.fairytale.auth.dto.RefreshTokenRequest;
 import com.fairytale.fairytale.auth.dto.TokenResponse;
 import com.fairytale.fairytale.auth.service.OAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,7 +17,10 @@ public class OAuthController {
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> socialLogin(@RequestBody OAuthLoginRequest request) {
-        TokenResponse tokenResponse = oauthService.loginWithAuthorizationCode(request);
+        System.out.println("🚀 로그인 요청 - Provider: " + request.getProvider());
+        System.out.println("🚀 액세스 토큰 앞 20자: " + request.getAccessToken().substring(0, Math.min(20, request.getAccessToken().length())));
+
+        TokenResponse tokenResponse = oauthService.loginWithAccessToken(request);
         return ResponseEntity.ok(tokenResponse);
     }
 

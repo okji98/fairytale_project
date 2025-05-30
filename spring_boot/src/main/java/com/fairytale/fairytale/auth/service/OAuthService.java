@@ -21,46 +21,38 @@ import org.springframework.web.client.RestTemplate;
 @Service
 @RequiredArgsConstructor
 public class OAuthService {
+    private final RestTemplate restTemplate;
     private final UsersRepository usersRepository;
     private final JwtAuthStrategy jwtAuthStrategy;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Value("${spring.security.oauth2.client.provider.kakao.user-info-uri}")
     private String kakaoUserInfoUri;
     @Value("${spring.security.oauth2.client.provider.google.user-info-uri}")
     private String googleUserInfoUri;
+    @Value("${spring.security.oauth2.client.registration.kakao.redirect-uri}")
+    private String kakaoUserRedirectUri;
+    @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
+    private String googleUserRedirectUri;
     @Value("${spring.security.oauth2.client.registration.kakao.client-id}")
     private String kakaoClientId;
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
-    @Value("${spring.security.oauth2.client.provider.client-secret}")
+    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
     private String googleClientSecret;
 
     @Transactional
-    public TokenResponse loginWithAuthorizationCode(OAuthLoginRequest request) {
-        // 1. 소셜 provider로부터 AccessToken 얻기
-        String socialAccessToken = getAccessTokenFromProvider(request.getProvider(), request.getAuthorizationCode());
-        // 2. AccessToken으로 사용자 정보 가져오기
-        Users user = getUserInfoFromProvider(request.getProvider(), socialAccessToken);
-        // 3. DB에 사용자 정보 저장 or 업데이트
+    public TokenResponse loginWithAccessToken(OAuthLoginRequest request) {
+        // 클라이언트가 보낸 accessToken으로 바로 유저 정보 조회
+        Users user = getUserInfoFromProvider(request.getProvider(), request.getAccessToken());
+        // 사용자 DB에 저장 또는 업데이트
         Users savedUser = saveOrUpdateUser(user);
-        // 4. JWT 발급
+        // JWT 토큰 발급
         TokenResponse tokens = jwtAuthStrategy.generateTokens(savedUser);
-        // 5. Refresh Token 저장
+        // RefreshToken 저장
         refreshTokenRepository.save(new RefreshToken(savedUser.getId(), tokens.getRefreshToken()));
-
         return tokens;
-    }
-
-    private String getAccessTokenFromProvider(String provider, String authorizationCode) {
-        if (provider.equalsIgnoreCase("kakao")) {
-            return getKakaoAccessToken(authorizationCode);
-        } else if (provider.equalsIgnoreCase("google")) {
-            return getGoogleAccessToken(authorizationCode);
-        } else {
-            throw new IllegalArgumentException("지원하지 않는 provider: " + provider);
-        }
     }
 
     private Users getUserInfoFromProvider(String provider, String accessToken) {
@@ -68,68 +60,30 @@ public class OAuthService {
         headers.setBearerAuth(accessToken);
         HttpEntity<String> entity = new HttpEntity<>(headers);
 
-        String uri = "";
-        if ("kakao".equals(provider)) uri = kakaoUserInfoUri;
-        else if ("google".equals(provider)) uri = googleUserInfoUri;
-        else throw new IllegalArgumentException("지원하지 않는 소셜 로그인 제공자입니다.");
+        String uri;
+        if ("kakao".equalsIgnoreCase(provider)) {
+            uri = kakaoUserInfoUri;
+        } else if ("google".equalsIgnoreCase(provider)) {
+            uri = googleUserInfoUri;
+        } else {
+            throw new IllegalArgumentException("지원하지 않는 소셜 로그인 제공자입니다.");
+        }
 
         ResponseEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
 
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
-            if ("kakao".equals(provider)) {
+
+            if ("kakao".equalsIgnoreCase(provider)) {
                 return parseKakaoUser(root);
-            } else if ("google".equals(provider)) {
+            } else if ("google".equalsIgnoreCase(provider)) {
                 return parseGoogleUser(root);
             }
         } catch (Exception e) {
             throw new RuntimeException(provider + " 사용자 정보 파싱 실패", e);
         }
+
         throw new IllegalStateException("사용자 정보 파싱 실패");
-    }
-
-    private String getKakaoAccessToken(String authorizationCode) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("client_id", kakaoClientId);
-        body.add("redirect_uri", kakaoUserInfoUri);
-        body.add("code", authorizationCode);
-
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = restTemplate.postForEntity("https://kauth.kakao.com/oauth/token", request, String.class);
-
-        try {
-            JsonNode json = objectMapper.readTree(response.getBody());
-            return json.get("access_token").asText();
-        } catch (Exception e) {
-            throw new RuntimeException("카카오 access token 요청 실패", e);
-        }
-    }
-
-
-    private String getGoogleAccessToken(String authorizationCode) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("client_id", googleClientId);
-        body.add("client_secret", googleClientSecret);
-        body.add("redirect_uri", googleUserInfoUri);
-        body.add("code", authorizationCode);
-
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = restTemplate.postForEntity("https://oauth2.googleapis.com/token", request, String.class);
-
-        try {
-            JsonNode json = objectMapper.readTree(response.getBody());
-            return json.get("access_token").asText();
-        } catch (Exception e) {
-            throw new RuntimeException("구글 access token 요청 실패", e);
-        }
     }
 
     private Users parseKakaoUser(JsonNode root) {
