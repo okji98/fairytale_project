@@ -68,7 +68,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
                   ),
                   Positioned(
                     top:20,
-                    right: 16,
+                    right: -18,
                     child: Image.asset(
                       'assets/rabbit.png', // 토끼 이미지
                       width: 150,

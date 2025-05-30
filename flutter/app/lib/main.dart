@@ -1,7 +1,12 @@
 // lib/main.dart
+import 'package:app/profile_details_screen.dart';
+import 'package:app/profile_screen.dart';
+import 'package:app/settings_screen.dart';
 import 'package:app/stories_screen.dart';
+import 'package:app/support_screen.dart';
 import 'package:flutter/material.dart';
 
+import 'contacts_screen.dart';
 import 'onboarding_screen.dart';
 import 'login_screen.dart';
 import 'child_info_screen.dart';
@@ -84,6 +89,11 @@ class MyApp extends StatelessWidget {
         '/childInfo': (context) => ChildInfoScreen(),
         '/home': (context) => HomeScreen(),
         '/stories':    (ctx) => StoriesScreen(),
+        '/profile': (context) => ProfileScreen(),
+        '/profile-details': (context) => ProfileDetailsScreen(),
+        '/settings': (context) => SettingsScreen(),
+        '/contacts': (context) => ContactsScreen(),
+        '/support': (context) => SupportScreen(),
       },
     );
   }
