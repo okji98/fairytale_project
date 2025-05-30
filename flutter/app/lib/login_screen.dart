@@ -61,6 +61,11 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
+  // 3) 테스트용 홈화면 이동 함수
+  void _navigateToHome(BuildContext context) {
+    Navigator.pushReplacementNamed(context, '/home');
+  }
+
   // ────────────────────────────────────────────
   // 예시용 시뮬레이션 & 에러 다이얼로그
   // ────────────────────────────────────────────
@@ -165,6 +170,28 @@ class LoginScreen extends StatelessWidget {
                           child: Image.asset(
                             'assets/google_login.png',
                             fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // 테스트용 홈화면 이동 버튼
+                      ElevatedButton(
+                        onPressed: () => _navigateToHome(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.brown,
+                          foregroundColor: Colors.white,
+                          minimumSize: Size(MediaQuery.of(context).size.width * 0.8, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: const Text(
+                          '홈화면 test 이동',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
