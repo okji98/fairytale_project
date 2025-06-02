@@ -249,125 +249,34 @@ class LoginScreen extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // 테스트용 홈화면 이동 버튼
-                  ElevatedButton(
-                    onPressed: () => _navigateToHome(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.brown,
-                      foregroundColor: Colors.white,
-                      minimumSize: Size(MediaQuery.of(context).size.width * 0.8, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                    child: const Text(
-                      '홈화면 test 이동 (개발용)',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  // 🆕 간단한 홈화면 이동 버튼 (로그 없이)
+              // 🆕 가짜 로그인 상태 저장 후 홈화면 이동 버튼
+              ElevatedButton(
+                onPressed: () async {
+                  // 🆕 개발용: 가짜 로그인 상태 저장
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('is_logged_in', true);
+                  await prefs.setString('access_token', 'fake-token-for-testing');
+
+                  Navigator.pushReplacementNamed(context, '/home');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.brown,
+                  foregroundColor: Colors.white,
+                  minimumSize: Size(MediaQuery.of(context).size.width * 0.8, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
                   ),
-
-                  const SizedBox(height: 12),
-
-                  // ⭐ 디버깅용 버튼들 추가
-                  Column(
-                    children: [
-                      // 서버 연결 테스트
-                      ElevatedButton(
-                        onPressed: () async {
-                          print('🔍 서버 연결 테스트 시작');
-                          try {
-                            final dio = Dio();
-                            final response = await dio.post(
-                              'http://10.0.2.2:8080/oauth/login',
-                              data: {
-                                'provider': 'test',
-                                'accessToken': 'test-token'
-                              },
-                              options: Options(
-                                headers: {'Content-Type': 'application/json'},
-                                sendTimeout: Duration(seconds: 5),
-                                receiveTimeout: Duration(seconds: 5),
-                              ),
-                            );
-                            print('✅ 서버 연결 성공 - 상태코드: ${response.statusCode}');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('서버 연결 성공! 코드: ${response.statusCode}')),
-                            );
-                          } on DioException catch (e) {
-                            print('🔍 DioException 상세 정보:');
-                            print('❌ 타입: ${e.type}');
-                            print('❌ 메시지: ${e.message}');
-                            print('❌ 응답 코드: ${e.response?.statusCode}');
-                            print('❌ 응답 데이터: ${e.response?.data}');
-
-                            String message = '';
-                            if (e.type == DioExceptionType.badResponse) {
-                              // 서버는 연결되었지만 에러 응답
-                              message = '서버 연결됨! 응답코드: ${e.response?.statusCode}';
-                              print('✅ 서버 연결은 성공! (${e.response?.statusCode} 응답)');
-                            } else if (e.type == DioExceptionType.connectionTimeout) {
-                              message = '연결 타임아웃';
-                            } else if (e.type == DioExceptionType.connectionError) {
-                              message = '연결 실패 - 서버 확인 필요';
-                            } else {
-                              message = '기타 오류: ${e.type}';
-                            }
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(message)),
-                            );
-                          } catch (e) {
-                            print('❌ 예상치 못한 오류: $e');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('예상치 못한 오류: $e')),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          minimumSize: Size(MediaQuery.of(context).size.width * 0.8, 48),
-                        ),
-                        child: const Text('서버 연결 테스트'),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton(
-                            onPressed: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
-                              final accessToken = prefs.getString('access_token');
-                              print('🔍 현재 로그인 상태: $isLoggedIn');
-                              print('🔍 저장된 토큰: ${accessToken?.substring(0, 20) ?? 'null'}...');
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('로그인 상태: $isLoggedIn')),
-                              );
-                            },
-                            child: const Text('상태 확인'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.clear();
-                              print('🔍 모든 저장된 데이터 삭제');
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('데이터 초기화 완료')),
-                              );
-                            },
-                            child: const Text('데이터 초기화'),
-                          ),
-                        ],
-                      ),
-                    ],
+                ),
+                child: const Text(
+                  '홈화면 test 이동 (개발용)',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
+                ),
+              ),
+              ]
               ),
             ),
           ],
