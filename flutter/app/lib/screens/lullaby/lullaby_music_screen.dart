@@ -466,7 +466,7 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
 
               // ⭐ 곰돌이 이미지를 Stack의 최상단에 위치시켜 하단 플레이어 영역까지 침범하도록 함
               Positioned(
-                top: 60, // 헤더 아래쪽에 위치
+                top: 20, // 헤더 아래쪽에 위치
                 left: 0,
                 right: 0,
                 child: Center(

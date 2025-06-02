@@ -21,15 +21,16 @@ class OnboardingScreen extends StatelessWidget {
             Expanded(
               flex: 3,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                padding: const EdgeInsets.fromLTRB(24.0, 0, 24.0, 40), // 하단 패딩 추가
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.start, // center에서 start로 변경
                   children: [
+                    SizedBox(height: 0), // 상단에 여백 추가
                     Text(
                       '“엄빠, 읽어도!”',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 30,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF3B2D2C),
                       ),
@@ -39,8 +40,8 @@ class OnboardingScreen extends StatelessWidget {
                       '아이와 함께 쓰는 세상에 단 하나뿐인 이야기,\n지금 시작해요.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF9E9E9E),
+                        fontSize: 20,
+                        color: Color(0xFF754D19),
                       ),
                     ),
                     SizedBox(height: 24),
@@ -53,11 +54,12 @@ class OnboardingScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(24),
                         ),
                         textStyle: TextStyle(
-                          fontSize: 16,
+                          fontSize: 20,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      child: Text('START'),
+                      child: Text('START',
+                      style: TextStyle(color: Colors.white),),
                     ),
                   ],
                 ),
