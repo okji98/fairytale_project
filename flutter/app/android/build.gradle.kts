@@ -1,3 +1,16 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.7.0") // 버전 맞춤
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22") // 버전 맞춤
+        classpath("com.google.gms:google-services:4.4.0") // ⭐ 추가
+    }
+}
+
 allprojects {
     repositories {
         google()

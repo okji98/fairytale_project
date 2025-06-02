@@ -2,6 +2,8 @@
 import 'package:app/screens/share/share_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+// ⭐ 소셜 로그인 SDK 추가
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
 // Screens
 import 'screens/auth/onboarding_screen.dart';
@@ -15,9 +17,15 @@ import 'screens/profile/profile_details_screen.dart';
 import 'screens/profile/settings_screen.dart';
 import 'screens/profile/contacts_screen.dart';
 import 'screens/profile/support_screen.dart';
-import 'screens/lullaby/lullaby_screen.dart'; // 자장가 화면 import 추가
+import 'screens/lullaby/lullaby_screen.dart';
 
 void main() {
+  // ⭐ 카카오 SDK 초기화 (앱 실행 전에 설정)
+  KakaoSdk.init(
+    nativeAppKey: "6240e72db33e4ae36f4920a200335220",
+    javaScriptAppKey: "9b0881fcab5b67f9f17c9dd43b08fb7a",
+  );
+
   runApp(MyApp());
 }
 
@@ -187,7 +195,7 @@ class MyApp extends StatelessWidget {
         '/support': (context) => SupportScreen(),
         '/coloring': (context) => ColoringScreen(),
         '/share': (context) => ShareScreen(),
-        '/lullaby': (context) => LullabyScreen(), // 자장가 라우트 추가
+        '/lullaby': (context) => LullabyScreen(),
         // TODO: 추가 필요한 라우트들
       },
     );

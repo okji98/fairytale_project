@@ -1,8 +1,8 @@
 // lib/profile_screen.dart
 import 'package:flutter/material.dart';
-
 import '../../main.dart';
-
+import '../service/auth_service.dart';
+import '../service/auth_service.dart';  // ⭐ AuthService import 추가
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -24,17 +24,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // TODO: Spring Boot API에서 사용자 데이터 불러오기
   Future<void> _loadUserData() async {
+    // ⭐ AuthService를 사용해서 토큰 가져와서 API 호출할 수 있음
+    final accessToken = await AuthService.getAccessToken();
+
     // API 호출 예시:
-    // final response = await http.get(Uri.parse('$baseUrl/api/user/profile'));
-    // if (response.statusCode == 200) {
-    //   final userData = json.decode(response.body);
-    //   setState(() {
-    //     _userName = userData['name'] ?? '동글이';
-    //     _userEmail = userData['email'] ?? 'donggeul@example.com';
-    //     _profileImagePath = userData['profileImage'] ?? 'assets/myphoto.png';
-    //   });
+    // if (accessToken != null) {
+    //   final dio = Dio();
+    //   final response = await dio.get(
+    //     'http://10.0.2.2:8080/api/user/profile',
+    //     options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    //   );
+    //   if (response.statusCode == 200) {
+    //     final userData = response.data;
+    //     setState(() {
+    //       _userName = userData['name'] ?? '동글이';
+    //       _userEmail = userData['email'] ?? 'donggeul@example.com';
+    //       _profileImagePath = userData['profileImage'] ?? 'assets/myphoto.png';
+    //     });
+    //   }
     // }
   }
+
+  // ⭐ AuthService를 사용한 로그아웃 함수
+  Future<void> _logout() async {
+    try {
+      // 1. 서버에 로그아웃 요청 (선택사항)
+      final accessToken = await AuthService.getAccessToken();
+      if (accessToken != null) {
+        // TODO: 서버에 로그아웃 API 호출
+        // final dio = Dio();
+        // await dio.post(
+        //   'http://10.0.2.2:8080/oauth/logout',
+        //   options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+        // );
+      }
+
+      // 2. 로컬 토큰 삭제
+      await AuthService.logout();
+
+      // 3. 로그인 화면으로 이동
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/login',
+            (route) => false,
+      );
+    } catch (e) {
+      print('로그아웃 오류: $e');
+      // 오류가 발생해도 로컬 토큰은 삭제하고 로그인 화면으로 이동
+      await AuthService.logout();
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/login',
+            (route) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -380,7 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Future<void> _uploadImage(File imageFile) async {
   //   final request = http.MultipartRequest(
   //     'POST',
-  //     Uri.parse('$baseUrl/api/user/profile/image'),
+  //     Uri.parse('http://10.0.2.2:8080/api/user/profile/image'),
   //   );
   //   request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
   //
@@ -394,6 +439,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   //   }
   // }
 
+  // ⭐ AuthService를 사용한 로그아웃 다이얼로그
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -409,11 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context); // 다이얼로그 닫기
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/login',
-                      (route) => false,
-                ); // 로그인 화면으로 이동하고 스택 클리어
+                _logout(); // ⭐ AuthService를 사용한 로그아웃 함수 호출
               },
               child: Text('로그아웃'),
             ),
