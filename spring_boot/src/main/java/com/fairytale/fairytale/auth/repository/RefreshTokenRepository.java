@@ -9,6 +9,5 @@ import java.util.Optional;
 @Repository
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
     Optional<RefreshToken> findByUserId(Long userId);
-    // 로그아웃 시 리프레시 토큰 삭제용
     void deleteByUserId(Long userId);
 }
