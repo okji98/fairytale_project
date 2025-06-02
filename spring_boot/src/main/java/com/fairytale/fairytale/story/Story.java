@@ -38,13 +38,14 @@ public class Story {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
-    @Column(length = 255, nullable = false)
+    // nullable = true로 변경 (나중에 추가되는 필드들)
+    @Column(length = 255, nullable = true)
     private String voiceContent;
 
-    @Column(length = 255, nullable = false)
+    @Column(length = 255, nullable = true)
     private String colorImage;
 
-    @Column(length = 255, nullable = false)
+    @Column(length = 255, nullable = true)
     private String blackImage;
 
     @CreationTimestamp

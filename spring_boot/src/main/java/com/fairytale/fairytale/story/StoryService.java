@@ -9,10 +9,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class StoryService {
     private final StoryRepository storyRepository;
     private final UsersRepository usersRepository;
@@ -25,13 +27,17 @@ public class StoryService {
 
     // 동화 생성 메서드
     public Story createStory(StoryCreateRequest request) {
+        System.out.println("Service: Start creating story");
         // 1. 사용자 조회
         Users user = usersRepository.findById(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        System.out.println("Service: User found");
         // 2. FastAPI로 동화 생성 요청
         String url = fastApiBaseUrl + "/generate/story";
-        String storyContent = callFastApi(url, request);
-        // 3. Story 엔티티 생성 및 저장
+        String response = callFastApi(url, request);
+        // 3. 응답에서 story 추출
+        String storyContent = extractStoryFromResponse(response);
+        // 4. Story 엔티티 생성 및 저장
         Story story = new Story();
         story.setTheme(request.getTheme());
         story.setVoice(request.getVoice());
@@ -40,7 +46,16 @@ public class StoryService {
         story.setContent(storyContent);
         story.setUser(user);
 
-        return storyRepository.save(story);
+        // 기본값 명시적 설정
+        story.setVoiceContent("");
+        story.setColorImage("");
+        story.setBlackImage("");
+
+        System.out.println("Service: Before save");
+        Story saved = storyRepository.save(story);
+        System.out.println("Service: After save, id: " + saved.getId());
+
+        return saved;
     }
 
     // 음성 생성 메서드
@@ -116,6 +131,16 @@ public class StoryService {
     }
 
     // FastAPI 응답 파싱 메서드들
+    private String extractStoryFromResponse(String response) {
+        try {
+            JsonNode jsonNode = objectMapper.readTree(response);
+            return jsonNode.get("story").asText();
+        } catch (Exception e) {
+            // JSON 파싱 실패 시 응답 전체를 스토리로 사용
+            return response;
+        }
+    }
+
     private String extractImageUrlFromResponse(String response) {
         try {
             JsonNode jsonNode = objectMapper.readTree(response);
@@ -128,7 +153,7 @@ public class StoryService {
     private String extractVoiceUrlFromResponse(String response) {
         try {
             JsonNode jsonNode = objectMapper.readTree(response);
-            return jsonNode.get("voice_url").asText();
+            return jsonNode.get("audio_path ").asText();
         } catch (Exception e) {
             throw new RuntimeException("보이스 URL 파싱 실패 " + e);
         }
