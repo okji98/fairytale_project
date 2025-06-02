@@ -1,12 +1,53 @@
 import 'package:flutter/material.dart';
-
 import '../profile/profile_screen.dart';
+import '../service/auth_service.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  // ⭐ 인증 확인
+  Future<void> _checkAuth() async {
+    final isLoggedIn = await AuthService.isLoggedIn();
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (!isLoggedIn) {
+      Navigator.pushReplacementNamed(context, '/login');
+    }
+  }
+
+  // ⭐ 로그아웃 기능
+  Future<void> _logout() async {
+    await AuthService.logout();
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // ⭐ 로딩 중이면 로딩 화면 표시
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
@@ -35,7 +76,7 @@ class HomeScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  // 상단 로고
+                  // ⭐ 상단 로고 (로그아웃 기능 추가)
                   Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: screenWidth * 0.04,
@@ -52,20 +93,67 @@ class HomeScreen extends StatelessWidget {
                             fit: BoxFit.contain,
                           ),
                         ),
-                        IconButton(
+                        // ⭐ 프로필 아이콘을 PopupMenuButton으로 변경 (로그아웃 기능 추가)
+                        PopupMenuButton(
                           icon: Image.asset(
                             'assets/profile_icon.png',
                             width: screenWidth * 0.06,
                             height: screenWidth * 0.06,
                           ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ProfileScreen(),
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.person, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('프로필'),
+                                ],
                               ),
-                            );
-                          },
+                              onTap: () {
+                                Future.delayed(Duration.zero, () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ProfileScreen(),
+                                    ),
+                                  );
+                                });
+                              },
+                            ),
+                            PopupMenuItem(
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.logout, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('로그아웃'),
+                                ],
+                              ),
+                              onTap: () {
+                                Future.delayed(Duration.zero, () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: const Text('로그아웃'),
+                                      content: const Text('정말 로그아웃하시겠습니까?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('취소'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            _logout();
+                                          },
+                                          child: const Text('로그아웃'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                });
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
