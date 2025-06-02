@@ -893,32 +893,32 @@ class _ColoringScreenState extends State<ColoringScreen> {
           child: Row(
             children: [
               // 되돌리기 버튼
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _selectedImageUrl = null;
-                      _drawingPoints.clear();
-                    });
-                  },
-                  icon: Icon(Icons.arrow_back),
-                  label: Text('다시 선택'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[600],
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-
-              SizedBox(width: screenWidth * 0.02),
+              // Expanded(
+              //   child: ElevatedButton.icon(
+              //     onPressed: () {
+              //       setState(() {
+              //         _selectedImageUrl = null;
+              //         _drawingPoints.clear();
+              //       });
+              //     },
+              //     icon: Icon(Icons.arrow_back),
+              //     label: Text('다시\n선택'),
+              //     style: ElevatedButton.styleFrom(
+              //       backgroundColor: Colors.grey[600],
+              //       foregroundColor: Colors.white,
+              //       padding: EdgeInsets.symmetric(vertical: 12),
+              //     ),
+              //   ),
+              // ),
+              //
+              // SizedBox(width: screenWidth * 0.02),
 
               // 실행 취소 버튼
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _drawingPoints.isNotEmpty ? _undoLastStroke : null,
                   icon: Icon(Icons.undo),
-                  label: Text('실행 취소'),
+                  label: Text('실행\n취소'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
@@ -934,7 +934,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _drawingPoints.isNotEmpty ? _clearCanvas : null,
                   icon: Icon(Icons.clear),
-                  label: Text('전체 지우기'),
+                  label: Text('전체\n지우기'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
