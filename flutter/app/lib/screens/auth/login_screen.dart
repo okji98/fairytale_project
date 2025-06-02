@@ -49,14 +49,15 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
-  // ✅ 토큰 서버에 전송 및 저장
+// ✅ 토큰 서버에 전송 및 저장 (URL 수정)
   Future<Map<String, dynamic>?> _sendTokenToServer(String accessToken, String provider) async {
     try {
       print('🔍 서버로 토큰 전송 시작 - Provider: $provider');
       final dio = Dio();
 
+      // 🆕 실제 서버 IP로 변경 (컴퓨터의 실제 IP 주소 사용)
       final response = await dio.post(
-        'http://10.0.2.2:8080/oauth/login',
+        'http://192.168.0.30:8080/oauth/login',  // 🆕 실제 컴퓨터 IP
         data: {
           'provider': provider,
           'accessToken': accessToken
@@ -84,12 +85,6 @@ class LoginScreen extends StatelessWidget {
         print('✅ Refresh Token 저장 성공: $refreshTokenSaved');
         print('✅ 로그인 상태 저장 성공: $loginStatusSaved');
 
-        // 저장된 값 확인
-        final savedAccessToken = await prefs.getString('access_token');
-        final savedLoginStatus = await prefs.getBool('is_logged_in');
-        print('🔍 저장 확인 - Access Token: ${savedAccessToken?.substring(0, 20)}...');
-        print('🔍 저장 확인 - 로그인 상태: $savedLoginStatus');
-
         return {
           'success': true,
           'accessToken': response.data['accessToken'],
@@ -106,13 +101,27 @@ class LoginScreen extends StatelessWidget {
         print('❌ 서버 응답 코드: ${e.response?.statusCode}');
         print('❌ 서버 응답 데이터: ${e.response?.data}');
       }
+
+      // 🆕 서버 연결 실패시 임시 로그인 상태 저장 (개발용)
+      if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
+        print('🎭 서버 연결 실패 - 오프라인 모드로 로그인 상태 저장');
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_logged_in', true);
+        await prefs.setString('access_token', 'offline-${provider}-${DateTime.now().millisecondsSinceEpoch}');
+
+        return {
+          'success': true,
+          'accessToken': 'offline-${provider}-token',
+          'refreshToken': 'offline-refresh-token',
+        };
+      }
+
       return null;
     } catch (e) {
       print('❌ 서버 전송 오류: $e');
       return null;
     }
   }
-
   // 에러 다이얼로그
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
