@@ -19,7 +19,7 @@ import java.util.List;
         @Index(name = "idx_user_email", columnList = "email"),
         @Index(name = "idx_user_google_id", columnList = "googleId"),
         @Index(name = "idx_user_kakao_id", columnList = "kakaoId"),
-        @Index(name = "idx_user_apple_id", columnList = "appleId")
+//        @Index(name = "idx_user_apple_id", columnList = "appleId")
 })
 @Getter
 @Setter
