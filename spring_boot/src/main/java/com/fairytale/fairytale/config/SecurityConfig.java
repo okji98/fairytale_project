@@ -8,11 +8,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
+@EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -26,15 +29,40 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
-                .csrf(csrf -> csrf.disable())
+                // ⭐ CSRF 완전 비활성화
+                .csrf(AbstractHttpConfigurer::disable)
+
+                // ⭐ CORS 허용
+                .cors(AbstractHttpConfigurer::disable)
+
+                // ⭐ 세션 비활성화 (JWT 사용)
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // ⭐ 경로별 권한 설정 (중요!)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/main", "/home", "/share", "/stories", "/coloring-list", "coloring", "/lullabies", "/not-profile").permitAll()
-                        .requestMatchers("/oauth/login", "/oauth/refresh").permitAll() // 로그인, 토큰 갱신 허용
-                        .requestMatchers("/oauth/logout").authenticated() // 로그아웃은 인증 필요
+                        // OAuth 관련 경로는 모두 허용
+                        .requestMatchers("/oauth/**").permitAll()
+
+                        // 기타 API 경로 허용
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        // FastAPI 경로 허용
+                        .requestMatchers("/api/fairytale/**", "/health", "/actuator/**", "/h2-console/**").permitAll()
+
+                        // 홈화면 관련 경로 허용
+//                        .requestMatchers("/main", "/home", "/share", "/stories", "/coloring-list", "/coloring", "/lullabies", "/not-profile").permitAll()
+
+                        // 에러 페이지 허용
+//                        .requestMatchers("/error").permitAll()
+
+//                         나머지는 인증 필요
                         .anyRequest().authenticated()
+//                        .anyRequest().permitAll() // 모든 요청 허용 (테스트용)
                 )
+
+                // ⭐ JWT 필터 추가
                 .addFilterBefore(new JwtAuthenticationFilter(jwtAuthStrategy), UsernamePasswordAuthenticationFilter.class)
+
                 .build();
     }
 }
