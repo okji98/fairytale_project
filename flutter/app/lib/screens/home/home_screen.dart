@@ -292,7 +292,22 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: const Color(0xFF9E9E9E),
         onTap: (index) {
           final routes = ['/home', '/stories', '/coloring', '/share', '/lullaby'];
-          Navigator.pushReplacementNamed(context, routes[index]);
+          final currentRoute = ModalRoute.of(context)?.settings.name;
+
+          // ⭐ 현재 페이지가 아닌 경우에만 이동
+          if (currentRoute != routes[index]) {
+            // Home이 아닌 페이지로 이동할 때는 pushNamed 사용
+            if (index != 0) {
+              Navigator.pushNamed(context, routes[index]);
+            } else {
+              // Home으로 돌아갈 때는 스택을 정리하며 이동
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/home',
+                    (route) => false,
+              );
+            }
+          }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
