@@ -35,7 +35,7 @@ public class Story {
     @Column(length = 100, nullable = false)
     private String title;
 
-    @Column(length = 100, nullable = false)
+    @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
     @Column(length = 255, nullable = false)
