@@ -26,19 +26,19 @@ public class OAuthService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${spring.security.oauth2.client.provider.kakao.user-info-uri}")
-    private final String kakaoUserInfoUri;
+    private String kakaoUserInfoUri;
     @Value("${spring.security.oauth2.client.provider.google.user-info-uri}")
-    private final String googleUserInfoUri;
+    private String googleUserInfoUri;
     @Value("${spring.security.oauth2.client.registration.kakao.redirect-uri}")
-    private final String kakaoUserRedirectUri;
+    private String kakaoUserRedirectUri;
     @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
-    private final String googleUserRedirectUri;
+    private String googleUserRedirectUri;
     @Value("${spring.security.oauth2.client.registration.kakao.client-id}")
-    private final String kakaoClientId;
+    private String kakaoClientId;
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
-    private final String googleClientId;
+    private String googleClientId;
     @Value("${spring.security.oauth2.client.registration.google.client-secret}")
-    private final String googleClientSecret;
+    private String googleClientSecret;
 
     @Transactional
     public TokenResponse loginWithAccessToken(OAuthLoginRequest request) {

@@ -43,7 +43,7 @@
                 <data android:scheme="kakao6240e72db33e4ae36f4920a200335220" />
             </intent-filter>
         </activity>
-
+ㄹ
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

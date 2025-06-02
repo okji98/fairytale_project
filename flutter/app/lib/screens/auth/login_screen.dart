@@ -57,7 +57,7 @@ class LoginScreen extends StatelessWidget {
 
       // 🆕 실제 서버 IP로 변경 (컴퓨터의 실제 IP 주소 사용)
       final response = await dio.post(
-        'http://192.168.0.30:8080/oauth/login',  // 🆕 실제 컴퓨터 IP
+        'http://192.168.219.106:8080/oauth/login',  // 🆕 실제 컴퓨터 IP
         data: {
           'provider': provider,
           'accessToken': accessToken
