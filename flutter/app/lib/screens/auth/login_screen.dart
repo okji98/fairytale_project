@@ -49,8 +49,11 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
-// ✅ 토큰 서버에 전송 및 저장 (URL 수정)
-  Future<Map<String, dynamic>?> _sendTokenToServer(String accessToken, String provider) async {
+  // ✅ 토큰 서버에 전송 및 저장 (URL 수정)
+  Future<Map<String, dynamic>?> _sendTokenToServer(
+    String accessToken,
+    String provider,
+  ) async {
     try {
       print('🔍 서버로 토큰 전송 시작 - Provider: $provider');
       final dio = Dio();
@@ -77,8 +80,14 @@ class LoginScreen extends StatelessWidget {
         print('🔍 JWT 토큰 저장 시작');
         final prefs = await SharedPreferences.getInstance();
 
-        final accessTokenSaved = await prefs.setString('access_token', response.data['accessToken']);
-        final refreshTokenSaved = await prefs.setString('refresh_token', response.data['refreshToken'] ?? '');
+        final accessTokenSaved = await prefs.setString(
+          'access_token',
+          response.data['accessToken'],
+        );
+        final refreshTokenSaved = await prefs.setString(
+          'refresh_token',
+          response.data['refreshToken'] ?? '',
+        );
         final loginStatusSaved = await prefs.setBool('is_logged_in', true);
 
         print('✅ Access Token 저장 성공: $accessTokenSaved');
@@ -103,11 +112,15 @@ class LoginScreen extends StatelessWidget {
       }
 
       // 🆕 서버 연결 실패시 임시 로그인 상태 저장 (개발용)
-      if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
         print('🎭 서버 연결 실패 - 오프라인 모드로 로그인 상태 저장');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('is_logged_in', true);
-        await prefs.setString('access_token', 'offline-${provider}-${DateTime.now().millisecondsSinceEpoch}');
+        await prefs.setString(
+          'access_token',
+          'offline-${provider}-${DateTime.now().millisecondsSinceEpoch}',
+        );
 
         return {
           'success': true,
@@ -122,31 +135,35 @@ class LoginScreen extends StatelessWidget {
       return null;
     }
   }
+
   // 에러 다이얼로그
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('로그인 오류'),
-        content: Text(message),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('확인')
+      builder:
+          (_) => AlertDialog(
+            title: const Text('로그인 오류'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
   // ⭐ 로그인 성공 후 홈화면으로 이동
   void _navigateToHome(BuildContext context) {
     print('🔍 홈화면으로 이동 시도');
-    Navigator.pushReplacementNamed(context, '/home').then((_) {
-      print('✅ 홈화면 이동 완료');
-    }).catchError((error) {
-      print('❌ 홈화면 이동 실패: $error');
-    });
+    Navigator.pushReplacementNamed(context, '/home')
+        .then((_) {
+          print('✅ 홈화면 이동 완료');
+        })
+        .catchError((error) {
+          print('❌ 홈화면 이동 실패: $error');
+        });
   }
 
   @override
@@ -157,7 +174,10 @@ class LoginScreen extends StatelessWidget {
           children: [
             // 상단 바
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
               child: Row(
                 children: [
                   IconButton(
@@ -205,7 +225,10 @@ class LoginScreen extends StatelessWidget {
                       print('🔍 카카오 로그인 버튼 클릭');
                       final kakaoToken = await _loginWithKakao();
                       if (kakaoToken != null) {
-                        final loginData = await _sendTokenToServer(kakaoToken, 'kakao');
+                        final loginData = await _sendTokenToServer(
+                          kakaoToken,
+                          'kakao',
+                        );
                         if (loginData != null && loginData['success'] == true) {
                           print('✅ 로그인 성공! 홈화면으로 이동');
                           _navigateToHome(context);
@@ -234,7 +257,10 @@ class LoginScreen extends StatelessWidget {
                       print('🔍 구글 로그인 버튼 클릭');
                       final googleToken = await _loginWithGoogle();
                       if (googleToken != null) {
-                        final loginData = await _sendTokenToServer(googleToken, 'google');
+                        final loginData = await _sendTokenToServer(
+                          googleToken,
+                          'google',
+                        );
                         if (loginData != null && loginData['success'] == true) {
                           print('✅ 로그인 성공! 홈화면으로 이동');
                           _navigateToHome(context);
@@ -259,33 +285,39 @@ class LoginScreen extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // 🆕 간단한 홈화면 이동 버튼 (로그 없이)
-              // 🆕 가짜 로그인 상태 저장 후 홈화면 이동 버튼
-              ElevatedButton(
-                onPressed: () async {
-                  // 🆕 개발용: 가짜 로그인 상태 저장
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setBool('is_logged_in', true);
-                  await prefs.setString('access_token', 'fake-token-for-testing');
+                  // 🆕 가짜 로그인 상태 저장 후 홈화면 이동 버튼
+                  ElevatedButton(
+                    onPressed: () async {
+                      // 🆕 개발용: 가짜 로그인 상태 저장
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('is_logged_in', true);
+                      await prefs.setString(
+                        'access_token',
+                        'fake-token-for-testing',
+                      );
 
-                  Navigator.pushReplacementNamed(context, '/home');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.brown,
-                  foregroundColor: Colors.white,
-                  minimumSize: Size(MediaQuery.of(context).size.width * 0.8, 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                      Navigator.pushReplacementNamed(context, '/home');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.brown,
+                      foregroundColor: Colors.white,
+                      minimumSize: Size(
+                        MediaQuery.of(context).size.width * 0.8,
+                        48,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    child: const Text(
+                      '홈화면 test 이동 (개발용)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  '홈화면 test 이동 (개발용)',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              ]
+                ],
               ),
             ),
           ],
