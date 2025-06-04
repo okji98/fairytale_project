@@ -123,95 +123,33 @@ class LoginScreen extends StatelessWidget {
   //TEST CODE
   // 기존 _getKakaoAccessToken 메서드를 이것으로 교체하세요
 
+  // 🆕 카카오 Access Token 획득
   Future<String?> _getKakaoAccessToken(String authCode, String clientId, String redirectUri) async {
     try {
-      print('🔍 ===== 토큰 요청 시작 =====');
-      print('🔍 authCode: $authCode');
-      print('🔍 clientId: $clientId');
-      print('🔍 redirectUri: $redirectUri');
-
       final dio = Dio();
-
-      // 요청 데이터 확인
-      final requestData = {
-        'grant_type': 'authorization_code',
-        'client_id': clientId,
-        'redirect_uri': redirectUri,
-        'code': authCode,
-      };
-      print('🔍 요청 데이터: $requestData');
-
       final response = await dio.post(
         'https://kauth.kakao.com/oauth/token',
-        data: requestData,
+        data: {
+          'grant_type': 'authorization_code',
+          'client_id': clientId,
+          'redirect_uri': redirectUri,
+          'code': authCode,
+        },
         options: Options(
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          sendTimeout: Duration(seconds: 30),
-          receiveTimeout: Duration(seconds: 30),
         ),
       );
 
-      print('🔍 ===== 카카오 응답 =====');
-      print('🔍 응답 상태코드: ${response.statusCode}');
-      print('🔍 응답 헤더: ${response.headers}');
-      print('🔍 응답 데이터: ${response.data}');
-
       if (response.statusCode == 200) {
         final tokenData = response.data;
-        final accessToken = tokenData['access_token'];
-        print('✅ Access Token 획득 성공: ${accessToken?.substring(0, 20)}...');
-        return accessToken;
-      } else {
-        print('❌ 응답 상태코드가 200이 아님: ${response.statusCode}');
-        return null;
-      }
-    } on DioException catch (e) {
-      print('❌ ===== DioException 발생 =====');
-      print('❌ 타입: ${e.type}');
-      print('❌ 메시지: ${e.message}');
-      print('❌ 요청 옵션: ${e.requestOptions.uri}');
-      print('❌ 요청 데이터: ${e.requestOptions.data}');
-      print('❌ 요청 헤더: ${e.requestOptions.headers}');
-
-      if (e.response != null) {
-        print('❌ 응답 상태코드: ${e.response?.statusCode}');
-        print('❌ 응답 데이터: ${e.response?.data}');
+        return tokenData['access_token'];
       }
       return null;
     } catch (e) {
-      print('❌ ===== 일반 Exception 발생 =====');
-      print('❌ 오류: $e');
-      print('❌ 타입: ${e.runtimeType}');
+      print('❌ 카카오 토큰 획득 오류: $e');
       return null;
     }
   }
-  // // 🆕 카카오 Access Token 획득
-  // Future<String?> _getKakaoAccessToken(String authCode, String clientId, String redirectUri) async {
-  //   try {
-  //     final dio = Dio();
-  //     final response = await dio.post(
-  //       'https://kauth.kakao.com/oauth/token',
-  //       data: {
-  //         'grant_type': 'authorization_code',
-  //         'client_id': clientId,
-  //         'redirect_uri': redirectUri,
-  //         'code': authCode,
-  //       },
-  //       options: Options(
-  //         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-  //       ),
-  //     );
-  //
-  //     if (response.statusCode == 200) {
-  //       final tokenData = response.data;
-  //       return tokenData['access_token'];
-  //     }
-  //     return null;
-  //   } catch (e) {
-  //     print('❌ 카카오 토큰 획득 오류: $e');
-  //     return null;
-  //   }
-  // }
 
   // ✅ 구글 로그인 (기존과 동일)
   Future<String?> _loginWithGoogle() async {
