@@ -1,5 +1,5 @@
 import streamlit as st
-from controllers.story_controller import generate_fairy_tale, play_openai_voice, generate_image_from_fairy_tale
+from controllers.story_controller import generate_fairy_tale, play_openai_voice, generate_image_from_fairy_tale, convert_bw_image
 import os
 
 # 초기 상태 설정
@@ -48,18 +48,10 @@ if st.button("음성으로 듣기"):
     else:
         st.warning("먼저 동화를 생성하세요.")
 
-# 이미지 색상 모드 선택 버튼
-image_mode = st.radio(
-    "모드를 선택해 주세요",
-    ["Color", "Black/White"],
-    index=0, # 기본 선택값
-)
-st.write(f"{image_mode}를 선택하였습니다.")
-
 # 이미지 생성 버튼
 if st.button("동화 이미지 생성"):
     if st.session_state.fairy_tale_text.strip():
-        image_url = generate_image_from_fairy_tale(image_mode, st.session_state.fairy_tale_text)
+        image_url = generate_image_from_fairy_tale(st.session_state.fairy_tale_text)
         if image_url:
             st.session_state.image_url = image_url
             st.success("이미지가 생성되었습니다!")
@@ -70,4 +62,18 @@ if st.button("동화 이미지 생성"):
 
 # 이미지 표시
 if st.session_state.image_url:
-    st.image(st.session_state.image_url, caption="동화 이미지", use_column_width=True)
+    st.image(st.session_state.image_url, caption="동화 이미지", use_container_width=True)
+
+# 흑백 이미지 변환 버튼
+#if st.session_state.get("image_url"):
+if st.button("흑백 이미지 변환"):
+    bw_path = convert_bw_image(st.session_state.image_url)
+    if bw_path:
+        st.session_state.bw_image_path = bw_path
+        st.success("흑백 이미지로 변환되었습니다.")
+    else:
+        st.error("흑백 이미지로 변환에 실패하였습니다.")
+
+# 흑백 이미지 표시
+if st.session_state.get("bw_image_path"):
+    st.image(st.session_state.bw_image_path, caption="색칠용 라인 드로잉", use_container_width=True)

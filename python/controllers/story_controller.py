@@ -6,6 +6,11 @@ import asyncio
 from dotenv import load_dotenv
 import streamlit as st
 from openai import OpenAI
+from io import BytesIO
+import requests
+import cv2
+import numpy as np
+from PIL import Image
 
 load_dotenv()  # .env 파일에서 환경변수 로드
 
@@ -74,16 +79,16 @@ def play_openai_voice(text, voice="alloy", speed=1):
 
 
 # 이미지 생성 함수
-def generate_image_from_fairy_tale(image_mode, fairy_tale_text):
+def generate_image_from_fairy_tale(fairy_tale_text):
     # 프롬프트 영어로 생성 시 응답 내용 더 정확해짐
     try:
         base_prompt = fairy_tale_text[:300].replace('\n', ' ')
-        if image_mode == "Black/White":
-            style_note = "simple cartoon line drawing art, ideal for children's coloring books."
-        else:
-            style_note = "in colorful, storybook-style illustration"
 
-        prompt =  f"An illustration of a scene from a children's fairy tale: {base_prompt}, {style_note}."
+        prompt = (
+            "Make sure there is no text in the image"
+            f"Please create a single, simple illustration that matches the content about {base_prompt}, in a child-friendly style. "
+        )
+
         response = client.images.generate(
             model="dall-e-3",
             prompt=prompt,
@@ -101,3 +106,31 @@ def generate_image_from_fairy_tale(image_mode, fairy_tale_text):
     except Exception as e:
         print(f"이미지 생성 중 오류 발생:\n{e}")
         return None
+
+
+# 흑백 이미지 변환
+def convert_bw_image(image_url, save_path="bw_image.png"):
+    try:
+        response = requests.get(image_url)
+        image = Image.open(BytesIO(response.content)).convert("RGB")
+        np_image = np.array(image)
+
+        # 흑백 변환
+        gray = cv2.cvtColor(np_image, cv2.COLOR_RGB2GRAY)
+
+        # Canny edge 검출
+        edges = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
+                cv2.THRESH_BINARY_INV, 9, 5
+            )
+
+        # 색 반전 (흰 배경에 검은 선)
+        line_drawing = 255 - edges
+
+        cv2.imwrite(save_path, line_drawing)
+        return save_path
+    
+    except Exception as e:
+        print(f"흑백 변환 오류: {e}")
+        return None
+

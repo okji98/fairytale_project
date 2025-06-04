@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Body
 from pydantic import BaseModel
-from controllers.story_controller import generate_fairy_tale, generate_image_from_fairy_tale, play_openai_voice
+from controllers.story_controller import generate_fairy_tale, generate_image_from_fairy_tale, play_openai_voice, convert_bw_image
 from controllers.music_controller import search_tracks_by_tag
 from controllers.video_controller import search_videos
 from datetime import datetime
+
 
 # FastAPI 애플리케이션 생성
 app = FastAPI()
@@ -16,6 +17,7 @@ async def health_check():
         "service": "fastapi",
         "timestamp": datetime.now().isoformat()
     }
+
 
 # 동화 생성 클래스
 class StoryRequest(BaseModel):
@@ -33,26 +35,25 @@ class TTSRequest(BaseModel):
     text: str
 
 # 음성 파일 생성 라우터
-# @app.post("/generate/voice")
-# def generate_void(req: TTSRequest):
-#     path = play_openai_voice(generate_fairy_tale(req.text))
-#     return {"audio_path": path}
-# 음성 파일 생성 라우터 수정
 @app.post("/generate/voice")
-def generate_voice(req: TTSRequest):  # 함수명 수정
-    # 받은 텍스트로 바로 음성 생성 (동화 재생성 하지 않음)
+def generate_voice(req: TTSRequest):
     path = play_openai_voice(req.text)
     return {"audio_path": path}
 
 # 이미지 생성 클래스
 class ImageRequest(BaseModel):
-    mode: str
     text: str
 
 # 이미지 생성 라우터
 @app.post("/generate/image")
 def generate_image(req: ImageRequest):
-    image_url = generate_image_from_fairy_tale(req.mode, req.text)
+    image_url = generate_image_from_fairy_tale(req.text)
+    return {"image_url": image_url}
+
+# 흑백 이미지 변환 라우터
+@app.post("/convert/bwimage")
+def convert_image(req: ImageRequest):
+    image_url = convert_bw_image(req.text)
     return {"image_url": image_url}
 
 

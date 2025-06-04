@@ -8,3 +8,5 @@ fastapi==0.115.12
 youtube_search==2.1.2
 langchain==0.3.25
 langchain-community==0.3.24
+opencv_python_headless==4.11.0.86
+opencv_python==4.11.0.86
