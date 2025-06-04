@@ -116,10 +116,11 @@ public class StoryService {
 
     // 이미지 생성 메서드
     public Story createImage(ImageRequest request) {
+        System.out.println("🔍 Flutter에서 받은 데이터: " + request);
         // 1. 기존 스토리 조회
         Story story = storyRepository.findById(request.getStoryId())
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
-
+        System.out.println("🔍 Story 내용 길이: " + story.getContent().length());
         // 2. style을 imageMode로 변환
         String imageMode;
         if ("cartoon".equals(request.getStyle())) {
@@ -135,7 +136,7 @@ public class StoryService {
         FastApiImageRequest fastApiRequest = new FastApiImageRequest();
         fastApiRequest.setMode(request.getStyle());  // "cartoon" or "line_art"
         fastApiRequest.setText(story.getContent());  // 동화 내용을 텍스트로 사용
-
+        System.out.println("🔍 FastAPI로 보낼 데이터: " + fastApiRequest);
         System.out.println("🔍 FastAPI 전송 JSON: mode=" + request.getStyle() + ", text=" + story.getContent().substring(0, Math.min(50, story.getContent().length())) + "...");
 
         // 4. FastAPI로 이미지 생성 요청
