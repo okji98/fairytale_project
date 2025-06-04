@@ -48,10 +48,12 @@ class LoginScreen extends StatelessWidget {
       print('✅ 로컬 서버 시작: http://localhost:8080');
 
       // 카카오 로그인 URL 생성 및 브라우저 열기
-      const clientId = 'c65655b8bd8ad412ee16edb91d0ad084'; // 실제 REST API 키로 변경하세요
+      const clientId =
+          'c65655b8bd8ad412ee16edb91d0ad084'; // 실제 REST API 키로 변경하세요
       const redirectUri = 'http://localhost:8080/auth/kakao/callback';
 
-      final loginUrl = 'https://kauth.kakao.com/oauth/authorize?'
+      final loginUrl =
+          'https://kauth.kakao.com/oauth/authorize?'
           'client_id=$clientId&'
           'redirect_uri=${Uri.encodeComponent(redirectUri)}&'
           'response_type=code';
@@ -84,7 +86,11 @@ class LoginScreen extends StatelessWidget {
             break;
           } else if (authCode != null) {
             // Access Token 획득
-            accessToken = await _getKakaoAccessToken(authCode, clientId, redirectUri);
+            accessToken = await _getKakaoAccessToken(
+              authCode,
+              clientId,
+              redirectUri,
+            );
 
             response.headers.contentType = ContentType.html;
             if (accessToken != null) {
@@ -113,7 +119,6 @@ class LoginScreen extends StatelessWidget {
 
       await server.close();
       return accessToken;
-
     } catch (e) {
       print('❌ 카카오 웹 로그인 오류: $e');
       return null;
@@ -124,7 +129,11 @@ class LoginScreen extends StatelessWidget {
   // 기존 _getKakaoAccessToken 메서드를 이것으로 교체하세요
 
   // 🆕 카카오 Access Token 획득
-  Future<String?> _getKakaoAccessToken(String authCode, String clientId, String redirectUri) async {
+  Future<String?> _getKakaoAccessToken(
+    String authCode,
+    String clientId,
+    String redirectUri,
+  ) async {
     try {
       final dio = Dio();
       final response = await dio.post(
@@ -173,19 +182,16 @@ class LoginScreen extends StatelessWidget {
 
   // ✅ 토큰 서버에 전송 및 저장 (기존과 동일)
   Future<Map<String, dynamic>?> _sendTokenToServer(
-      String accessToken,
-      String provider,
-      ) async {
+    String accessToken,
+    String provider,
+  ) async {
     try {
       print('🔍 서버로 토큰 전송 시작 - Provider: $provider');
       final dio = Dio();
 
       final response = await dio.post(
-        'http://192.168.0.45:8080/oauth/login',
-        data: {
-          'provider': provider,
-          'accessToken': accessToken
-        },
+        'http://localhost:8080/oauth/login',
+        data: {'provider': provider, 'accessToken': accessToken},
         options: Options(
           headers: {'Content-Type': 'application/json'},
           sendTimeout: Duration(seconds: 10),
@@ -260,16 +266,17 @@ class LoginScreen extends StatelessWidget {
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('로그인 오류'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('확인'),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('로그인 오류'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -278,11 +285,11 @@ class LoginScreen extends StatelessWidget {
     print('🔍 홈화면으로 이동 시도');
     Navigator.pushReplacementNamed(context, '/home')
         .then((_) {
-      print('✅ 홈화면 이동 완료');
-    })
+          print('✅ 홈화면 이동 완료');
+        })
         .catchError((error) {
-      print('❌ 홈화면 이동 실패: $error');
-    });
+          print('❌ 홈화면 이동 실패: $error');
+        });
   }
 
   @override
@@ -408,10 +415,7 @@ class LoginScreen extends StatelessWidget {
                     Platform.isMacOS
                         ? '💻 macOS - 웹 기반 로그인 사용'
                         : '📱 모바일 - 네이티브 로그인 사용',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 16),
 

@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class OAuthService {
@@ -119,42 +121,97 @@ public class OAuthService {
     }
 
     private Users saveOrUpdateUser(Users oauthUser) {
-        // 🆕 기본 USER 역할 설정
-        Role userRole = roleRepository.findByRoleName("USER")
-                .orElseGet(() -> {
-                    System.out.println("⚠️ USER 역할이 없어서 새로 생성합니다.");
-                    Role newRole = new Role();
-                    newRole.setRoleName("USER");
-                    return roleRepository.save(newRole);
-                });
+        System.out.println("🔍 saveOrUpdateUser 시작 - 이메일: " + oauthUser.getEmail());
 
-        // OAuth 사용자에게 역할 설정
-        oauthUser.setRole(userRole);
-        System.out.println("🔍 사용자 역할 설정 완료: " + userRole.getRoleName());
+        try {
+            // 🆕 기본 USER 역할 설정
+            System.out.println("🔍 USER 역할 찾는 중...");
+            Role userRole = roleRepository.findByRoleName("USER")
+                    .orElseGet(() -> {
+                        System.out.println("⚠️ USER 역할이 없어서 새로 생성합니다.");
+                        Role newRole = new Role();
+                        newRole.setRoleName("USER");
+                        return roleRepository.save(newRole);
+                    });
+            System.out.println("🔍 USER 역할 조회 완료");
 
-        return usersRepository.findByEmail(oauthUser.getEmail())
-                .or(() -> usersRepository.findByGoogleId(oauthUser.getGoogleId()))
-                .or(() -> usersRepository.findByKakaoId(oauthUser.getKakaoId()))
-                .map(existingUser -> {
+            // OAuth 사용자에게 역할 설정
+            oauthUser.setRole(userRole);
+            System.out.println("🔍 사용자 역할 설정 완료: " + userRole.getRoleName());
+
+            // 이메일로 찾기
+            System.out.println("🔍 이메일로 사용자 찾는 중: " + oauthUser.getEmail());
+            Optional<Users> emailUser = usersRepository.findByEmail(oauthUser.getEmail());
+            System.out.println("🔍 이메일 조회 결과: " + (emailUser.isPresent() ? "발견" : "없음"));
+
+            if (emailUser.isPresent()) {
+                Users existingUser = emailUser.get();
+                System.out.println("🔍 기존 사용자 업데이트: " + existingUser.getUsername());
+                existingUser.setNickname(oauthUser.getNickname());
+
+                if (existingUser.getRole() == null) {
+                    existingUser.setRole(userRole);
+                }
+
+                if (oauthUser.getGoogleId() != null) {
+                    existingUser.setGoogleId(oauthUser.getGoogleId());
+                }
+                if (oauthUser.getKakaoId() != null) {
+                    existingUser.setKakaoId(oauthUser.getKakaoId());
+                }
+
+                return usersRepository.save(existingUser);
+            }
+
+            // 구글 ID로 찾기
+            if (oauthUser.getGoogleId() != null) {
+                System.out.println("🔍 구글 ID로 사용자 찾는 중: " + oauthUser.getGoogleId());
+                Optional<Users> googleUser = usersRepository.findByGoogleId(oauthUser.getGoogleId());
+                System.out.println("🔍 구글 ID 조회 결과: " + (googleUser.isPresent() ? "발견" : "없음"));
+
+                if (googleUser.isPresent()) {
+                    Users existingUser = googleUser.get();
                     System.out.println("🔍 기존 사용자 업데이트: " + existingUser.getUsername());
                     existingUser.setNickname(oauthUser.getNickname());
-                    // 역할이 없으면 설정
+                    existingUser.setEmail(oauthUser.getEmail()); // 이메일 업데이트
+
                     if (existingUser.getRole() == null) {
                         existingUser.setRole(userRole);
                     }
-                    // 소셜 ID 업데이트
-                    if (oauthUser.getGoogleId() != null) {
-                        existingUser.setGoogleId(oauthUser.getGoogleId());
-                    }
-                    if (oauthUser.getKakaoId() != null) {
-                        existingUser.setKakaoId(oauthUser.getKakaoId());
-                    }
+
                     return usersRepository.save(existingUser);
-                })
-                .orElseGet(() -> {
-                    System.out.println("🔍 새 사용자 생성: " + oauthUser.getUsername());
-                    return usersRepository.save(oauthUser);
-                });
+                }
+            }
+
+            // 카카오 ID로 찾기
+            if (oauthUser.getKakaoId() != null) {
+                System.out.println("🔍 카카오 ID로 사용자 찾는 중: " + oauthUser.getKakaoId());
+                Optional<Users> kakaoUser = usersRepository.findByKakaoId(oauthUser.getKakaoId());
+                System.out.println("🔍 카카오 ID 조회 결과: " + (kakaoUser.isPresent() ? "발견" : "없음"));
+
+                if (kakaoUser.isPresent()) {
+                    Users existingUser = kakaoUser.get();
+                    System.out.println("🔍 기존 사용자 업데이트: " + existingUser.getUsername());
+                    existingUser.setNickname(oauthUser.getNickname());
+                    existingUser.setEmail(oauthUser.getEmail()); // 이메일 업데이트
+
+                    if (existingUser.getRole() == null) {
+                        existingUser.setRole(userRole);
+                    }
+
+                    return usersRepository.save(existingUser);
+                }
+            }
+
+            // 새 사용자 생성
+            System.out.println("🔍 새 사용자 생성: " + oauthUser.getUsername());
+            return usersRepository.save(oauthUser);
+
+        } catch (Exception e) {
+            System.err.println("❌ saveOrUpdateUser에서 예외 발생: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     // 로그아웃 기능 추가
