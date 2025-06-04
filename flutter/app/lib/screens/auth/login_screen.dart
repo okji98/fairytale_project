@@ -194,7 +194,7 @@ class LoginScreen extends StatelessWidget {
       print("✅ 구글 ID Token 획득: ${idToken?.substring(0, 20)}...");
 
       // ID Token을 우선적으로 반환, 없으면 Access Token 반환
-      return idToken ?? accessToken;
+      return accessToken ?? idToken;
     } catch (e) {
       print('❌ 구글 로그인 오류: $e');
       return null;
