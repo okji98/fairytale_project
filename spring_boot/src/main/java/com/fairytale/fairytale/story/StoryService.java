@@ -119,22 +119,39 @@ public class StoryService {
         // 1. 기존 스토리 조회
         Story story = storyRepository.findById(request.getStoryId())
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
-        // 2. FastAPI 요청 객체 생성 (변환)
+
+        // 2. style을 imageMode로 변환
+        String imageMode;
+        if ("cartoon".equals(request.getStyle())) {
+            imageMode = "color";
+        } else if ("line_art".equals(request.getStyle())) {
+            imageMode = "black";
+        } else {
+            // 기본값 또는 에러 처리
+            imageMode = "color";
+        }
+
+        // 3. FastAPI 요청 객체 생성
         FastApiImageRequest fastApiRequest = new FastApiImageRequest();
-        fastApiRequest.setMode(request.getImageMode());  // imageMode → mode
-        fastApiRequest.setText(request.getPrompt());     // prompt → text
-        // 3. FastAPI로 이미지 생성 요청
+        fastApiRequest.setMode(request.getStyle());  // "cartoon" or "line_art"
+        fastApiRequest.setText(story.getContent());  // 동화 내용을 텍스트로 사용
+
+        System.out.println("🔍 FastAPI 전송 JSON: mode=" + request.getStyle() + ", text=" + story.getContent().substring(0, Math.min(50, story.getContent().length())) + "...");
+
+        // 4. FastAPI로 이미지 생성 요청
         String url = fastApiBaseUrl + "/generate/image";
         String fastApiResponse = callFastApi(url, fastApiRequest);
-        // 4. 응답에서 이미지 url 추출
+
+        // 5. 응답에서 이미지 url 추출
         String imageUrl = extractImageUrlFromResponse(fastApiResponse);
-        // 5. imageMode에 따라 적절한 컬럼에 저장
-        if ("color".equals(request.getImageMode())) {
+
+        // 6. imageMode에 따라 적절한 컬럼에 저장
+        if ("color".equals(imageMode)) {
             story.setColorImage(imageUrl);
-        } else if ("black".equals(request.getImageMode())) {
+        } else if ("black".equals(imageMode)) {
             story.setBlackImage(imageUrl);
         } else {
-            throw new IllegalArgumentException("지원하지 않는 이미지 모드: " + request.getImageMode());
+            throw new IllegalArgumentException("지원하지 않는 이미지 모드: " + imageMode);
         }
 
         return storyRepository.save(story);
@@ -205,5 +222,14 @@ public class StoryService {
         } catch (Exception e) {
             throw new RuntimeException("보이스 URL 파싱 실패 " + e);
         }
+    }
+
+    // StoryService.java
+    public Story getStoryById(Long id, String username) {
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+
+        return storyRepository.findByIdAndUser(id, user)
+                .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
     }
 }

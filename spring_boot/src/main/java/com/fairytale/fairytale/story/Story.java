@@ -26,7 +26,7 @@ public class Story {
     @Column(length = 500, nullable = false)
     private String theme;
 
-    @Column(length = 100, nullable = false)
+    @Column(length = 100, nullable = true)
     private String voice;
 
     @Column(length = 100, nullable = true)

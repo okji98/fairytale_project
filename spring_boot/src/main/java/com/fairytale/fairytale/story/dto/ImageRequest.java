@@ -11,7 +11,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class ImageRequest {
     private Long storyId;
-    private String description;
-    private String imageMode; // "color" or "black"
-    private String prompt;
+    private String style;        // Flutter의 'style' 필드와 일치
+    private String resolution;   // Flutter의 'resolution' 필드와 일치
+    private String description;  // 추가 설명 (선택사항)
 }
