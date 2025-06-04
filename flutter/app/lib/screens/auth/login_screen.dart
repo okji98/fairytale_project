@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../../main.dart';
-import '../service/api_service.dart';  // 🔧 추가
+import '../service/api_service.dart'; // 🔧 추가
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -16,23 +16,25 @@ class LoginScreen extends StatelessWidget {
     try {
       print('🔍 카카오 로그인 시작');
 
-      if (Platform.isMacOS) {
-        // macOS에서는 웹 기반 로그인
-        return await _loginWithKakaoWeb();
-      } else {
-        // iOS/Android에서는 네이티브 SDK
-        bool isInstalled = await isKakaoTalkInstalled();
-        OAuthToken token;
-        if (isInstalled) {
-          print('🔍 카카오톡 앱으로 로그인');
+      bool isInstalled = await isKakaoTalkInstalled();
+      OAuthToken token;
+
+      if (isInstalled) {
+        try {
+          print('🔍 카카오톡 앱으로 로그인 시도');
           token = await UserApi.instance.loginWithKakaoTalk();
-        } else {
-          print('🔍 카카오 계정으로 로그인');
+        } catch (e) {
+          print('🔍 카카오톡 로그인 실패, 웹 로그인으로 전환: $e');
+          // 카카오톡 로그인 실패 시 웹 로그인으로 fallback
           token = await UserApi.instance.loginWithKakaoAccount();
         }
-        print('✅ 카카오 토큰 획득: ${token.accessToken.substring(0, 20)}...');
-        return token.accessToken;
+      } else {
+        print('🔍 카카오 계정으로 로그인');
+        token = await UserApi.instance.loginWithKakaoAccount();
       }
+
+      print('✅ 카카오 토큰 획득: ${token.accessToken.substring(0, 20)}...');
+      return token.accessToken;
     } catch (e) {
       print('❌ 카카오 로그인 오류: $e');
       return null;
@@ -49,10 +51,12 @@ class LoginScreen extends StatelessWidget {
       print('✅ 로컬 서버 시작: http://localhost:8080');
 
       // 카카오 로그인 URL 생성 및 브라우저 열기
-      const clientId = 'c65655b8bd8ad412ee16edb91d0ad084'; // 실제 REST API 키로 변경하세요
+      const clientId =
+          'c65655b8bd8ad412ee16edb91d0ad084'; // 실제 REST API 키로 변경하세요
       const redirectUri = 'http://localhost:8080/auth/kakao/callback';
 
-      final loginUrl = 'https://kauth.kakao.com/oauth/authorize?'
+      final loginUrl =
+          'https://kauth.kakao.com/oauth/authorize?'
           'client_id=$clientId&'
           'redirect_uri=${Uri.encodeComponent(redirectUri)}&'
           'response_type=code';
@@ -85,7 +89,11 @@ class LoginScreen extends StatelessWidget {
             break;
           } else if (authCode != null) {
             // Access Token 획득
-            accessToken = await _getKakaoAccessToken(authCode, clientId, redirectUri);
+            accessToken = await _getKakaoAccessToken(
+              authCode,
+              clientId,
+              redirectUri,
+            );
 
             response.headers.contentType = ContentType.html;
             if (accessToken != null) {
@@ -114,7 +122,6 @@ class LoginScreen extends StatelessWidget {
 
       await server.close();
       return accessToken;
-
     } catch (e) {
       print('❌ 카카오 웹 로그인 오류: $e');
       return null;
@@ -122,7 +129,11 @@ class LoginScreen extends StatelessWidget {
   }
 
   // 🆕 카카오 Access Token 획득
-  Future<String?> _getKakaoAccessToken(String authCode, String clientId, String redirectUri) async {
+  Future<String?> _getKakaoAccessToken(
+    String authCode,
+    String clientId,
+    String redirectUri,
+  ) async {
     try {
       print('🔍 ===== 토큰 요청 시작 =====');
       print('🔍 authCode: $authCode');
@@ -174,9 +185,10 @@ class LoginScreen extends StatelessWidget {
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
-        clientId: Platform.isMacOS
-            ? '910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com'
-            : null,
+        clientId:
+            Platform.isMacOS
+                ? '910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com'
+                : null,
       );
 
       final GoogleSignInAccount? account = await googleSignIn.signIn();
@@ -202,9 +214,9 @@ class LoginScreen extends StatelessWidget {
 
   // ✅ 토큰 서버에 전송 및 저장 (🔧 ApiService 사용)
   Future<Map<String, dynamic>?> _sendTokenToServer(
-      String accessToken,
-      String provider,
-      ) async {
+    String accessToken,
+    String provider,
+  ) async {
     try {
       print('🔍 서버로 토큰 전송 시작 - Provider: $provider');
 
@@ -273,16 +285,17 @@ class LoginScreen extends StatelessWidget {
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('로그인 오류'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('확인'),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('로그인 오류'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -291,18 +304,19 @@ class LoginScreen extends StatelessWidget {
     print('🔍 홈화면으로 이동 시도');
     Navigator.pushReplacementNamed(context, '/home')
         .then((_) {
-      print('✅ 홈화면 이동 완료');
-    })
+          print('✅ 홈화면 이동 완료');
+        })
         .catchError((error) {
-      print('❌ 홈화면 이동 실패: $error');
-    });
+          print('❌ 홈화면 이동 실패: $error');
+        });
   }
 
   @override
   Widget build(BuildContext context) {
     return BaseScaffold(
       child: SafeArea(
-        child: SingleChildScrollView(  // 🔧 스크롤 추가
+        child: SingleChildScrollView(
+          // 🔧 스크롤 추가
           child: Column(
             children: [
               // 상단 바
@@ -363,7 +377,8 @@ class LoginScreen extends StatelessWidget {
                             kakaoToken,
                             'kakao',
                           );
-                          if (loginData != null && loginData['success'] == true) {
+                          if (loginData != null &&
+                              loginData['success'] == true) {
                             print('✅ 로그인 성공! 홈화면으로 이동');
                             _navigateToHome(context);
                           } else {
@@ -395,7 +410,8 @@ class LoginScreen extends StatelessWidget {
                             googleToken,
                             'google',
                           );
-                          if (loginData != null && loginData['success'] == true) {
+                          if (loginData != null &&
+                              loginData['success'] == true) {
                             print('✅ 로그인 성공! 홈화면으로 이동');
                             _navigateToHome(context);
                           } else {
@@ -425,10 +441,7 @@ class LoginScreen extends StatelessWidget {
                           : Platform.isIOS
                           ? '📱 iOS - 서버: ${ApiService.baseUrl}'
                           : '💻 macOS - 서버: ${ApiService.baseUrl}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 16),
 
