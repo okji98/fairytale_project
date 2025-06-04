@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../../main.dart';
+import '../service/api_service.dart';  // 🔧 추가
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -166,18 +167,16 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
-  // ✅ 구글 로그인 (macOS 지원)
+  // ✅ 구글 로그인 (🔧 Access Token 우선 반환)
   Future<String?> _loginWithGoogle() async {
     try {
       print('🔍 구글 로그인 시작');
 
-      // macOS용 Google Sign-In 설정
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
-        // macOS에서는 클라이언트 ID를 명시적으로 설정할 수 있음
         clientId: Platform.isMacOS
             ? '910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com'
-            : null, // iOS/Android는 GoogleService-Info.plist에서 자동으로 읽음
+            : null,
       );
 
       final GoogleSignInAccount? account = await googleSignIn.signIn();
@@ -193,7 +192,7 @@ class LoginScreen extends StatelessWidget {
       print("✅ 구글 Access Token 획득: ${accessToken?.substring(0, 20)}...");
       print("✅ 구글 ID Token 획득: ${idToken?.substring(0, 20)}...");
 
-      // ID Token을 우선적으로 반환, 없으면 Access Token 반환
+      // 🔧 Access Token을 우선적으로 반환 (서버에서 Google API 호출용)
       return accessToken ?? idToken;
     } catch (e) {
       print('❌ 구글 로그인 오류: $e');
@@ -201,7 +200,7 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
-  // ✅ 토큰 서버에 전송 및 저장 (🔧 타임아웃 수정)
+  // ✅ 토큰 서버에 전송 및 저장 (🔧 ApiService 사용)
   Future<Map<String, dynamic>?> _sendTokenToServer(
       String accessToken,
       String provider,
@@ -209,80 +208,61 @@ class LoginScreen extends StatelessWidget {
     try {
       print('🔍 서버로 토큰 전송 시작 - Provider: $provider');
 
-      // 🔧 Dio 타임아웃 설정 수정
-      final dio = Dio();
-      dio.options.connectTimeout = Duration(seconds: 10);
-      dio.options.sendTimeout = Duration(seconds: 10);
-      dio.options.receiveTimeout = Duration(seconds: 10);
-
-      final response = await dio.post(
-        'http://localhost:8080/oauth/login',
-        data: {
-          'provider': provider,
-          'accessToken': accessToken
-        },
-        options: Options(
-          headers: {'Content-Type': 'application/json'},
-        ),
+      // 🔧 ApiService 사용
+      final result = await ApiService.sendOAuthLogin(
+        provider: provider,
+        accessToken: accessToken,
       );
 
-      print('✅ 서버 응답 성공 - 상태코드: ${response.statusCode}');
-      print('✅ 서버 응답 데이터: ${response.data}');
+      if (result != null && result['success'] == true) {
+        final responseData = result['data'];
 
-      if (response.data != null && response.data['accessToken'] != null) {
-        print('🔍 JWT 토큰 저장 시작');
-        final prefs = await SharedPreferences.getInstance();
+        if (responseData != null && responseData['accessToken'] != null) {
+          print('🔍 JWT 토큰 저장 시작');
+          final prefs = await SharedPreferences.getInstance();
 
-        final accessTokenSaved = await prefs.setString(
-          'access_token',
-          response.data['accessToken'],
-        );
-        final refreshTokenSaved = await prefs.setString(
-          'refresh_token',
-          response.data['refreshToken'] ?? '',
-        );
-        final loginStatusSaved = await prefs.setBool('is_logged_in', true);
+          final accessTokenSaved = await prefs.setString(
+            'access_token',
+            responseData['accessToken'],
+          );
+          final refreshTokenSaved = await prefs.setString(
+            'refresh_token',
+            responseData['refreshToken'] ?? '',
+          );
+          final loginStatusSaved = await prefs.setBool('is_logged_in', true);
 
-        print('✅ Access Token 저장 성공: $accessTokenSaved');
-        print('✅ Refresh Token 저장 성공: $refreshTokenSaved');
-        print('✅ 로그인 상태 저장 성공: $loginStatusSaved');
+          print('✅ Access Token 저장 성공: $accessTokenSaved');
+          print('✅ Refresh Token 저장 성공: $refreshTokenSaved');
+          print('✅ 로그인 상태 저장 성공: $loginStatusSaved');
 
-        return {
-          'success': true,
-          'accessToken': response.data['accessToken'],
-          'refreshToken': response.data['refreshToken'],
-        };
+          return {
+            'success': true,
+            'accessToken': responseData['accessToken'],
+            'refreshToken': responseData['refreshToken'],
+          };
+        } else {
+          print('❌ 서버 응답에 accessToken이 없음');
+          return null;
+        }
       } else {
-        print('❌ 서버 응답에 accessToken이 없음');
+        // 서버 연결 실패시 임시 로그인 상태 저장 (개발용)
+        if (result != null && result['type']?.contains('connection') == true) {
+          print('🎭 서버 연결 실패 - 오프라인 모드로 로그인 상태 저장');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('is_logged_in', true);
+          await prefs.setString(
+            'access_token',
+            'offline-${provider}-${DateTime.now().millisecondsSinceEpoch}',
+          );
+
+          return {
+            'success': true,
+            'accessToken': 'offline-${provider}-token',
+            'refreshToken': 'offline-refresh-token',
+          };
+        }
         return null;
       }
-    } on DioException catch (e) {
-      print('❌ 네트워크 오류: ${e.type}');
-      print('❌ 오류 메시지: ${e.message}');
-      if (e.response != null) {
-        print('❌ 서버 응답 코드: ${e.response?.statusCode}');
-        print('❌ 서버 응답 데이터: ${e.response?.data}');
-      }
-
-      // 서버 연결 실패시 임시 로그인 상태 저장 (개발용)
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        print('🎭 서버 연결 실패 - 오프라인 모드로 로그인 상태 저장');
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_logged_in', true);
-        await prefs.setString(
-          'access_token',
-          'offline-${provider}-${DateTime.now().millisecondsSinceEpoch}',
-        );
-
-        return {
-          'success': true,
-          'accessToken': 'offline-${provider}-token',
-          'refreshToken': 'offline-refresh-token',
-        };
-      }
-
-      return null;
     } catch (e) {
       print('❌ 서버 전송 오류: $e');
       return null;
@@ -440,9 +420,11 @@ class LoginScreen extends StatelessWidget {
 
                     // 플랫폼 정보 표시
                     Text(
-                      Platform.isMacOS
-                          ? '💻 macOS - 웹 기반 로그인 사용'
-                          : '📱 모바일 - 네이티브 로그인 사용',
+                      Platform.isAndroid
+                          ? '🤖 Android - 서버: ${ApiService.baseUrl}'
+                          : Platform.isIOS
+                          ? '📱 iOS - 서버: ${ApiService.baseUrl}'
+                          : '💻 macOS - 서버: ${ApiService.baseUrl}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
