@@ -1,5 +1,6 @@
 // lib/main.dart
 import 'package:app/screens/share/share_screen.dart';
+import 'package:app/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 // ⭐ 소셜 로그인 SDK 추가
@@ -182,22 +183,21 @@ class MyApp extends StatelessWidget {
         ),
       ),
       initialRoute: '/onboarding',
-      routes: {
-        '/onboarding': (context) => OnboardingScreen(),
-        '/login': (context) => LoginScreen(),
-        '/childInfo': (context) => ChildInfoScreen(),
-        '/home': (context) => HomeScreen(),
-        '/stories': (ctx) => StoriesScreen(),
-        '/profile': (context) => ProfileScreen(),
-        '/profile-details': (context) => ProfileDetailsScreen(),
-        '/settings': (context) => SettingsScreen(),
-        '/contacts': (context) => ContactsScreen(),
-        '/support': (context) => SupportScreen(),
-        '/coloring': (context) => ColoringScreen(),
-        '/share': (context) => ShareScreen(),
-        '/lullaby': (context) => LullabyScreen(),
-        // TODO: 추가 필요한 라우트들
-      },
+    routes: {
+    '/onboarding': (context) => OnboardingScreen(),  // 첫 화면 그대로 유지
+    '/login': (context) => LoginScreen(),
+    '/child-info': (context) => ChildInfoScreen(),  // childInfo → child-info로만 변경
+    '/home': (context) => HomeScreen(),
+    '/stories': (ctx) => StoriesScreen(),
+    '/profile': (context) => ProfileScreen(),
+    '/profile-details': (context) => ProfileDetailsScreen(),
+    '/settings': (context) => SettingsScreen(),
+    '/contacts': (context) => ContactsScreen(),
+    '/support': (context) => SupportScreen(),
+    '/coloring': (context) => ColoringScreen(),
+    '/share': (context) => ShareScreen(),
+    '/lullaby': (context) => LullabyScreen(),
+    },
     );
   }
 }

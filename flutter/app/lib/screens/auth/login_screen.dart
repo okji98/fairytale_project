@@ -6,7 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../../main.dart';
-import '../service/api_service.dart'; // 🔧 추가
+import '../service/api_service.dart';
+import '../service/auth_service.dart'; // 🆕 추가
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -130,10 +131,10 @@ class LoginScreen extends StatelessWidget {
 
   // 🆕 카카오 Access Token 획득
   Future<String?> _getKakaoAccessToken(
-    String authCode,
-    String clientId,
-    String redirectUri,
-  ) async {
+      String authCode,
+      String clientId,
+      String redirectUri,
+      ) async {
     try {
       print('🔍 ===== 토큰 요청 시작 =====');
       print('🔍 authCode: $authCode');
@@ -186,9 +187,9 @@ class LoginScreen extends StatelessWidget {
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
         clientId:
-            Platform.isMacOS
-                ? '910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com'
-                : null,
+        Platform.isMacOS
+            ? '910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com'
+            : null,
       );
 
       final GoogleSignInAccount? account = await googleSignIn.signIn();
@@ -214,9 +215,9 @@ class LoginScreen extends StatelessWidget {
 
   // ✅ 토큰 서버에 전송 및 저장 (🔧 ApiService 사용)
   Future<Map<String, dynamic>?> _sendTokenToServer(
-    String accessToken,
-    String provider,
-  ) async {
+      String accessToken,
+      String provider,
+      ) async {
     try {
       print('🔍 서버로 토큰 전송 시작 - Provider: $provider');
 
@@ -251,6 +252,8 @@ class LoginScreen extends StatelessWidget {
             'success': true,
             'accessToken': responseData['accessToken'],
             'refreshToken': responseData['refreshToken'],
+            'userId': responseData['userId'], // 🆕 userId 추가
+            'userEmail': responseData['userEmail'], // 🆕 userEmail 추가
           };
         } else {
           print('❌ 서버 응답에 accessToken이 없음');
@@ -271,6 +274,8 @@ class LoginScreen extends StatelessWidget {
             'success': true,
             'accessToken': 'offline-${provider}-token',
             'refreshToken': 'offline-refresh-token',
+            'userId': 1, // 임시 userId
+            'userEmail': 'test@example.com', // 임시 email
           };
         }
         return null;
@@ -281,34 +286,55 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
+  // 🆕 로그인 성공 후 아이 정보 확인하여 적절한 화면으로 이동
+  Future<void> _navigateAfterLogin(BuildContext context, Map<String, dynamic> loginData) async {
+    try {
+      print('🔍 로그인 성공 후 처리 시작');
+
+      // 1. AuthService에 사용자 정보 저장
+      await AuthService.saveTokens(
+        accessToken: loginData['accessToken'],
+        refreshToken: loginData['refreshToken'] ?? '',
+        userId: loginData['userId'] ?? 1,
+        userEmail: loginData['userEmail'] ?? 'test@example.com',
+      );
+
+      // 2. 아이 정보 확인
+      final childInfo = await AuthService.checkChildInfo();
+      print('🔍 아이 정보 확인 결과: $childInfo');
+
+      if (childInfo != null && childInfo['hasChild'] == true) {
+        // 아이 정보가 있으면 홈으로
+        print('✅ 아이 정보 있음 - 홈화면으로 이동');
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        // 아이 정보가 없으면 아이 정보 입력 화면으로
+        print('✅ 아이 정보 없음 - 아이 정보 입력 화면으로 이동');
+        Navigator.pushReplacementNamed(context, '/child-info');
+      }
+    } catch (e) {
+      print('❌ 로그인 후 처리 오류: $e');
+      // 오류 시 아이 정보 입력 화면으로 (안전장치)
+      Navigator.pushReplacementNamed(context, '/child-info');
+    }
+  }
+
   // 에러 다이얼로그
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
       builder:
           (_) => AlertDialog(
-            title: const Text('로그인 오류'),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('확인'),
-              ),
-            ],
+        title: const Text('로그인 오류'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
           ),
+        ],
+      ),
     );
-  }
-
-  // ⭐ 로그인 성공 후 홈화면으로 이동
-  void _navigateToHome(BuildContext context) {
-    print('🔍 홈화면으로 이동 시도');
-    Navigator.pushReplacementNamed(context, '/home')
-        .then((_) {
-          print('✅ 홈화면 이동 완료');
-        })
-        .catchError((error) {
-          print('❌ 홈화면 이동 실패: $error');
-        });
   }
 
   @override
@@ -379,8 +405,8 @@ class LoginScreen extends StatelessWidget {
                           );
                           if (loginData != null &&
                               loginData['success'] == true) {
-                            print('✅ 로그인 성공! 홈화면으로 이동');
-                            _navigateToHome(context);
+                            print('✅ 로그인 성공! 아이 정보 확인 중...');
+                            await _navigateAfterLogin(context, loginData);
                           } else {
                             print('❌ 로그인 실패');
                             _showErrorDialog(context, '카카오 로그인에 실패했습니다.');
@@ -412,8 +438,8 @@ class LoginScreen extends StatelessWidget {
                           );
                           if (loginData != null &&
                               loginData['success'] == true) {
-                            print('✅ 로그인 성공! 홈화면으로 이동');
-                            _navigateToHome(context);
+                            print('✅ 로그인 성공! 아이 정보 확인 중...');
+                            await _navigateAfterLogin(context, loginData);
                           } else {
                             print('❌ 로그인 실패');
                             _showErrorDialog(context, '구글 로그인에 실패했습니다.');
@@ -448,13 +474,15 @@ class LoginScreen extends StatelessWidget {
                     // 개발용 테스트 버튼
                     ElevatedButton(
                       onPressed: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool('is_logged_in', true);
-                        await prefs.setString(
-                          'access_token',
-                          'fake-token-for-testing',
-                        );
-                        Navigator.pushReplacementNamed(context, '/home');
+                        // 🆕 테스트용 로그인도 아이 정보 확인 로직 적용
+                        final testLoginData = {
+                          'success': true,
+                          'accessToken': 'fake-token-for-testing',
+                          'refreshToken': 'fake-refresh-token',
+                          'userId': 1,
+                          'userEmail': 'test@example.com',
+                        };
+                        await _navigateAfterLogin(context, testLoginData);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.brown,
