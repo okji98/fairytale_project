@@ -3,9 +3,19 @@ from pydantic import BaseModel
 from controllers.story_controller import generate_fairy_tale, generate_image_from_fairy_tale, play_openai_voice
 from controllers.music_controller import search_tracks_by_tag
 from controllers.video_controller import search_videos
+from datetime import datetime
 
 # FastAPI 애플리케이션 생성
 app = FastAPI()
+
+# 헬스체크 엔드포인트
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "service": "fastapi",
+        "timestamp": datetime.now().isoformat()
+    }
 
 # 동화 생성 클래스
 class StoryRequest(BaseModel):

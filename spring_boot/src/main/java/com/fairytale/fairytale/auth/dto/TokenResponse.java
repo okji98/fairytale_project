@@ -1,14 +1,13 @@
 package com.fairytale.fairytale.auth.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import org.springframework.security.oauth2.jwt.DPoPProofContext;
 
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
+@Builder
 public class TokenResponse {
     private String accessToken;
     private String refreshToken;

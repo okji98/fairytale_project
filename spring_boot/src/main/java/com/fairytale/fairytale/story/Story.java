@@ -23,29 +23,29 @@ public class Story {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(length = 100, nullable = false)
+    @Column(length = 500, nullable = false)
     private String theme;
 
     @Column(length = 100, nullable = false)
     private String voice;
 
-    @Column(length = 100, nullable = false)
+    @Column(length = 100, nullable = true)
     private String imageMode;
 
-    @Column(length = 100, nullable = false)
+    @Column(length = 500, nullable = false)
     private String title;
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
     // nullable = true로 변경 (나중에 추가되는 필드들)
-    @Column(length = 255, nullable = true)
+    @Column(length = 500, nullable = true)
     private String voiceContent;
 
-    @Column(length = 255, nullable = true)
+    @Column(length = 500, nullable = true)
     private String colorImage;
 
-    @Column(length = 255, nullable = true)
+    @Column(length = 500, nullable = true)
     private String blackImage;
 
     @CreationTimestamp

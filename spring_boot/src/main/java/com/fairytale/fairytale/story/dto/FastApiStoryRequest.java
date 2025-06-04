@@ -9,10 +9,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class StoryCreateRequest {
-    private String theme;
-    private String voice;
-    private String imageMode;
+public class FastApiStoryRequest {
     private String name;
-    private String voiceSpeed;
+    private String theme;
 }

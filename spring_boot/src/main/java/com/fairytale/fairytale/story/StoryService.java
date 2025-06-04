@@ -26,34 +26,50 @@ public class StoryService {
     private final ObjectMapper objectMapper;
 
     // 동화 생성 메서드
-    public Story createStory(StoryCreateRequest request) {
-        System.out.println("Service: Start creating story");
+    public Story createStory(StoryCreateRequest request, String username) {
+        System.out.println("🔍 스토리 생성 시작 - Username: " + username);
+        System.out.println("🔍 받은 요청: theme=" + request.getTheme() + ", voice=" + request.getVoice() + ", voiceSpeed=" + request.getVoiceSpeed());
+
         // 1. 사용자 조회
-        Users user = usersRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
-        System.out.println("Service: User found");
-        // 2. FastAPI로 동화 생성 요청
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    System.out.println("❌ 사용자를 찾을 수 없음: " + username);
+                    usersRepository.findAll().forEach(u ->
+                            System.out.println("  - 존재하는 사용자: " + u.getUsername()));
+                    return new RuntimeException("사용자를 찾을 수 없습니다: " + username);
+                });
+
+        System.out.println("🔍 사용자 조회 성공 - ID: " + user.getId());
+
+        // 2. FastAPI 전용 요청 객체 생성 (올바른 방법)
+        FastApiStoryRequest fastApiRequest = new FastApiStoryRequest();
+        fastApiRequest.setName(request.getTheme() + " 동화");    // theme + "동화"로 name 생성
+        fastApiRequest.setTheme(request.getTheme());             // theme 설정
+
+        System.out.println("🔍 FastAPI 요청 생성: name=" + fastApiRequest.getName() + ", theme=" + fastApiRequest.getTheme());
+
+        // 3. FastAPI로 동화 생성 요청
         String url = fastApiBaseUrl + "/generate/story";
-        String response = callFastApi(url, request);
-        // 3. 응답에서 story 추출
+        String response = callFastApi(url, fastApiRequest);
+
+        // 4. 응답에서 story 추출
         String storyContent = extractStoryFromResponse(response);
-        // 4. Story 엔티티 생성 및 저장
+
+        // 5. Story 엔티티 생성 및 저장
         Story story = new Story();
         story.setTheme(request.getTheme());
         story.setVoice(request.getVoice());
-        story.setImageMode(request.getImageMode());
-        story.setTitle(request.getTitle());
+        story.setImageMode("color");                           // 기본값
+        story.setTitle(request.getTheme() + " 동화");          // theme + "동화"로 제목 생성
         story.setContent(storyContent);
         story.setUser(user);
-
-        // 기본값 명시적 설정
         story.setVoiceContent("");
         story.setColorImage("");
         story.setBlackImage("");
 
-        System.out.println("Service: Before save");
+        System.out.println("🔍 스토리 저장 전 - Title: " + story.getTitle());
         Story saved = storyRepository.save(story);
-        System.out.println("Service: After save, id: " + saved.getId());
+        System.out.println("🔍 스토리 저장 완료 - ID: " + saved.getId());
 
         return saved;
     }
@@ -115,6 +131,8 @@ public class StoryService {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             String jsonRequest = objectMapper.writeValueAsString(request);
+            System.out.println("🔍 FastAPI 전송 JSON: " + jsonRequest);
+
             HttpEntity<String> entity = new HttpEntity<>(jsonRequest, headers);
 
             ResponseEntity<String> response = restTemplate.exchange(
@@ -124,9 +142,11 @@ public class StoryService {
                     String.class
             );
 
+            System.out.println("🔍 FastAPI 응답: " + response.getBody());
             return response.getBody();
         } catch (Exception e) {
-            throw new RuntimeException("FastAPI 호출 실페: " + e.getMessage(), e);
+            System.out.println("❌ FastAPI 호출 실패: " + e.getMessage());
+            throw new RuntimeException("FastAPI 호출 실패: " + e.getMessage(), e);
         }
     }
 

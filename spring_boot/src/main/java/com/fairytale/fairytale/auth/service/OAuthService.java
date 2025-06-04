@@ -5,6 +5,8 @@ import com.fairytale.fairytale.auth.dto.RefreshToken;
 import com.fairytale.fairytale.auth.dto.TokenResponse;
 import com.fairytale.fairytale.auth.repository.RefreshTokenRepository;
 import com.fairytale.fairytale.auth.strategy.JwtAuthStrategy;
+import com.fairytale.fairytale.role.Role;
+import com.fairytale.fairytale.role.RoleRepository;
 import com.fairytale.fairytale.users.Users;
 import com.fairytale.fairytale.users.UsersRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
 public class OAuthService {
     private final RestTemplate restTemplate;
     private final UsersRepository usersRepository;
+    private final RoleRepository roleRepository;
     private final JwtAuthStrategy jwtAuthStrategy;
     private final RefreshTokenRepository refreshTokenRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -42,12 +45,16 @@ public class OAuthService {
 
     @Transactional
     public TokenResponse loginWithAccessToken(OAuthLoginRequest request) {
+        System.out.println("🔍 OAuth 로그인 시작 - Provider: " + request.getProvider());
         // 클라이언트가 보낸 accessToken으로 바로 유저 정보 조회
         Users user = getUserInfoFromProvider(request.getProvider(), request.getAccessToken());
+        System.out.println("🔍 소셜 로그인 사용자 정보: " + user.getUsername());
         // 사용자 DB에 저장 또는 업데이트
         Users savedUser = saveOrUpdateUser(user);
+        System.out.println("🔍 DB 저장 완료 - ID: " + savedUser.getId() + ", Username: " + savedUser.getUsername());
         // JWT 토큰 발급
         TokenResponse tokens = jwtAuthStrategy.generateTokens(savedUser);
+        System.out.println("🔍 JWT 토큰 발급 완료");
         // RefreshToken 저장
         refreshTokenRepository.save(new RefreshToken(savedUser.getId(), tokens.getRefreshToken()));
         return tokens;
@@ -112,13 +119,42 @@ public class OAuthService {
     }
 
     private Users saveOrUpdateUser(Users oauthUser) {
+        // 🆕 기본 USER 역할 설정
+        Role userRole = roleRepository.findByRoleName("USER")
+                .orElseGet(() -> {
+                    System.out.println("⚠️ USER 역할이 없어서 새로 생성합니다.");
+                    Role newRole = new Role();
+                    newRole.setRoleName("USER");
+                    return roleRepository.save(newRole);
+                });
+
+        // OAuth 사용자에게 역할 설정
+        oauthUser.setRole(userRole);
+        System.out.println("🔍 사용자 역할 설정 완료: " + userRole.getRoleName());
+
         return usersRepository.findByEmail(oauthUser.getEmail())
                 .or(() -> usersRepository.findByGoogleId(oauthUser.getGoogleId()))
                 .or(() -> usersRepository.findByKakaoId(oauthUser.getKakaoId()))
-                .map(user -> {
-                    user.setNickname(oauthUser.getNickname());
-                    return usersRepository.save(user);
-                }).orElseGet(() -> usersRepository.save(oauthUser));
+                .map(existingUser -> {
+                    System.out.println("🔍 기존 사용자 업데이트: " + existingUser.getUsername());
+                    existingUser.setNickname(oauthUser.getNickname());
+                    // 역할이 없으면 설정
+                    if (existingUser.getRole() == null) {
+                        existingUser.setRole(userRole);
+                    }
+                    // 소셜 ID 업데이트
+                    if (oauthUser.getGoogleId() != null) {
+                        existingUser.setGoogleId(oauthUser.getGoogleId());
+                    }
+                    if (oauthUser.getKakaoId() != null) {
+                        existingUser.setKakaoId(oauthUser.getKakaoId());
+                    }
+                    return usersRepository.save(existingUser);
+                })
+                .orElseGet(() -> {
+                    System.out.println("🔍 새 사용자 생성: " + oauthUser.getUsername());
+                    return usersRepository.save(oauthUser);
+                });
     }
 
     // 로그아웃 기능 추가

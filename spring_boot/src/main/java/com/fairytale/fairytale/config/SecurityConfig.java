@@ -56,8 +56,8 @@ public class SecurityConfig {
 //                        .requestMatchers("/error").permitAll()
 
 //                         나머지는 인증 필요
-                        .anyRequest().authenticated()
-//                        .anyRequest().permitAll() // 모든 요청 허용 (테스트용)
+//                        .anyRequest().authenticated()
+                        .anyRequest().permitAll() // 모든 요청 허용 (테스트용)
                 )
 
                 // ⭐ JWT 필터 추가
