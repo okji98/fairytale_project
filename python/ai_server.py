@@ -3,15 +3,11 @@ from pydantic import BaseModel
 from controllers.story_controller import generate_fairy_tale, generate_image_from_fairy_tale, play_openai_voice
 from controllers.music_controller import search_tracks_by_tag
 from controllers.video_controller import search_videos
-<<<<<<< HEAD
 from datetime import datetime
-=======
->>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
 
 # FastAPI 애플리케이션 생성
 app = FastAPI()
 
-<<<<<<< HEAD
 # 헬스체크 엔드포인트
 @app.get("/health")
 async def health_check():
@@ -21,8 +17,6 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
-=======
->>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
 # 동화 생성 클래스
 class StoryRequest(BaseModel):
     name: str
@@ -39,7 +33,6 @@ class TTSRequest(BaseModel):
     text: str
 
 # 음성 파일 생성 라우터
-<<<<<<< HEAD
 # @app.post("/generate/voice")
 # def generate_void(req: TTSRequest):
 #     path = play_openai_voice(generate_fairy_tale(req.text))
@@ -49,12 +42,6 @@ class TTSRequest(BaseModel):
 def generate_voice(req: TTSRequest):  # 함수명 수정
     # 받은 텍스트로 바로 음성 생성 (동화 재생성 하지 않음)
     path = play_openai_voice(req.text)
-=======
-@app.post("/generate/voice")
-def generate_void(req: TTSRequest):
-    path = play_openai_voice(generate_fairy_tale(req.text))
->>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
-    return {"audio_path": path}
 
 # 이미지 생성 클래스
 class ImageRequest(BaseModel):
