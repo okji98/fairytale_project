@@ -29,16 +29,29 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 
-    <!-- 카카오 SDK 설정 추가 -->
+    <!-- 🆕 Google Sign-In Client ID -->
+    <key>GIDClientID</key>
+    <string>910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com</string>
+
+    <!-- 카카오 SDK 설정 + Google Sign-In URL Schemes -->
     <key>CFBundleURLTypes</key>
     <array>
+        <!-- 카카오 로그인 URL Scheme -->
         <dict>
             <key>CFBundleURLName</key>
             <string>kakao</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <!-- YOUR_NATIVE_APP_KEY를 실제 카카오 네이티브 앱 키로 변경하세요 -->
                 <string>kakao6240e72db33e4ae36f4920a200335220</string>
+            </array>
+        </dict>
+        <!-- 🆕 Google Sign-In URL Scheme -->
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.google.oauth</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>com.googleusercontent.apps.910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s</string>
             </array>
         </dict>
     </array>

@@ -19,6 +19,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        String path = request.getRequestURI();
+
+        // 🔧 OAuth 경로와 기타 공개 경로는 JWT 필터를 건너뛰기
+        if (path.startsWith("/oauth/") ||
+                path.startsWith("/api/auth/") ||
+                path.equals("/health") ||
+                path.startsWith("/actuator/") ||
+                path.startsWith("/h2-console/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String token = resolveToken(request); // 요청 헤더에서 토큰 꺼내기
 
         // 만약에 유저에게 request받은 토큰이 있고 기존에 있던 token과 비교했을 때 똑같다면
