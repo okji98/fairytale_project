@@ -67,6 +67,16 @@ public class StoryService {
         story.setColorImage("");
         story.setBlackImage("");
 
+        // 🆕 image 컬럼이 있다면 기본값 설정
+        try {
+            // image 컬럼이 있을 경우를 대비해 리플렉션으로 설정
+            java.lang.reflect.Method setImageMethod = Story.class.getMethod("setImage", String.class);
+            setImageMethod.invoke(story, ""); // 빈 문자열로 기본값 설정
+        } catch (Exception e) {
+            // image 컬럼이 없으면 무시
+            System.out.println("🔍 image 컬럼이 없거나 설정 실패 (정상)");
+        }
+
         System.out.println("🔍 스토리 저장 전 - Title: " + story.getTitle());
         Story saved = storyRepository.save(story);
         System.out.println("🔍 스토리 저장 완료 - ID: " + saved.getId());
@@ -75,18 +85,32 @@ public class StoryService {
     }
 
     // 음성 생성 메서드
+    // 음성 생성 메서드에 로그 추가
     public Story createVoice(VoiceRequest request) {
+        System.out.println("🔍 음성 생성 시작 - StoryId: " + request.getStoryId());
+
         // 1. 기존 스토리 조회
         Story story = storyRepository.findById(request.getStoryId())
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
-        // 2. FastAPI로 보이스 생성 요청
-        String url = fastApiBaseUrl + "/generate/voice";
-        String fastApiResponse = callFastApi(url, request);
-        // 3. 응답에서 보이스 url 추출
-        String voiceUrl = extractVoiceUrlFromResponse(fastApiResponse);
-        // 4. 음성 url 저장
-        story.setVoiceContent(voiceUrl);
 
+        System.out.println("🔍 스토리 조회 성공 - Content 길이: " + story.getContent().length());
+
+        // 2. FastAPI 요청 객체 생성
+        FastApiVoiceRequest fastApiRequest = new FastApiVoiceRequest();
+        fastApiRequest.setText(story.getContent());
+
+        System.out.println("🔍 FastAPI 음성 요청: text 길이 = " + fastApiRequest.getText().length());
+
+        // 3. FastAPI 호출
+        String url = fastApiBaseUrl + "/generate/voice";
+        String fastApiResponse = callFastApi(url, fastApiRequest);
+
+        // 4. 응답 파싱
+        String voiceUrl = extractVoiceUrlFromResponse(fastApiResponse);
+        System.out.println("🔍 음성 URL: " + voiceUrl);
+
+        // 5. 저장
+        story.setVoiceContent(voiceUrl);
         return storyRepository.save(story);
     }
 
@@ -95,12 +119,16 @@ public class StoryService {
         // 1. 기존 스토리 조회
         Story story = storyRepository.findById(request.getStoryId())
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
-        // 2. FastAPI로 이미지 생성 요청
+        // 2. FastAPI 요청 객체 생성 (변환)
+        FastApiImageRequest fastApiRequest = new FastApiImageRequest();
+        fastApiRequest.setMode(request.getImageMode());  // imageMode → mode
+        fastApiRequest.setText(request.getPrompt());     // prompt → text
+        // 3. FastAPI로 이미지 생성 요청
         String url = fastApiBaseUrl + "/generate/image";
-        String fastApiResponse = callFastApi(url, request);
-        // 3. 응답에서 이미지 url 추출
+        String fastApiResponse = callFastApi(url, fastApiRequest);
+        // 4. 응답에서 이미지 url 추출
         String imageUrl = extractImageUrlFromResponse(fastApiResponse);
-        // 4. imageMode에 따라 적절한 컬럼에 저장
+        // 5. imageMode에 따라 적절한 컬럼에 저장
         if ("color".equals(request.getImageMode())) {
             story.setColorImage(imageUrl);
         } else if ("black".equals(request.getImageMode())) {
@@ -173,7 +201,7 @@ public class StoryService {
     private String extractVoiceUrlFromResponse(String response) {
         try {
             JsonNode jsonNode = objectMapper.readTree(response);
-            return jsonNode.get("audio_path ").asText();
+            return jsonNode.get("audio_path").asText();
         } catch (Exception e) {
             throw new RuntimeException("보이스 URL 파싱 실패 " + e);
         }

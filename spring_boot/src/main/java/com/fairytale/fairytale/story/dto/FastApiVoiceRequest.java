@@ -9,9 +9,6 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ImageRequest {
-    private Long storyId;
-    private String description;
-    private String imageMode; // "color" or "black"
-    private String prompt;
+public class FastApiVoiceRequest {
+    private String text;  // FastAPI가 기대하는 필드명
 }
