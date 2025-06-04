@@ -13,8 +13,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
@@ -99,11 +101,15 @@ public class OAuthService {
         String email = account.has("email") ? account.get("email").asText() : kakaoId + "@kakao.com";
         String nickname = account.get("profile").get("nickname").asText();
 
+        // 🔧 고유한 사용자명 생성
+        String username = generateUniqueUsername("kakao_" + kakaoId);
+        String uniqueNickname = generateUniqueNickname(nickname);
+
         return Users.builder()
                 .kakaoId(kakaoId)
                 .email(email)
-                .nickname(nickname)
-                .username("kakao_" + kakaoId)
+                .nickname(uniqueNickname)
+                .username(username)
                 .build();
     }
 
@@ -111,13 +117,45 @@ public class OAuthService {
         String googleId = root.get("sub").asText();
         String email = root.get("email").asText();
         String nickname = root.get("name").asText();
+        // 🔧 고유한 사용자명 생성
+        String username = generateUniqueUsername("google_" + googleId);
+        String uniqueNickname = generateUniqueNickname(nickname);
 
         return Users.builder()
                 .googleId(googleId)
                 .email(email)
-                .nickname(nickname)
-                .username("google_" + googleId)
+                .nickname(uniqueNickname)
+                .username(username)
                 .build();
+    }
+
+    // 🆕 고유한 사용자명 생성 메서드 추가
+    private String generateUniqueUsername(String baseUsername) {
+        String username = baseUsername;
+        int counter = 1;
+
+        // 사용자명이 존재하면 뒤에 숫자 추가
+        while (usersRepository.findByUsername(username).isPresent()) {
+            username = baseUsername + "_" + counter;
+            counter++;
+            System.out.println("🔍 사용자명 중복으로 인한 변경: " + username);
+        }
+
+        return username;
+    }
+
+    // 🆕 고유한 닉네임 생성 메서드 추가
+    private String generateUniqueNickname(String baseNickname) {
+        String nickname = baseNickname;
+        int counter = 1;
+
+        while (usersRepository.findByNickname(nickname).isPresent()) {
+            nickname = baseNickname + "_" + counter;
+            counter++;
+            System.out.println("🔍 닉네임 중복으로 인한 변경: " + nickname);
+        }
+
+        return nickname;
     }
 
     private Users saveOrUpdateUser(Users oauthUser) {
@@ -204,8 +242,37 @@ public class OAuthService {
             }
 
             // 새 사용자 생성
-            System.out.println("🔍 새 사용자 생성: " + oauthUser.getUsername());
-            return usersRepository.save(oauthUser);
+            // 새 사용자 생성 부분을 이렇게 수정
+            try {
+                System.out.println("🔍 새 사용자 생성: " + oauthUser.getUsername());
+                return usersRepository.save(oauthUser);
+            } catch (DataIntegrityViolationException e) {
+                System.out.println("⚠️ 중복 데이터로 인한 저장 실패, 다시 조회 시도");
+
+                // 중복 에러 발생 시 다시 한 번 조회 시도
+                if (oauthUser.getGoogleId() != null) {
+                    Optional<Users> existingUser = usersRepository.findByGoogleId(oauthUser.getGoogleId());
+                    if (existingUser.isPresent()) {
+                        System.out.println("🔍 중복 에러 후 구글 ID로 기존 사용자 발견: " + existingUser.get().getUsername());
+                        return existingUser.get();
+                    }
+                }
+
+                if (oauthUser.getKakaoId() != null) {
+                    Optional<Users> existingUser = usersRepository.findByKakaoId(oauthUser.getKakaoId());
+                    if (existingUser.isPresent()) {
+                        System.out.println("🔍 중복 에러 후 카카오 ID로 기존 사용자 발견: " + existingUser.get().getUsername());
+                        return existingUser.get();
+                    }
+                }
+
+                Optional<Users> existingUser = usersRepository.findByEmail(oauthUser.getEmail());
+                if (existingUser.isPresent()) {
+                    System.out.println("🔍 중복 에러 후 이메일로 기존 사용자 발견: " + existingUser.get().getUsername());
+                    return existingUser.get();
+                }
+                throw e; // 여전히 실패하면 에러 재발생
+            }
 
         } catch (Exception e) {
             System.err.println("❌ saveOrUpdateUser에서 예외 발생: " + e.getMessage());
