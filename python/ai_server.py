@@ -42,6 +42,7 @@ class TTSRequest(BaseModel):
 def generate_voice(req: TTSRequest):  # 함수명 수정
     # 받은 텍스트로 바로 음성 생성 (동화 재생성 하지 않음)
     path = play_openai_voice(req.text)
+    return {"audio_path": path}
 
 # 이미지 생성 클래스
 class ImageRequest(BaseModel):

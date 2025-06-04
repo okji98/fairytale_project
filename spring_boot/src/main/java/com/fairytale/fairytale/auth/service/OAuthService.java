@@ -5,11 +5,8 @@ import com.fairytale.fairytale.auth.dto.RefreshToken;
 import com.fairytale.fairytale.auth.dto.TokenResponse;
 import com.fairytale.fairytale.auth.repository.RefreshTokenRepository;
 import com.fairytale.fairytale.auth.strategy.JwtAuthStrategy;
-<<<<<<< HEAD
 import com.fairytale.fairytale.role.Role;
 import com.fairytale.fairytale.role.RoleRepository;
-=======
->>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
 import com.fairytale.fairytale.users.Users;
 import com.fairytale.fairytale.users.UsersRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,10 +23,7 @@ import org.springframework.web.client.RestTemplate;
 public class OAuthService {
     private final RestTemplate restTemplate;
     private final UsersRepository usersRepository;
-<<<<<<< HEAD
     private final RoleRepository roleRepository;
-=======
->>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
     private final JwtAuthStrategy jwtAuthStrategy;
     private final RefreshTokenRepository refreshTokenRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -51,7 +45,6 @@ public class OAuthService {
 
     @Transactional
     public TokenResponse loginWithAccessToken(OAuthLoginRequest request) {
-<<<<<<< HEAD
         System.out.println("🔍 OAuth 로그인 시작 - Provider: " + request.getProvider());
         // 클라이언트가 보낸 accessToken으로 바로 유저 정보 조회
         Users user = getUserInfoFromProvider(request.getProvider(), request.getAccessToken());
@@ -62,14 +55,6 @@ public class OAuthService {
         // JWT 토큰 발급
         TokenResponse tokens = jwtAuthStrategy.generateTokens(savedUser);
         System.out.println("🔍 JWT 토큰 발급 완료");
-=======
-        // 클라이언트가 보낸 accessToken으로 바로 유저 정보 조회
-        Users user = getUserInfoFromProvider(request.getProvider(), request.getAccessToken());
-        // 사용자 DB에 저장 또는 업데이트
-        Users savedUser = saveOrUpdateUser(user);
-        // JWT 토큰 발급
-        TokenResponse tokens = jwtAuthStrategy.generateTokens(savedUser);
->>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
         // RefreshToken 저장
         refreshTokenRepository.save(new RefreshToken(savedUser.getId(), tokens.getRefreshToken()));
         return tokens;
@@ -134,7 +119,6 @@ public class OAuthService {
     }
 
     private Users saveOrUpdateUser(Users oauthUser) {
-<<<<<<< HEAD
         // 🆕 기본 USER 역할 설정
         Role userRole = roleRepository.findByRoleName("USER")
                 .orElseGet(() -> {
@@ -171,15 +155,6 @@ public class OAuthService {
                     System.out.println("🔍 새 사용자 생성: " + oauthUser.getUsername());
                     return usersRepository.save(oauthUser);
                 });
-=======
-        return usersRepository.findByEmail(oauthUser.getEmail())
-                .or(() -> usersRepository.findByGoogleId(oauthUser.getGoogleId()))
-                .or(() -> usersRepository.findByKakaoId(oauthUser.getKakaoId()))
-                .map(user -> {
-                    user.setNickname(oauthUser.getNickname());
-                    return usersRepository.save(user);
-                }).orElseGet(() -> usersRepository.save(oauthUser));
->>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
     }
 
     // 로그아웃 기능 추가
