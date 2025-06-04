@@ -85,7 +85,8 @@ def generate_image_from_fairy_tale(fairy_tale_text):
         base_prompt = fairy_tale_text[:300].replace('\n', ' ')
 
         prompt = (
-            "Make sure there is no text in the image"
+            "Make sure there is no text in the image "
+            "Minimul detail "
             f"Please create a single, simple illustration that matches the content about {base_prompt}, in a child-friendly style. "
         )
 
@@ -113,24 +114,31 @@ def convert_bw_image(image_url, save_path="bw_image.png"):
     try:
         response = requests.get(image_url)
         image = Image.open(BytesIO(response.content)).convert("RGB")
+
+        # Numpy 배열로 변환
         np_image = np.array(image)
 
         # 흑백 변환
         gray = cv2.cvtColor(np_image, cv2.COLOR_RGB2GRAY)
 
-        # Canny edge 검출
-        edges = cv2.adaptiveThreshold(
-                gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
-                cv2.THRESH_BINARY_INV, 9, 5
-            )
+        # 가우시안 블러로 노이즈 제거
+        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
 
-        # 색 반전 (흰 배경에 검은 선)
-        line_drawing = 255 - edges
-
+        # 캐니 엣지 디텍션 (더 부드러운 선)
+        edges = cv2.Canny(blurred, 50, 150)
+        
+        # 선 두께 조절
+        kernel = np.ones((2,2), np.uint8)
+        dilated_edges = cv2.dilate(edges, kernel, iterations=1)
+        
+        # 흰 배경에 검은 선
+        line_drawing = 255 - dilated_edges
+        
+        # 이미지 저장
         cv2.imwrite(save_path, line_drawing)
         return save_path
     
     except Exception as e:
-        print(f"흑백 변환 오류: {e}")
+        print(f"변환 오류: {e}")
         return None
 
