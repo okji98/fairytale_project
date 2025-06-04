@@ -39,6 +39,7 @@ public class Story {
     private String content;
 
     // nullable = true로 변경 (나중에 추가되는 필드들)
+<<<<<<< HEAD
     @Column(length = 500, nullable = true)
     private String voiceContent;
 
@@ -46,6 +47,15 @@ public class Story {
     private String colorImage;
 
     @Column(length = 500, nullable = true)
+=======
+    @Column(length = 255, nullable = true)
+    private String voiceContent;
+
+    @Column(length = 255, nullable = true)
+    private String colorImage;
+
+    @Column(length = 255, nullable = true)
+>>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
     private String blackImage;
 
     @CreationTimestamp

@@ -10,12 +10,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+<<<<<<< HEAD
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+=======
+>>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
 import org.springframework.security.core.userdetails.User;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+<<<<<<< HEAD
 import java.util.Collections;
+=======
+>>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -79,6 +85,7 @@ public class JwtAuthStrategy implements AuthStrategy {
 
     // 3. 토큰으로부터 Authentication 객체 얻기
     public Authentication getAuthentication(String token) {
+<<<<<<< HEAD
         try {
             String username = getUsername(token);
             System.out.println("🔍 JWT에서 추출한 username: " + username);
@@ -93,6 +100,15 @@ public class JwtAuthStrategy implements AuthStrategy {
             System.out.println("❌ JWT 인증 객체 생성 실패: " + e.getMessage());
             return null;
         }
+=======
+        String username = getUsername(token);
+        Optional<Users> userOpt = usersRepository.findByUsername(username);
+        Users user = userOpt.orElseThrow(() -> new RuntimeException("유저 없음"));
+
+        // Spring Security가 쓰는 UserDetails 객체로 변환
+        User principal = new User(user.getUsername(), "", /* 권한 리스트 */ List.of());
+        return new UsernamePasswordAuthenticationToken(principal, token, principal.getAuthorities());
+>>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
     }
 
     // 토큰에서 사용자 정보 추출 로직

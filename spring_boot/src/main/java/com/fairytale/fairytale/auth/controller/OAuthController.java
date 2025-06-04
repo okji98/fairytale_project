@@ -4,6 +4,7 @@ import com.fairytale.fairytale.auth.dto.OAuthLoginRequest;
 import com.fairytale.fairytale.auth.dto.RefreshTokenRequest;
 import com.fairytale.fairytale.auth.dto.TokenResponse;
 import com.fairytale.fairytale.auth.service.OAuthService;
+<<<<<<< HEAD
 import com.fairytale.fairytale.auth.strategy.JwtAuthStrategy;
 import com.fairytale.fairytale.role.Role;
 import com.fairytale.fairytale.role.RoleRepository;
@@ -45,6 +46,26 @@ public class OAuthController {
                             .refreshToken("error")
                             .build());
         }
+=======
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/oauth")
+@RequiredArgsConstructor
+public class OAuthController {
+    private final OAuthService oauthService;
+
+    @PostMapping("/login")
+    public ResponseEntity<TokenResponse> socialLogin(@RequestBody OAuthLoginRequest request) {
+        System.out.println("🚀 로그인 요청 - Provider: " + request.getProvider());
+        System.out.println("🚀 액세스 토큰 앞 20자: " + request.getAccessToken().substring(0, Math.min(20, request.getAccessToken().length())));
+
+        TokenResponse tokenResponse = oauthService.loginWithAccessToken(request);
+        return ResponseEntity.ok(tokenResponse);
+>>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
     }
 
     @PostMapping("/logout")
@@ -72,6 +93,7 @@ public class OAuthController {
         }
         return null;
     }
+<<<<<<< HEAD
 
     // 🆕 테스트용 토큰 발급 엔드포인트
     @PostMapping("/test/token")
@@ -116,4 +138,6 @@ public class OAuthController {
                 "timestamp", LocalDateTime.now().toString()
         ));
     }
+=======
+>>>>>>> ff499d6d3234cd9769f50af99afea5d983c6a701
 }
