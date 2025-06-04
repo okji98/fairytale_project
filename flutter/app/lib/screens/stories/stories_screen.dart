@@ -1,5 +1,8 @@
 // lib/stories_screen.dart
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 
 class StoriesScreen extends StatefulWidget {
@@ -17,7 +20,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
   // API 응답 데이터
   String? _generatedStory;
-  String? _storyId; // API에서 반환되는 동화 ID
+  int? _storyId; // API에서 반환되는 동화 ID
   String? _audioUrl; // TTS 오디오 파일 S3 URL
   List<String> _generatedImages = []; // 생성된 이미지들의 S3 URL 리스트
 
@@ -29,7 +32,14 @@ class _StoriesScreenState extends State<StoriesScreen> {
   String? _errorMessage;
 
   final List<String> _themes = ['자연', '도전', '가족', '사랑', '우정', '용기'];
-  final List<String> _voices = ['아이유', '김태연', '박보검']; // TODO: Google TTS 음성으로 변경
+  final List<String> _voices = [
+    '아이유',
+    '김태연',
+    '박보검',
+  ]; // TODO: Google TTS 음성으로 변경
+
+  // API 설정
+  static const String baseUrl = 'http://localhost:8080'; // 실제 서버 URL로 변경
 
   @override
   void initState() {
@@ -43,14 +53,27 @@ class _StoriesScreenState extends State<StoriesScreen> {
     super.dispose();
   }
 
-  // TODO: Spring Boot API - 사용자 프로필에서 아이 이름 가져오기
+  // 인증된 HTTP 요청을 위한 헤더 가져오기
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accessToken = prefs.getString('access_token');
+
+    return {
+      'Content-Type': 'application/json',
+      if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+    };
+  }
+
+  // Spring Boot API - 사용자 프로필에서 아이 이름 가져오기
   Future<void> _loadUserProfile() async {
     setState(() => _isLoading = true);
 
     try {
+      // TODO: 사용자 프로필 API 구현 후 활성화
+      // final headers = await _getAuthHeaders();
       // final response = await http.get(
       //   Uri.parse('$baseUrl/api/user/profile'),
-      //   headers: {'Authorization': 'Bearer $accessToken'},
+      //   headers: headers,
       // );
       //
       // if (response.statusCode == 200) {
@@ -69,7 +92,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // TODO: Spring Boot API - 동화 생성
+  // Spring Boot API - 동화 생성
   Future<void> _generateStory() async {
     if (_selectedTheme == null || _selectedVoice == null) {
       _showError('테마와 목소리를 모두 선택해주세요.');
@@ -85,52 +108,71 @@ class _StoriesScreenState extends State<StoriesScreen> {
     });
 
     try {
-      // TODO: Spring Boot API - 동화 생성 (OpenAI + Python 연동)
-      // final requestData = {
-      //   'childName': _nameController.text,
-      //   'theme': _selectedTheme,
-      //   'voice': _selectedVoice,
-      //   'speed': _speed,
-      // };
-      //
-      // final response = await http.post(
-      //   Uri.parse('$baseUrl/api/stories/generate'),
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': 'Bearer $accessToken',
-      //   },
-      //   body: json.encode(requestData),
-      // );
-      //
-      // if (response.statusCode == 200) {
-      //   final responseData = json.decode(response.body);
-      //   setState(() {
-      //     _storyId = responseData['storyId'];
-      //     _generatedStory = responseData['content']; // Python OpenAI에서 생성
-      //     _audioUrl = responseData['audioUrl']; // TTS S3 URL
-      //   });
-      // } else {
-      //   throw Exception('동화 생성에 실패했습니다.');
-      // }
+      final headers = await _getAuthHeaders();
+      final requestData = {
+        'genre': _selectedTheme,
+        'theme': _selectedTheme,
+        'character': _nameController.text,
+        'setting': '마법의 세계',
+        'lesson': '${_selectedTheme}의 소중함',
+        'ageGroup': 5,
+      };
 
-      // 현재는 더미 데이터로 시뮬레이션
-      await Future.delayed(Duration(seconds: 3));
-      setState(() {
-        _storyId = 'story_${DateTime.now().millisecondsSinceEpoch}';
-        _generatedStory = '''옛날 옛적, ${_nameController.text}이라는 용감한 아이가 살았습니다.
-        
-${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 떠나게 되었어요.
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/fairytale/generate/story'),
+        headers: headers,
+        body: json.encode(requestData),
+      );
 
-어느 날, ${_nameController.text}은(는) 마법의 숲에서 신비로운 동물들을 만났습니다. 
-그들과 함께 $_selectedTheme에 관한 소중한 교훈을 배우며 성장해 나갔답니다.
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        setState(() {
+          _storyId = responseData['id'];
+          _generatedStory =
+              responseData['content'] ?? responseData['storyText'];
+        });
 
-마침내 ${_nameController.text}은(는) 모든 어려움을 극복하고 행복하게 살았답니다.''';
-        _audioUrl = 'https://s3.bucket.com/audio/${_storyId}.mp3';
-      });
+        // 동화 생성 후 자동으로 음성 생성
+        _generateVoice();
+      } else {
+        throw Exception('동화 생성에 실패했습니다. 상태 코드: ${response.statusCode}');
+      }
     } catch (e) {
       _showError('동화 생성 중 오류가 발생했습니다: ${e.toString()}');
     } finally {
       setState(() => _isGeneratingStory = false);
+    }
+  }
+
+  // Spring Boot API - 음성 생성
+  Future<void> _generateVoice() async {
+    if (_storyId == null) return;
+
+    try {
+      final headers = await _getAuthHeaders();
+      final requestData = {
+        'storyId': _storyId,
+        'voiceType': _selectedVoice,
+        'speed': _speed.toString(),
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/fairytale/generate/voice'),
+        headers: headers,
+        body: json.encode(requestData),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        setState(() {
+          _audioUrl = responseData['audioUrl'] ?? responseData['voiceUrl'];
+        });
+      } else {
+        print('음성 생성 실패: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('음성 생성 중 오류: $e');
+      // 음성 생성 실패해도 동화는 보여줌
     }
   }
 
@@ -150,9 +192,9 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
     print('${_isPlaying ? 'Playing' : 'Pausing'} audio: $_audioUrl');
   }
 
-  // TODO: Spring Boot API - 이미지 생성 (1개만)
+  // Spring Boot API - 이미지 생성 또는 기존 이미지 가져오기
   Future<void> _generateImage() async {
-    if (_generatedStory == null || _selectedImageMode == null) {
+    if (_storyId == null || _selectedImageMode == null) {
       _showError('동화를 먼저 생성하고 이미지 모드를 선택해주세요.');
       return;
     }
@@ -164,49 +206,91 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
     });
 
     try {
-      // final requestData = {
-      //   'storyId': _storyId,
-      //   'storyContent': _generatedStory,
-      //   'imageMode': _selectedImageMode, // 'color' or 'bw'
-      //   'childName': _nameController.text,
-      // };
-      //
-      // final response = await http.post(
-      //   Uri.parse('$baseUrl/api/stories/generate-image'),
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': 'Bearer $accessToken',
-      //   },
-      //   body: json.encode(requestData),
-      // );
-      //
-      // if (response.statusCode == 200) {
-      //   final responseData = json.decode(response.body);
-      //   setState(() {
-      //     _generatedImages = [responseData['imageUrl']]; // 1개 이미지만
-      //   });
-      // } else {
-      //   throw Exception('이미지 생성에 실패했습니다.');
-      // }
+      // 1. 먼저 기존 Story 데이터 조회해서 이미지가 있는지 확인
+      final headers = await _getAuthHeaders();
+      final storyResponse = await http.get(
+        Uri.parse('$baseUrl/api/fairytale/story/$_storyId'), // Story 조회 API 필요
+        headers: headers,
+      );
 
-      // 현재는 더미 데이터로 시뮬레이션 (1개 이미지만)
-      await Future.delayed(Duration(seconds: 5));
-      setState(() {
-        _generatedImages = [
-          'https://s3.bucket.com/images/${_storyId}_main.jpg',
-        ];
-      });
+      if (storyResponse.statusCode == 200) {
+        final storyData = json.decode(storyResponse.body);
+        String? existingImageUrl;
+
+        // 선택된 모드에 따라 기존 이미지 확인
+        if (_selectedImageMode == 'color') {
+          existingImageUrl = storyData['colorImage'];
+        } else if (_selectedImageMode == 'bw') {
+          existingImageUrl = storyData['blackImage'];
+        }
+
+        // 기존 이미지가 있으면 그것을 사용
+        if (existingImageUrl != null && existingImageUrl.isNotEmpty) {
+          print('🔍 기존 이미지 사용: $existingImageUrl');
+          setState(() {
+            _generatedImages = [existingImageUrl!]; // ! 연산자로 non-null 보장
+          });
+          return; // 기존 이미지 사용하고 함수 종료
+        }
+      }
+
+      // 2. 기존 이미지가 없으면 새로 생성
+      print('🔍 새 이미지 생성 시작');
+      final requestData = {
+        'storyId': _storyId,
+        'style': _selectedImageMode == 'color' ? 'cartoon' : 'line_art',
+        'resolution': '512x512',
+      };
+
+      print('🔍 이미지 생성 요청: ${json.encode(requestData)}');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/fairytale/generate/image'),
+        headers: headers,
+        body: json.encode(requestData),
+      );
+
+      print('🔍 이미지 생성 응답 상태: ${response.statusCode}');
+      print('🔍 이미지 생성 응답 본문: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+
+        // 응답에서 선택된 모드에 맞는 이미지 URL 추출
+        String? imageUrl;
+        if (responseData is Map<String, dynamic>) {
+          if (_selectedImageMode == 'color') {
+            imageUrl = responseData['colorImage'];
+          } else if (_selectedImageMode == 'bw') {
+            imageUrl = responseData['blackImage'];
+          }
+
+          // 위에서 못찾으면 다른 필드명들도 시도
+          imageUrl ??= responseData['imageUrl'] ?? responseData['imageS3Url'];
+        }
+
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          setState(() {
+            _generatedImages = [imageUrl!]; // ! 연산자로 non-null 보장
+          });
+          print('✅ 새 이미지 생성 완료: $imageUrl');
+        } else {
+          throw Exception('응답에서 이미지 URL을 찾을 수 없습니다.');
+        }
+      } else {
+        throw Exception(
+          '이미지 생성에 실패했습니다. 상태 코드: ${response.statusCode}\n응답: ${response.body}',
+        );
+      }
     } catch (e) {
+      print('❌ 이미지 생성 에러: $e');
       _showError('이미지 생성 중 오류가 발생했습니다: ${e.toString()}');
     } finally {
       setState(() => _isGeneratingImages = false);
     }
   }
 
-  // TODO: 동화 저장하기 (제거됨)
-  // 저장 기능은 제거하고 공유 기능으로 대체
-
-  // TODO: Spring Boot API - 음성+이미지 합성하여 MP4 생성 및 공유
+  // 공유 기능
   Future<void> _shareStoryVideo() async {
     if (_audioUrl == null || _generatedImages.isEmpty) {
       _showError('음성과 이미지가 모두 생성되어야 공유할 수 있습니다.');
@@ -216,58 +300,22 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
     setState(() => _isLoading = true);
 
     try {
-      // final requestData = {
-      //   'storyId': _storyId,
-      //   'audioUrl': _audioUrl,
-      //   'imageUrl': _generatedImages[0],
-      //   'storyContent': _generatedStory,
-      //   'childName': _nameController.text,
-      //   'theme': _selectedTheme,
-      // };
-      //
-      // final response = await http.post(
-      //   Uri.parse('$baseUrl/api/stories/create-video'),
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': 'Bearer $accessToken',
-      //   },
-      //   body: json.encode(requestData),
-      // );
-      //
-      // if (response.statusCode == 200) {
-      //   final responseData = json.decode(response.body);
-      //   final String videoUrl = responseData['videoUrl']; // S3에 저장된 MP4 URL
-      //
-      //   // Share 페이지로 이동하면서 비디오 URL 전달
-      //   Navigator.pushNamed(
-      //     context,
-      //     '/share',
-      //     arguments: {
-      //       'videoUrl': videoUrl,
-      //       'storyTitle': '${_nameController.text}의 ${_selectedTheme} 동화',
-      //       'storyContent': _generatedStory,
-      //     },
-      //   );
-      // } else {
-      //   throw Exception('비디오 생성에 실패했습니다.');
-      // }
-
-      // 현재는 더미 데이터로 시뮬레이션
-      await Future.delayed(Duration(seconds: 3));
+      // TODO: 실제 비디오 생성 API 추가 필요
+      // 현재는 시뮬레이션
+      await Future.delayed(Duration(seconds: 2));
 
       // Share 페이지로 이동
       Navigator.pushNamed(
         context,
         '/share',
         arguments: {
-          'videoUrl': 'https://s3.bucket.com/videos/${_storyId}.mp4',
+          'videoUrl': 'https://generated-video-url.com/video_${_storyId}.mp4',
           'storyTitle': '${_nameController.text}의 $_selectedTheme 동화',
           'storyContent': _generatedStory,
           'audioUrl': _audioUrl,
           'imageUrl': _generatedImages[0],
         },
       );
-
     } catch (e) {
       _showError('비디오 생성 중 오류가 발생했습니다: ${e.toString()}');
     } finally {
@@ -278,10 +326,7 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
   void _showError(String message) {
     setState(() => _errorMessage = message);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -293,17 +338,12 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
 
     if (_isLoading) {
       return BaseScaffold(
-        child: Center(
-          child: CircularProgressIndicator(color: primaryColor),
-        ),
+        child: Center(child: CircularProgressIndicator(color: primaryColor)),
       );
     }
 
     return BaseScaffold(
-      background: Image.asset(
-        'assets/bg_image.png',
-        fit: BoxFit.cover,
-      ),
+      background: Image.asset('assets/bg_image.png', fit: BoxFit.cover),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(screenWidth * 0.04),
@@ -321,10 +361,7 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  Image.asset(
-                    'assets/logo.png',
-                    height: screenHeight * 0.25,
-                  ),
+                  Image.asset('assets/logo.png', height: screenHeight * 0.25),
                   Positioned(
                     top: 20,
                     right: -18,
@@ -387,9 +424,15 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
               SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _selectedTheme,
-                items: _themes
-                    .map((theme) => DropdownMenuItem(value: theme, child: Text(theme)))
-                    .toList(),
+                items:
+                    _themes
+                        .map(
+                          (theme) => DropdownMenuItem(
+                            value: theme,
+                            child: Text(theme),
+                          ),
+                        )
+                        .toList(),
                 hint: Text('테마 선택'),
                 onChanged: (val) => setState(() => _selectedTheme = val),
                 decoration: InputDecoration(
@@ -416,9 +459,15 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
               SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _selectedVoice,
-                items: _voices
-                    .map((voice) => DropdownMenuItem(value: voice, child: Text(voice)))
-                    .toList(),
+                items:
+                    _voices
+                        .map(
+                          (voice) => DropdownMenuItem(
+                            value: voice,
+                            child: Text(voice),
+                          ),
+                        )
+                        .toList(),
                 hint: Text('음성 선택'),
                 onChanged: (val) => setState(() => _selectedVoice = val),
                 decoration: InputDecoration(
@@ -483,29 +532,32 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                       borderRadius: BorderRadius.circular(24),
                     ),
                   ),
-                  child: _isGeneratingStory
-                      ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Text('동화 생성 중...'),
-                    ],
-                  )
-                      : Text(
-                    '동화 생성',
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.04,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child:
+                      _isGeneratingStory
+                          ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text('동화 생성 중...'),
+                            ],
+                          )
+                          : Text(
+                            '동화 생성',
+                            style: TextStyle(
+                              fontSize: screenWidth * 0.04,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                 ),
               ),
 
@@ -569,7 +621,9 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                   child: IconButton(
                     iconSize: screenWidth * 0.15,
                     icon: Icon(
-                      _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                      _isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_fill,
                       color: primaryColor,
                     ),
                     onPressed: _playPauseAudio,
@@ -594,10 +648,14 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                       child: ChoiceChip(
                         label: Text('컬러'),
                         selected: _selectedImageMode == 'color',
-                        onSelected: (_) => setState(() => _selectedImageMode = 'color'),
+                        onSelected:
+                            (_) => setState(() => _selectedImageMode = 'color'),
                         selectedColor: primaryColor,
                         labelStyle: TextStyle(
-                          color: _selectedImageMode == 'color' ? Colors.white : Colors.black,
+                          color:
+                              _selectedImageMode == 'color'
+                                  ? Colors.white
+                                  : Colors.black,
                         ),
                       ),
                     ),
@@ -606,10 +664,14 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                       child: ChoiceChip(
                         label: Text('흑백 (색칠용)'),
                         selected: _selectedImageMode == 'bw',
-                        onSelected: (_) => setState(() => _selectedImageMode = 'bw'),
+                        onSelected:
+                            (_) => setState(() => _selectedImageMode = 'bw'),
                         selectedColor: primaryColor,
                         labelStyle: TextStyle(
-                          color: _selectedImageMode == 'bw' ? Colors.white : Colors.black,
+                          color:
+                              _selectedImageMode == 'bw'
+                                  ? Colors.white
+                                  : Colors.black,
                         ),
                       ),
                     ),
@@ -631,29 +693,32 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                         borderRadius: BorderRadius.circular(24),
                       ),
                     ),
-                    child: _isGeneratingImages
-                        ? Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Text('이미지 생성 중...'),
-                      ],
-                    )
-                        : Text(
-                      '이미지 생성',
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.04,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child:
+                        _isGeneratingImages
+                            ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text('이미지 생성 중...'),
+                              ],
+                            )
+                            : Text(
+                              '이미지 생성',
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.04,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                   ),
                 ),
               ],
@@ -686,52 +751,46 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        color: Colors.grey[300],
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.image,
-                                size: screenWidth * 0.2,
-                                color: Colors.grey[600],
+                      child: Image.network(
+                        _generatedImages[0],
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: primaryColor,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[300],
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.image,
+                                    size: screenWidth * 0.2,
+                                    color: Colors.grey[600],
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    _selectedImageMode == 'color'
+                                        ? '컬러 이미지'
+                                        : '색칠용 이미지',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: screenWidth * 0.04,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              SizedBox(height: 16),
-                              Text(
-                                _selectedImageMode == 'color' ? '컬러 이미지' : '색칠용 이미지',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: screenWidth * 0.04,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                      // TODO: 실제 이미지 로드
-                      // child: Image.network(
-                      //   _generatedImages[0],
-                      //   fit: BoxFit.cover,
-                      //   loadingBuilder: (context, child, loadingProgress) {
-                      //     if (loadingProgress == null) return child;
-                      //     return Center(
-                      //       child: CircularProgressIndicator(color: primaryColor),
-                      //     );
-                      //   },
-                      //   errorBuilder: (context, error, stackTrace) {
-                      //     return Center(
-                      //       child: Column(
-                      //         mainAxisAlignment: MainAxisAlignment.center,
-                      //         children: [
-                      //           Icon(Icons.error, color: Colors.red),
-                      //           Text('이미지 로드 실패'),
-                      //         ],
-                      //       ),
-                      //     );
-                      //   },
-                      // ),
                     ),
                   ),
                 ),
@@ -742,21 +801,27 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                 Center(
                   child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : _shareStoryVideo,
-                    icon: _isLoading
-                        ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                        : Icon(Icons.share),
+                    icon:
+                        _isLoading
+                            ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : Icon(Icons.share),
                     label: Text(_isLoading ? '비디오 생성 중...' : '동화 공유하기'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),
@@ -783,7 +848,10 @@ ${_nameController.text}은(는) $_selectedTheme에 대한 특별한 모험을 �
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.purple,
                         foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),

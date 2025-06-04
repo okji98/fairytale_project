@@ -5,10 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("api/fairytale")
@@ -27,6 +24,17 @@ public class StoryController {
     } catch (Exception e) {
       System.out.println("❌ 컨트롤러 에러: " + e.getMessage());
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  @GetMapping("/story/{id}")
+  public ResponseEntity<Story> getStory(@PathVariable Long id, Authentication auth) {
+    try {
+      String username = auth.getName();
+      Story story = storyService.getStoryById(id, username);
+      return ResponseEntity.ok(story);
+    } catch (Exception e) {
+      return ResponseEntity.notFound().build();
     }
   }
 
