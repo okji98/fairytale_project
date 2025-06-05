@@ -151,7 +151,9 @@ def convert_bw_image(image_url, save_path="bw_image.png"):
         line_drawing = 255 - dilated_edges
         
         # 이미지 저장
-        cv2.imwrite(save_path, line_drawing)
+        # cv2.imwrite(save_path, line_drawing)
+        bw_pil_image = Image.fromarray(line_drawing)
+        bw_pil_image.save(save_path)
         return save_path
     
     except Exception as e:
