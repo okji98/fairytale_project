@@ -1,6 +1,9 @@
 package com.fairytale.fairytale.story;
 
 import com.fairytale.fairytale.users.Users;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -29,9 +32,6 @@ public class Story {
     @Column(length = 100, nullable = true)
     private String voice;
 
-    @Column(length = 100, nullable = true)
-    private String imageMode;
-
     @Column(length = 500, nullable = false)
     private String title;
 
@@ -42,18 +42,19 @@ public class Story {
     @Column(length = 500, nullable = true)
     private String voiceContent;
 
-    @Column(length = 500, nullable = true)
-    private String colorImage;
-
-    @Column(length = 500, nullable = true)
-    private String blackImage;
+    @Column(name = "image", length = 500, nullable = true)
+    @JsonProperty("image")
+    private String image;
 
     @CreationTimestamp
     @Column(updatable = false)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonProperty("createdAt")
     private LocalDateTime createdAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "users_id")
+    @JsonIgnore
     private Users user;
 }
 

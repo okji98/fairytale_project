@@ -13,8 +13,7 @@ public class StoryResponseDto {
     private String title;
     private String content;
     private String theme;
-    private String colorImage;
-    private String blackImage;
+    private String image;
     private String voice;
     private LocalDateTime createdAt;
 
@@ -24,8 +23,7 @@ public class StoryResponseDto {
         this.title = story.getTitle();
         this.content = story.getContent();
         this.theme = story.getTheme();
-        this.colorImage = story.getColorImage();
-        this.blackImage = story.getBlackImage();
+        this.image = story.getImage();
         this.voice = story.getVoice();
         this.createdAt = story.getCreatedAt();
     }

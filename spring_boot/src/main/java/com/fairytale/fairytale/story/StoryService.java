@@ -3,14 +3,20 @@ package com.fairytale.fairytale.story;
 import com.fairytale.fairytale.story.dto.*;
 import com.fairytale.fairytale.users.Users;
 import com.fairytale.fairytale.users.UsersRepository;
+import com.fairytale.fairytale.coloring.ColoringTemplateService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -19,16 +25,82 @@ public class StoryService {
     private final StoryRepository storyRepository;
     private final UsersRepository usersRepository;
 
+    // 🆕 색칠공부 서비스 추가
+    @Autowired
+    private ColoringTemplateService coloringTemplateService;
+
     @Value("${fastapi.base.url:http://localhost:8000}")
     private String fastApiBaseUrl;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    // 동화 생성 메서드
+    // 🎯 수정된 이미지 생성 메서드 (흑백 변환 로직 제거)
+    public Story createImage(ImageRequest request) {
+        System.out.println("🔍 이미지 생성 요청 - StoryId: " + request.getStoryId());
+
+        // 1. 기존 스토리 조회
+        Story story = storyRepository.findById(request.getStoryId())
+                .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
+
+        System.out.println("✅ 스토리 조회 성공 - Title: " + story.getTitle());
+
+        // 2. 🎯 FastAPI로 컬러 이미지만 생성
+        FastApiImageRequest fastApiRequest = new FastApiImageRequest();
+        fastApiRequest.setMode("cartoon");  // 항상 컬러로 고정
+        fastApiRequest.setText(story.getContent());
+
+        System.out.println("🔍 FastAPI 컬러 이미지 생성 요청");
+
+        // 3. FastAPI로 컬러 이미지 생성
+        String imageUrl = fastApiBaseUrl + "/generate/image";
+        String fastApiResponse = callFastApi(imageUrl, fastApiRequest);
+        String colorImageUrl = extractImageUrlFromResponse(fastApiResponse);
+
+        System.out.println("🎯 컬러 이미지 생성 완료: " + colorImageUrl);
+
+        // 4. 🎯 Story의 단일 image 컬럼에 저장
+        story.setImage(colorImageUrl);
+        Story savedStory = storyRepository.save(story);
+
+        System.out.println("✅ 컬러 이미지 저장 완료");
+
+        // 🔧 흑백 변환 로직 완전 제거 (Flutter에서 직접 처리)
+        // createColoringTemplateAsync(savedStory, colorImageUrl); // 주석 처리
+
+        return savedStory;
+    }
+
+    // 🔧 FastAPI 기존 /convert/bwimage 엔드포인트 호출
+//    private String callFastApiBlackWhiteConversion(String originalImageUrl) {
+//        try {
+//            System.out.println("🔍 FastAPI 흑백 변환 요청 - URL: " + originalImageUrl);
+//
+//            // 기존 FastAPI 엔드포인트는 text 필드를 받음
+//            Map<String, String> request = new HashMap<>();
+//            request.put("text", originalImageUrl);  // image URL을 text 필드로 전달
+//
+//            // 기존 FastAPI /convert/bwimage 엔드포인트 호출
+//            String url = fastApiBaseUrl + "/convert/bwimage";
+//            String response = callFastApi(url, request);
+//
+//            // 응답에서 흑백 이미지 URL 추출
+//            JsonNode jsonNode = objectMapper.readTree(response);
+//            String blackWhiteUrl = jsonNode.get("image_url").asText();
+//
+//            System.out.println("✅ FastAPI 흑백 변환 완료: " + blackWhiteUrl);
+//            return blackWhiteUrl;
+//
+//        } catch (Exception e) {
+//            System.out.println("❌ FastAPI 흑백 변환 실패: " + e.getMessage());
+//            throw new RuntimeException("FastAPI 흑백 변환 실패", e);
+//        }
+//    }
+
+    // 🔄 기존 동화 생성 메서드 (수정됨)
     public Story createStory(StoryCreateRequest request, String username) {
         System.out.println("🔍 스토리 생성 시작 - Username: " + username);
-        System.out.println("🔍 받은 요청: theme=" + request.getTheme() + ", voice=" + request.getVoice() + ", voiceSpeed=" + request.getVoiceSpeed());
+        System.out.println("🔍 받은 요청: theme=" + request.getTheme() + ", voice=" + request.getVoice());
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
@@ -41,12 +113,12 @@ public class StoryService {
 
         System.out.println("🔍 사용자 조회 성공 - ID: " + user.getId());
 
-        // 2. FastAPI 전용 요청 객체 생성 (올바른 방법)
+        // 2. FastAPI 동화 생성 요청
         FastApiStoryRequest fastApiRequest = new FastApiStoryRequest();
-        fastApiRequest.setName(request.getTheme() + " 동화");    // theme + "동화"로 name 생성
-        fastApiRequest.setTheme(request.getTheme());             // theme 설정
+        fastApiRequest.setName(request.getTheme() + " 동화");
+        fastApiRequest.setTheme(request.getTheme());
 
-        System.out.println("🔍 FastAPI 요청 생성: name=" + fastApiRequest.getName() + ", theme=" + fastApiRequest.getTheme());
+        System.out.println("🔍 FastAPI 동화 생성 요청: " + fastApiRequest.getName());
 
         // 3. FastAPI로 동화 생성 요청
         String url = fastApiBaseUrl + "/generate/story";
@@ -59,23 +131,11 @@ public class StoryService {
         Story story = new Story();
         story.setTheme(request.getTheme());
         story.setVoice(request.getVoice());
-        story.setImageMode("color");                           // 기본값
-        story.setTitle(request.getTheme() + " 동화");          // theme + "동화"로 제목 생성
+        story.setTitle(request.getTheme() + " 동화");
         story.setContent(storyContent);
         story.setUser(user);
         story.setVoiceContent("");
-        story.setColorImage("");
-        story.setBlackImage("");
-
-        // 🆕 image 컬럼이 있다면 기본값 설정
-        try {
-            // image 컬럼이 있을 경우를 대비해 리플렉션으로 설정
-            java.lang.reflect.Method setImageMethod = Story.class.getMethod("setImage", String.class);
-            setImageMethod.invoke(story, ""); // 빈 문자열로 기본값 설정
-        } catch (Exception e) {
-            // image 컬럼이 없으면 무시
-            System.out.println("🔍 image 컬럼이 없거나 설정 실패 (정상)");
-        }
+        story.setImage("");  // 🎯 단일 image 컬럼 사용
 
         System.out.println("🔍 스토리 저장 전 - Title: " + story.getTitle());
         Story saved = storyRepository.save(story);
@@ -85,7 +145,6 @@ public class StoryService {
     }
 
     // 음성 생성 메서드
-    // 음성 생성 메서드에 로그 추가
     public Story createVoice(VoiceRequest request) {
         System.out.println("🔍 음성 생성 시작 - StoryId: " + request.getStoryId());
 
@@ -111,50 +170,6 @@ public class StoryService {
 
         // 5. 저장
         story.setVoiceContent(voiceUrl);
-        return storyRepository.save(story);
-    }
-
-    // 이미지 생성 메서드
-    public Story createImage(ImageRequest request) {
-        System.out.println("🔍 Flutter에서 받은 데이터: " + request);
-        // 1. 기존 스토리 조회
-        Story story = storyRepository.findById(request.getStoryId())
-                .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
-        System.out.println("🔍 Story 내용 길이: " + story.getContent().length());
-        // 2. style을 imageMode로 변환
-        String imageMode;
-        if ("cartoon".equals(request.getStyle())) {
-            imageMode = "color";
-        } else if ("line_art".equals(request.getStyle())) {
-            imageMode = "black";
-        } else {
-            // 기본값 또는 에러 처리
-            imageMode = "color";
-        }
-
-        // 3. FastAPI 요청 객체 생성
-        FastApiImageRequest fastApiRequest = new FastApiImageRequest();
-        fastApiRequest.setMode(request.getStyle());  // "cartoon" or "line_art"
-        fastApiRequest.setText(story.getContent());  // 동화 내용을 텍스트로 사용
-        System.out.println("🔍 FastAPI로 보낼 데이터: " + fastApiRequest);
-        System.out.println("🔍 FastAPI 전송 JSON: mode=" + request.getStyle() + ", text=" + story.getContent().substring(0, Math.min(50, story.getContent().length())) + "...");
-
-        // 4. FastAPI로 이미지 생성 요청
-        String url = fastApiBaseUrl + "/generate/image";
-        String fastApiResponse = callFastApi(url, fastApiRequest);
-
-        // 5. 응답에서 이미지 url 추출
-        String imageUrl = extractImageUrlFromResponse(fastApiResponse);
-
-        // 6. imageMode에 따라 적절한 컬럼에 저장
-        if ("color".equals(imageMode)) {
-            story.setColorImage(imageUrl);
-        } else if ("black".equals(imageMode)) {
-            story.setBlackImage(imageUrl);
-        } else {
-            throw new IllegalArgumentException("지원하지 않는 이미지 모드: " + imageMode);
-        }
-
         return storyRepository.save(story);
     }
 
@@ -225,12 +240,29 @@ public class StoryService {
         }
     }
 
-    // StoryService.java
+    // 기존 조회 메서드
     public Story getStoryById(Long id, String username) {
         Users user = usersRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
         return storyRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
+    }
+
+    public ResponseEntity<String> convertToBlackWhite(Map<String, String> request) {
+        try {
+            System.out.println("🔍 흑백 변환 요청: " + request.get("text"));
+
+            // FastAPI로 프록시 요청
+            String url = fastApiBaseUrl + "/convert/bwimage";
+            String response = callFastApi(url, request);
+
+            System.out.println("🔍 FastAPI 흑백 변환 응답: " + response);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.out.println("❌ 흑백 변환 실패: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("{\"error\": \"" + e.getMessage() + "\"}");
+        }
     }
 }
