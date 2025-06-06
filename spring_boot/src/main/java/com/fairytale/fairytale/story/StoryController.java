@@ -1,6 +1,7 @@
 package com.fairytale.fairytale.story;
 
 import com.fairytale.fairytale.story.dto.*;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -10,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -86,10 +88,90 @@ public class StoryController {
     }
   }
 
-  // 🆕 흑백 변환 프록시 엔드포인트 (StoryService 사용)
+  // 🎯 PIL+OpenCV 흑백 변환 API (Python 코드와 동일한 로직)
   @PostMapping("/convert/bwimage")
-  public ResponseEntity<String> convertToBlackWhite(@RequestBody Map<String, String> request) {
-    return storyService.convertToBlackWhite(request);
+  public ResponseEntity<Map<String, Object>> convertToBlackWhite(@RequestBody Map<String, String> request) {
+    System.out.println("🔍 [StoryController] PIL+OpenCV 흑백 변환 요청: " + request);
+
+    try {
+      String colorImageUrl = request.get("text");
+
+      if (colorImageUrl == null || colorImageUrl.isEmpty()) {
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("error", "이미지 URL이 제공되지 않았습니다.");
+        return ResponseEntity.badRequest().body(errorResponse);
+      }
+
+      // 🎯 Python 코드의 convert_bw_image와 동일한 FastAPI 호출
+      Map<String, String> fastApiRequest = new HashMap<>();
+      fastApiRequest.put("text", colorImageUrl);  // image_url 파라미터
+
+      System.out.println("🔍 [StoryController] FastAPI PIL+OpenCV 변환 요청: " + fastApiRequest);
+
+      Map<String, String> response = restTemplate.postForObject(
+              "http://localhost:8000/convert/bwimage",
+              fastApiRequest,
+              Map.class
+      );
+
+      System.out.println("🔍 [StoryController] FastAPI 응답: " + response);
+
+      if (response != null && response.containsKey("image_url")) {
+        String imageUrl = response.get("image_url");
+
+        // 🎯 Python과 동일한 URL 처리 로직
+        String finalImageUrl = processConvertedImageUrl(imageUrl, colorImageUrl);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("image_url", finalImageUrl);
+        result.put("original_url", colorImageUrl);
+        result.put("conversion_method", "PIL+OpenCV");
+        result.put("python_response", imageUrl);  // 원본 Python 응답 포함
+
+        System.out.println("✅ [StoryController] PIL+OpenCV 흑백 변환 성공: " + finalImageUrl);
+        return ResponseEntity.ok(result);
+      } else {
+        throw new RuntimeException("FastAPI에서 유효한 응답을 받지 못했습니다.");
+      }
+
+    } catch (Exception e) {
+      System.err.println("❌ [StoryController] PIL+OpenCV 변환 실패: " + e.getMessage());
+
+      // 🎯 폴백: 원본 이미지 + Flutter 필터링 안내
+      Map<String, Object> fallbackResponse = new HashMap<>();
+      fallbackResponse.put("image_url", request.get("text")); // 원본 URL 사용
+      fallbackResponse.put("original_url", request.get("text"));
+      fallbackResponse.put("conversion_method", "Fallback_Flutter_Filter");
+      fallbackResponse.put("warning", "PIL+OpenCV 변환 실패로 Flutter에서 필터링 처리됩니다.");
+      fallbackResponse.put("flutter_filter_enabled", true);  // Flutter 필터 사용 플래그
+
+      return ResponseEntity.ok(fallbackResponse);
+    }
+  }
+
+  // 🎯 Python 변환 결과 URL 처리 (PIL Image 저장 방식 고려)
+  private String processConvertedImageUrl(String convertedUrl, String originalUrl) {
+    System.out.println("🔍 [StoryController] URL 처리 - 변환됨: " + convertedUrl + ", 원본: " + originalUrl);
+
+    // 1. 완전한 URL인 경우 (Base64 데이터 URL 포함)
+    if (convertedUrl.startsWith("http://") ||
+            convertedUrl.startsWith("https://") ||
+            convertedUrl.startsWith("data:image/")) {
+      System.out.println("✅ [StoryController] 완전한 URL 확인");
+      return convertedUrl;
+    }
+
+    // 2. 파일명만 반환된 경우 (Python의 save_path 결과)
+    if (convertedUrl.equals("bw_image.png") ||
+            convertedUrl.endsWith(".png") ||
+            convertedUrl.endsWith(".jpg")) {
+      System.out.println("⚠️ [StoryController] 파일명만 반환됨, 원본 이미지 사용");
+      return originalUrl; // Flutter에서 필터링 처리
+    }
+
+    // 3. 기타 경우
+    System.out.println("⚠️ [StoryController] 알 수 없는 형식, 원본 이미지 사용");
+    return originalUrl;
   }
 
   @PostMapping("/search/url")

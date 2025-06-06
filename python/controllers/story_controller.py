@@ -11,6 +11,7 @@ import requests
 import cv2
 import numpy as np
 from PIL import Image
+import base64
 
 load_dotenv()  # .env 파일에서 환경변수 로드
 
@@ -135,10 +136,20 @@ def convert_bw_image(image_url, save_path="bw_image.png"):
         line_drawing = 255 - dilated_edges
         
         # 이미지 저장
-        cv2.imwrite(save_path, line_drawing)
+        # cv2.imwrite(save_path, line_drawing)
+        bw_pil_image = Image.fromarray(line_drawing)
+        bw_pil_image.save(save_path)
         return save_path
+    
+        # 이미지 저장
+        # success = cv2.imwrite(save_path, line_drawing)
+        # if not success:
+        #     print("이미지 저장에 실패했습니다.")
+        #     return None
+
+        # print(f"이미지가 성공적으로 {save_path}에 저장되었습니다.")
+        # return save_path
     
     except Exception as e:
         print(f"변환 오류: {e}")
         return None
-

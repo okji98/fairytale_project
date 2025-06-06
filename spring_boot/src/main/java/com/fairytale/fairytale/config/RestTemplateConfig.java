@@ -1,4 +1,4 @@
-package com.fairytale.fairytale.auth.strategy;
+package com.fairytale.fairytale.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

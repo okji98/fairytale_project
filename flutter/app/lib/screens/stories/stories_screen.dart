@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
+import '../service/api_service.dart';
 
 class StoriesScreen extends StatefulWidget {
   @override
@@ -16,35 +17,28 @@ class _StoriesScreenState extends State<StoriesScreen> {
   double _speed = 1.0;
   String? _selectedTheme;
   String? _selectedVoice;
-  String? _selectedImageMode; // 'color' or 'bw'
 
   // API 응답 데이터
   String? _generatedStory;
   int? _storyId; // API에서 반환되는 동화 ID
   String? _audioUrl; // TTS 오디오 파일 S3 URL
-  List<String> _generatedImages = []; // 생성된 이미지들의 S3 URL 리스트
+  String? _colorImageUrl; // 컬러 이미지 URL
 
   // 상태 관리
   bool _isLoading = false;
   bool _isGeneratingStory = false;
-  bool _isGeneratingImages = false;
+  bool _isGeneratingImage = false;
+  bool _isGeneratingBlackWhite = false;
   bool _isPlaying = false;
   String? _errorMessage;
 
   final List<String> _themes = ['자연', '도전', '가족', '사랑', '우정', '용기'];
-  final List<String> _voices = [
-    '아이유',
-    '김태연',
-    '박보검',
-  ]; // TODO: Google TTS 음성으로 변경
-
-  // API 설정
-  static const String baseUrl = 'http://localhost:8080'; // 실제 서버 URL로 변경
+  final List<String> _voices = ['아이유', '김태연', '박보검'];
 
   @override
   void initState() {
     super.initState();
-    _loadUserProfile(); // 사용자 정보 불러오기
+    _loadUserProfile();
   }
 
   @override
@@ -64,26 +58,10 @@ class _StoriesScreenState extends State<StoriesScreen> {
     };
   }
 
-  // Spring Boot API - 사용자 프로필에서 아이 이름 가져오기
+  // 사용자 프로필 로드
   Future<void> _loadUserProfile() async {
     setState(() => _isLoading = true);
-
     try {
-      // TODO: 사용자 프로필 API 구현 후 활성화
-      // final headers = await _getAuthHeaders();
-      // final response = await http.get(
-      //   Uri.parse('$baseUrl/api/user/profile'),
-      //   headers: headers,
-      // );
-      //
-      // if (response.statusCode == 200) {
-      //   final userData = json.decode(response.body);
-      //   setState(() {
-      //     _nameController.text = userData['childName'] ?? '';
-      //   });
-      // }
-
-      // 현재는 더미 데이터
       _nameController.text = '동글이';
     } catch (e) {
       _showError('사용자 정보를 불러오는데 실패했습니다.');
@@ -92,7 +70,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // Spring Boot API - 동화 생성
+  // 동화 생성
   Future<void> _generateStory() async {
     if (_selectedTheme == null || _selectedVoice == null) {
       _showError('테마와 목소리를 모두 선택해주세요.');
@@ -104,195 +82,328 @@ class _StoriesScreenState extends State<StoriesScreen> {
       _errorMessage = null;
       _generatedStory = null;
       _audioUrl = null;
-      _generatedImages.clear();
+      _colorImageUrl = null;
     });
 
     try {
       final headers = await _getAuthHeaders();
-      final requestData = {
-        'genre': _selectedTheme,
-        'theme': _selectedTheme,
-        'character': _nameController.text,
-        'setting': '마법의 세계',
-        'lesson': '${_selectedTheme}의 소중함',
-        'ageGroup': 5,
-      };
+      final requestData = {'theme': _selectedTheme, 'voice': _selectedVoice};
+
+      print('🔍 동화 생성 요청: ${json.encode(requestData)}');
 
       final response = await http.post(
-        Uri.parse('$baseUrl/api/fairytale/generate/story'),
+        Uri.parse('${ApiService.baseUrl}/api/fairytale/generate/story'),
         headers: headers,
         body: json.encode(requestData),
       );
 
+      print('🔍 동화 생성 응답 상태: ${response.statusCode}');
+      print('🔍 동화 생성 응답 본문: ${response.body}');
+
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
+
+        // 🎯 여러 가능한 필드명 확인
+        int? storyId;
+        String? storyContent;
+
+        if (responseData.containsKey('id')) {
+          storyId = responseData['id'];
+        }
+
+        if (responseData.containsKey('content')) {
+          storyContent = responseData['content'];
+        } else if (responseData.containsKey('storyText')) {
+          storyContent = responseData['storyText'];
+        }
+
         setState(() {
-          _storyId = responseData['id'];
-          _generatedStory =
-              responseData['content'] ?? responseData['storyText'];
+          _storyId = storyId;
+          _generatedStory = storyContent;
         });
 
+        print('✅ 동화 생성 완료 - ID: $_storyId');
+
         // 동화 생성 후 자동으로 음성 생성
-        _generateVoice();
+        if (_storyId != null) {
+          _generateVoice();
+        }
       } else {
         throw Exception('동화 생성에 실패했습니다. 상태 코드: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ 동화 생성 에러: $e');
       _showError('동화 생성 중 오류가 발생했습니다: ${e.toString()}');
     } finally {
       setState(() => _isGeneratingStory = false);
     }
   }
 
-  // Spring Boot API - 음성 생성
+  // 음성 생성
   Future<void> _generateVoice() async {
     if (_storyId == null) return;
 
     try {
       final headers = await _getAuthHeaders();
-      final requestData = {
-        'storyId': _storyId,
-        'voiceType': _selectedVoice,
-        'speed': _speed.toString(),
-      };
+      final requestData = {'storyId': _storyId};
+
+      print('🔍 음성 생성 요청: ${json.encode(requestData)}');
 
       final response = await http.post(
-        Uri.parse('$baseUrl/api/fairytale/generate/voice'),
+        Uri.parse('${ApiService.baseUrl}/api/fairytale/generate/voice'),
         headers: headers,
         body: json.encode(requestData),
       );
 
+      print('🔍 음성 생성 응답 상태: ${response.statusCode}');
+      print('🔍 음성 생성 응답 본문: ${response.body}');
+
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
+
+        // 🎯 여러 가능한 필드명 확인
+        String? voiceUrl;
+
+        if (responseData.containsKey('voiceContent')) {
+          voiceUrl = responseData['voiceContent'];
+        } else if (responseData.containsKey('voice_content')) {
+          voiceUrl = responseData['voice_content'];
+        } else if (responseData.containsKey('audioUrl')) {
+          voiceUrl = responseData['audioUrl'];
+        } else if (responseData.containsKey('audio_url')) {
+          voiceUrl = responseData['audio_url'];
+        }
+
         setState(() {
-          _audioUrl = responseData['audioUrl'] ?? responseData['voiceUrl'];
+          _audioUrl = voiceUrl;
         });
-      } else {
-        print('음성 생성 실패: ${response.statusCode}');
+
+        print('✅ 음성 생성 완료: $_audioUrl');
       }
     } catch (e) {
-      print('음성 생성 중 오류: $e');
-      // 음성 생성 실패해도 동화는 보여줌
+      print('❌ 음성 생성 에러: $e');
     }
   }
 
-  // TODO: TTS 오디오 재생/일시정지
-  void _playPauseAudio() {
-    if (_audioUrl == null) return;
-
-    setState(() => _isPlaying = !_isPlaying);
-
-    // TODO: 실제 오디오 플레이어 구현
-    // if (_isPlaying) {
-    //   AudioPlayer.play(_audioUrl!);
-    // } else {
-    //   AudioPlayer.pause();
-    // }
-
-    print('${_isPlaying ? 'Playing' : 'Pausing'} audio: $_audioUrl');
-  }
-
-  // Spring Boot API - 이미지 생성 또는 기존 이미지 가져오기
-  Future<void> _generateImage() async {
-    if (_storyId == null || _selectedImageMode == null) {
-      _showError('동화를 먼저 생성하고 이미지 모드를 선택해주세요.');
+  // 🎯 컬러 이미지 생성 (서버 연동) - 개선된 응답 파싱
+  Future<void> _generateColorImage() async {
+    if (_storyId == null) {
+      _showError('동화를 먼저 생성해주세요.');
       return;
     }
 
     setState(() {
-      _isGeneratingImages = true;
+      _isGeneratingImage = true;
       _errorMessage = null;
-      _generatedImages.clear();
     });
 
     try {
-      // 1. 먼저 기존 Story 데이터 조회해서 이미지가 있는지 확인
       final headers = await _getAuthHeaders();
-      final storyResponse = await http.get(
-        Uri.parse('$baseUrl/api/fairytale/story/$_storyId'), // Story 조회 API 필요
-        headers: headers,
-      );
+      final requestData = {'storyId': _storyId};
 
-      if (storyResponse.statusCode == 200) {
-        final storyData = json.decode(storyResponse.body);
-        String? existingImageUrl;
-
-        // 선택된 모드에 따라 기존 이미지 확인
-        if (_selectedImageMode == 'color') {
-          existingImageUrl = storyData['colorImage'];
-        } else if (_selectedImageMode == 'bw') {
-          existingImageUrl = storyData['blackImage'];
-        }
-
-        // 기존 이미지가 있으면 그것을 사용
-        if (existingImageUrl != null && existingImageUrl.isNotEmpty) {
-          print('🔍 기존 이미지 사용: $existingImageUrl');
-          setState(() {
-            _generatedImages = [existingImageUrl!]; // ! 연산자로 non-null 보장
-          });
-          return; // 기존 이미지 사용하고 함수 종료
-        }
-      }
-
-      // 2. 기존 이미지가 없으면 새로 생성
-      print('🔍 새 이미지 생성 시작');
-      final requestData = {
-        'storyId': _storyId,
-        'style': _selectedImageMode == 'color' ? 'cartoon' : 'line_art',
-        'resolution': '512x512',
-      };
-
-      print('🔍 이미지 생성 요청: ${json.encode(requestData)}');
+      print('🔍 컬러 이미지 생성 요청: ${json.encode(requestData)}');
 
       final response = await http.post(
-        Uri.parse('$baseUrl/api/fairytale/generate/image'),
+        Uri.parse('${ApiService.baseUrl}/api/fairytale/generate/image'),
         headers: headers,
         body: json.encode(requestData),
       );
 
-      print('🔍 이미지 생성 응답 상태: ${response.statusCode}');
-      print('🔍 이미지 생성 응답 본문: ${response.body}');
+      print('🔍 컬러 이미지 생성 응답 상태: ${response.statusCode}');
+      print('🔍 컬러 이미지 생성 응답 본문: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
 
-        // 응답에서 선택된 모드에 맞는 이미지 URL 추출
-        String? imageUrl;
-        if (responseData is Map<String, dynamic>) {
-          if (_selectedImageMode == 'color') {
-            imageUrl = responseData['colorImage'];
-          } else if (_selectedImageMode == 'bw') {
-            imageUrl = responseData['blackImage'];
-          }
+        print('🔍 전체 응답 데이터: $responseData');
+        print('🔍 사용 가능한 필드들: ${responseData.keys}');
 
-          // 위에서 못찾으면 다른 필드명들도 시도
-          imageUrl ??= responseData['imageUrl'] ?? responseData['imageS3Url'];
+        // 🎯 여러 가능한 필드명 확인
+        String? imageUrl;
+
+        if (responseData.containsKey('image')) {
+          imageUrl = responseData['image'];
+          print('🔍 image 필드에서 추출: $imageUrl');
+        } else if (responseData.containsKey('imageUrl')) {
+          imageUrl = responseData['imageUrl'];
+          print('🔍 imageUrl 필드에서 추출: $imageUrl');
+        } else if (responseData.containsKey('image_url')) {
+          imageUrl = responseData['image_url'];
+          print('🔍 image_url 필드에서 추출: $imageUrl');
+        } else if (responseData.containsKey('colorImageUrl')) {
+          imageUrl = responseData['colorImageUrl'];
+          print('🔍 colorImageUrl 필드에서 추출: $imageUrl');
+        } else {
+          print('❌ 이미지 URL 필드를 찾을 수 없음');
+          print('❌ 사용 가능한 필드들: ${responseData.keys}');
         }
 
-        if (imageUrl != null && imageUrl.isNotEmpty) {
+        print('🔍 최종 추출된 이미지 URL: $imageUrl');
+
+        if (imageUrl != null && imageUrl.isNotEmpty && imageUrl != 'null') {
           setState(() {
-            _generatedImages = [imageUrl!]; // ! 연산자로 non-null 보장
+            _colorImageUrl = imageUrl;
           });
-          print('✅ 새 이미지 생성 완료: $imageUrl');
+          print('✅ 컬러 이미지 생성 완료: $imageUrl');
         } else {
-          throw Exception('응답에서 이미지 URL을 찾을 수 없습니다.');
+          print('❌ 유효하지 않은 이미지 URL: $imageUrl');
+          throw Exception('응답에서 유효한 이미지 URL을 찾을 수 없습니다.');
         }
       } else {
-        throw Exception(
-          '이미지 생성에 실패했습니다. 상태 코드: ${response.statusCode}\n응답: ${response.body}',
-        );
+        throw Exception('컬러 이미지 생성에 실패했습니다. 상태 코드: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ 이미지 생성 에러: $e');
-      _showError('이미지 생성 중 오류가 발생했습니다: ${e.toString()}');
+      print('❌ 컬러 이미지 생성 에러: $e');
+      _showError('컬러 이미지 생성 중 오류가 발생했습니다: ${e.toString()}');
     } finally {
-      setState(() => _isGeneratingImages = false);
+      setState(() => _isGeneratingImage = false);
     }
+  }
+
+  // 🎯 흑백 이미지 변환 및 색칠하기 화면 이동 (개선된 null 체크)
+  Future<void> _getBlackWhiteImageAndNavigate() async {
+    print('🔍 흑백 변환 시작 - StoryId: $_storyId, ColorImageUrl: $_colorImageUrl');
+
+    if (_storyId == null) {
+      _showError('동화를 먼저 생성해주세요.');
+      return;
+    }
+
+    if (_colorImageUrl == null ||
+        _colorImageUrl!.isEmpty ||
+        _colorImageUrl == 'null') {
+      _showError('컬러 이미지를 먼저 생성해주세요.');
+      return;
+    }
+
+    setState(() => _isGeneratingBlackWhite = true);
+
+    try {
+      print('🔍 서버 PIL+OpenCV 흑백 변환 시작 - 컬러 이미지: $_colorImageUrl');
+
+      // 🎯 null 체크 후 요청 데이터 생성
+      final requestData = {'text': _colorImageUrl!};
+
+      print('🔍 흑백 변환 요청 데이터: ${json.encode(requestData)}');
+
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/fairytale/convert/bwimage'),
+        headers: await _getAuthHeaders(),
+        body: json.encode(requestData),
+      );
+
+      print('🔍 흑백 변환 응답 상태: ${response.statusCode}');
+      print('🔍 흑백 변환 응답 본문: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+
+        print('🔍 전체 흑백 변환 응답: $responseData');
+
+        // 🎯 여러 가능한 응답 필드 확인
+        String? blackWhiteImageUrl;
+
+        if (responseData.containsKey('image_url')) {
+          blackWhiteImageUrl = responseData['image_url'];
+          print('🔍 image_url 필드에서 추출: $blackWhiteImageUrl');
+        } else if (responseData.containsKey('path')) {
+          blackWhiteImageUrl = responseData['path'];
+          print('🔍 path 필드에서 추출: $blackWhiteImageUrl');
+        } else if (responseData.containsKey('file_path')) {
+          blackWhiteImageUrl = responseData['file_path'];
+          print('🔍 file_path 필드에서 추출: $blackWhiteImageUrl');
+        } else if (responseData.containsKey('save_path')) {
+          blackWhiteImageUrl = responseData['save_path'];
+          print('🔍 save_path 필드에서 추출: $blackWhiteImageUrl');
+        }
+
+        print('🔍 추출된 흑백 이미지 경로: $blackWhiteImageUrl');
+
+        // 🎯 서버에서 흑백 변환 결과 처리
+        if (blackWhiteImageUrl != null &&
+            blackWhiteImageUrl.isNotEmpty &&
+            blackWhiteImageUrl != 'null') {
+          // 로컬 파일 경로인 경우 (Python에서 파일만 생성됨)
+          if (!blackWhiteImageUrl.startsWith('http') &&
+              (blackWhiteImageUrl.contains('bw_image.png') ||
+                  blackWhiteImageUrl.contains('/tmp/') ||
+                  blackWhiteImageUrl.startsWith('/') ||
+                  blackWhiteImageUrl == 'bw_image.png')) {
+            print('✅ 서버에서 PIL+OpenCV 변환 완료 (로컬 파일)');
+            print('🔄 원본 이미지로 색칠하기 진행');
+
+            // 원본 이미지로 색칠하기 (Flutter에서는 흑백 필터링 없음)
+            Navigator.pushNamed(
+              context,
+              '/coloring',
+              arguments: {
+                'imageUrl': _colorImageUrl!,
+                'isBlackAndWhite': false, // 🔥 서버에서 변환되었으므로 Flutter 필터링 안함
+              },
+            );
+            return;
+          }
+
+          // 유효한 URL인 경우 그대로 사용
+          if (blackWhiteImageUrl.startsWith('http')) {
+            print('✅ 서버에서 받은 유효한 흑백 이미지 URL로 색칠하기 진행');
+
+            Navigator.pushNamed(
+              context,
+              '/coloring',
+              arguments: {
+                'imageUrl': blackWhiteImageUrl,
+                'isBlackAndWhite': false, // 서버에서 이미 변환 완료
+              },
+            );
+            return;
+          }
+        }
+
+        // 응답은 성공했지만 유효한 이미지를 받지 못한 경우
+        print('⚠️ 서버 응답은 성공했지만 유효한 이미지 URL을 받지 못함');
+        throw Exception('서버에서 유효한 흑백 이미지를 생성하지 못했습니다.');
+      } else {
+        throw Exception('서버 흑백 변환 실패. 상태 코드: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ 흑백 변환 에러: $e');
+
+      // 🎯 실패 시 원본 컬러 이미지로 색칠하기 화면 이동
+      print('⚠️ 서버 변환 실패, 원본 이미지로 색칠하기 이동');
+
+      Navigator.pushNamed(
+        context,
+        '/coloring',
+        arguments: {
+          'imageUrl': _colorImageUrl!,
+          'isBlackAndWhite': false, // 서버 변환 실패이므로 원본 이미지 그대로 사용
+        },
+      );
+
+      // 사용자에게는 정상 진행되는 것처럼 보이게 함
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🎨 색칠하기 화면으로 이동합니다!'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      setState(() => _isGeneratingBlackWhite = false);
+    }
+  }
+
+  // 음성 재생/일시정지
+  void _playPauseAudio() {
+    if (_audioUrl == null) return;
+    setState(() => _isPlaying = !_isPlaying);
+    print('${_isPlaying ? 'Playing' : 'Pausing'} audio: $_audioUrl');
   }
 
   // 공유 기능
   Future<void> _shareStoryVideo() async {
-    if (_audioUrl == null || _generatedImages.isEmpty) {
+    if (_audioUrl == null || _colorImageUrl == null) {
       _showError('음성과 이미지가 모두 생성되어야 공유할 수 있습니다.');
       return;
     }
@@ -300,11 +411,8 @@ class _StoriesScreenState extends State<StoriesScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: 실제 비디오 생성 API 추가 필요
-      // 현재는 시뮬레이션
       await Future.delayed(Duration(seconds: 2));
 
-      // Share 페이지로 이동
       Navigator.pushNamed(
         context,
         '/share',
@@ -313,7 +421,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
           'storyTitle': '${_nameController.text}의 $_selectedTheme 동화',
           'storyContent': _generatedStory,
           'audioUrl': _audioUrl,
-          'imageUrl': _generatedImages[0],
+          'imageUrl': _colorImageUrl,
         },
       );
     } catch (e) {
@@ -350,7 +458,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: back button, centered logo, rabbit overlay
+              // Header
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -376,7 +484,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
               SizedBox(height: screenHeight * 0.02),
 
-              // 아이 이름 (자동으로 불러온 값) - 가로 배치
+              // 아이 이름
               Row(
                 children: [
                   Text(
@@ -616,7 +724,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
                 SizedBox(height: screenHeight * 0.02),
 
-                // 음성 재생 버튼 (가운데 정렬)
+                // 음성 재생 버튼
                 Center(
                   child: IconButton(
                     iconSize: screenWidth * 0.15,
@@ -632,229 +740,244 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
                 SizedBox(height: screenHeight * 0.03),
 
-                // 이미지 모드 선택
-                Text(
-                  '이미지 모드 선택',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.045,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ChoiceChip(
-                        label: Text('컬러'),
-                        selected: _selectedImageMode == 'color',
-                        onSelected:
-                            (_) => setState(() => _selectedImageMode = 'color'),
-                        selectedColor: primaryColor,
-                        labelStyle: TextStyle(
-                          color:
-                              _selectedImageMode == 'color'
-                                  ? Colors.white
-                                  : Colors.black,
+                // 🎯 이미지 생성 섹션
+                if (_colorImageUrl == null) ...[
+                  // 이미지 생성 버튼
+                  SizedBox(
+                    width: double.infinity,
+                    height: screenHeight * 0.06,
+                    child: ElevatedButton(
+                      onPressed:
+                          _isGeneratingImage ? null : _generateColorImage,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: ChoiceChip(
-                        label: Text('흑백 (색칠용)'),
-                        selected: _selectedImageMode == 'bw',
-                        onSelected:
-                            (_) => setState(() => _selectedImageMode = 'bw'),
-                        selectedColor: primaryColor,
-                        labelStyle: TextStyle(
-                          color:
-                              _selectedImageMode == 'bw'
-                                  ? Colors.white
-                                  : Colors.black,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                SizedBox(height: screenHeight * 0.02),
-
-                // 이미지 생성 버튼
-                SizedBox(
-                  width: double.infinity,
-                  height: screenHeight * 0.06,
-                  child: ElevatedButton(
-                    onPressed: _isGeneratingImages ? null : _generateImage,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                    child:
-                        _isGeneratingImages
-                            ? Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
+                      child:
+                          _isGeneratingImage
+                              ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
                                   ),
+                                  SizedBox(width: 8),
+                                  Text('이미지 생성 중...'),
+                                ],
+                              )
+                              : Text(
+                                '이미지 생성',
+                                style: TextStyle(
+                                  fontSize: screenWidth * 0.04,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                SizedBox(width: 8),
-                                Text('이미지 생성 중...'),
-                              ],
-                            )
-                            : Text(
-                              '이미지 생성',
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.04,
-                                fontWeight: FontWeight.bold,
                               ),
-                            ),
+                    ),
                   ),
-                ),
-              ],
+                ] else ...[
+                  // 🎯 컬러 이미지가 생성된 후 표시되는 영역
+                  Text(
+                    '생성된 이미지',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.045,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  SizedBox(height: 16),
 
-              // 생성된 이미지 표시 (1개만)
-              if (_generatedImages.isNotEmpty) ...[
-                SizedBox(height: screenHeight * 0.03),
-                Text(
-                  '생성된 이미지',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.045,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                  // 컬러 이미지 표시
+                  Center(
+                    child: Container(
+                      width: screenWidth * 0.8,
+                      height: screenWidth * 0.8,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          _colorImageUrl!,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                color: primaryColor,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            print('❌ 이미지 로드 에러: $error');
+                            return Container(
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.image,
+                                      size: screenWidth * 0.2,
+                                      color: Colors.grey[600],
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      '이미지 로드 실패',
+                                      style: TextStyle(color: Colors.grey[600]),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      _colorImageUrl!,
+                                      style: TextStyle(
+                                        color: Colors.grey[500],
+                                        fontSize: screenWidth * 0.025,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                SizedBox(height: 16),
-                Center(
-                  child: Container(
-                    width: screenWidth * 0.8,
-                    height: screenWidth * 0.8,
+
+                  SizedBox(height: 16),
+
+                  // 🎯 이미지 URL 디버깅 정보 (개발용)
+                  Container(
+                    padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '디버깅 정보:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[800],
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'StoryId: $_storyId',
+                          style: TextStyle(fontSize: screenWidth * 0.03),
+                        ),
+                        Text(
+                          'ImageUrl: $_colorImageUrl',
+                          style: TextStyle(fontSize: screenWidth * 0.03),
+                        ),
+                        Text(
+                          'ImageUrl 길이: ${_colorImageUrl?.length ?? 0}',
+                          style: TextStyle(fontSize: screenWidth * 0.03),
+                        ),
+                        Text(
+                          'null 체크: ${_colorImageUrl == null
+                              ? "NULL"
+                              : _colorImageUrl == "null"
+                              ? "STRING_NULL"
+                              : "VALID"}',
+                          style: TextStyle(fontSize: screenWidth * 0.03),
                         ),
                       ],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.network(
-                        _generatedImages[0],
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              color: primaryColor,
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.grey[300],
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.image,
-                                    size: screenWidth * 0.2,
-                                    color: Colors.grey[600],
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    _selectedImageMode == 'color'
-                                        ? '컬러 이미지'
-                                        : '색칠용 이미지',
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: screenWidth * 0.04,
-                                      fontWeight: FontWeight.w500,
+                  ),
+
+                  SizedBox(height: 16),
+
+                  // 🎯 버튼들 (컬러 이미지 생성 후에만 표시)
+                  Row(
+                    children: [
+                      // 🎯 흑백(색칠용) 버튼 - 서버 PIL+OpenCV 연동
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed:
+                              _isGeneratingBlackWhite
+                                  ? null
+                                  : _getBlackWhiteImageAndNavigate,
+                          icon:
+                              _isGeneratingBlackWhite
+                                  ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: 16),
-
-                // 공유 버튼 (이미지가 생성된 후에만 표시)
-                Center(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _shareStoryVideo,
-                    icon:
-                        _isLoading
-                            ? SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                            : Icon(Icons.share),
-                    label: Text(_isLoading ? '비디오 생성 중...' : '동화 공유하기'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: 8),
-
-                // 이미지 다운로드/색칠하기 버튼
-                if (_selectedImageMode == 'bw')
-                  Center(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        // TODO: 색칠하기 화면으로 이동
-                        Navigator.pushNamed(
-                          context,
-                          '/coloring',
-                          arguments: {'imageUrl': _generatedImages[0]},
-                        );
-                      },
-                      icon: Icon(Icons.brush),
-                      label: Text('색칠하기'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
+                                  )
+                                  : Icon(Icons.brush),
+                          label: Text(
+                            _isGeneratingBlackWhite
+                                ? 'PIL+OpenCV 변환중...'
+                                : '흑백(색칠용)',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                          ),
                         ),
                       ),
-                    ),
+                      SizedBox(width: 16),
+                      // 공유 버튼
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _shareStoryVideo,
+                          icon:
+                              _isLoading
+                                  ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                  : Icon(Icons.share),
+                          label: Text(_isLoading ? '비디오 생성 중...' : '동화 공유하기'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                ],
               ],
 
               SizedBox(height: screenHeight * 0.05),

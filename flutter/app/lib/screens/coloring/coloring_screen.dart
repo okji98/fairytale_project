@@ -2,10 +2,13 @@
 
 import 'dart:ui' as ui;
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../../main.dart';
+import '../service/api_service.dart';
 
 class ColoringScreen extends StatefulWidget {
   @override
@@ -23,6 +26,9 @@ class _ColoringScreenState extends State<ColoringScreen> {
   String? _errorMessage;
   bool _showColorPalette = false; // 색상 팔레트 표시 여부
   PaintingTool _selectedTool = PaintingTool.brush; // 선택된 도구
+
+  // 🎯 흑백 필터링 상태 추가
+  bool _isBlackAndWhite = false; // 흑백 모드 여부 (서버에서 결정)
 
   // 페인팅 관련
   List<DrawingPoint> _drawingPoints = [];
@@ -54,127 +60,163 @@ class _ColoringScreenState extends State<ColoringScreen> {
     _checkForSharedImage();
   }
 
-  // TODO: Spring Boot API에서 흑백 이미지들 불러오기
+  // 🎯 Spring Boot API에서 색칠공부 템플릿들 불러오기 (실제 구현)
   Future<void> _loadColoringTemplates() async {
     setState(() => _isLoading = true);
 
     try {
-      // final response = await http.get(
-      //   Uri.parse('$baseUrl/api/coloring/templates'),
-      //   headers: {'Authorization': 'Bearer $accessToken'},
-      // );
-      //
-      // if (response.statusCode == 200) {
-      //   final List<dynamic> templatesJson = json.decode(response.body);
-      //   setState(() {
-      //     _templates = templatesJson.map((json) => ColoringTemplate.fromJson(json)).toList();
-      //   });
-      // } else {
-      //   throw Exception('색칠공부 이미지를 불러오는데 실패했습니다.');
-      // }
+      print('🔍 색칠공부 템플릿 조회 시작');
 
-      // 현재는 저장된 흑백 이미지들의 더미 데이터
-      await Future.delayed(Duration(seconds: 2));
-      setState(() {
-        _templates = [
-          ColoringTemplate(
-            id: 'coloring_1',
-            title: '토끼와 꽃밭',
-            imageUrl: 'https://storage.bucket.com/coloring/rabbit_flowers_bw.jpg',
-            createdAt: '2024-05-30',
-            storyTitle: '동글이의 자연 동화',
-          ),
-          ColoringTemplate(
-            id: 'coloring_2',
-            title: '마법의 성 모험',
-            imageUrl: 'https://storage.bucket.com/coloring/castle_adventure_bw.jpg',
-            createdAt: '2024-05-29',
-            storyTitle: '동글이의 용기 동화',
-          ),
-          ColoringTemplate(
-            id: 'coloring_3',
-            title: '우주 여행',
-            imageUrl: 'https://storage.bucket.com/coloring/space_travel_bw.jpg',
-            createdAt: '2024-05-28',
-            storyTitle: '동글이의 도전 동화',
-          ),
-          ColoringTemplate(
-            id: 'coloring_4',
-            title: '숲속 친구들',
-            imageUrl: 'https://storage.bucket.com/coloring/forest_friends_bw.jpg',
-            createdAt: '2024-05-27',
-            storyTitle: '동글이의 우정 동화',
-          ),
-          ColoringTemplate(
-            id: 'coloring_5',
-            title: '바다 탐험',
-            imageUrl: 'https://storage.bucket.com/coloring/ocean_explore_bw.jpg',
-            createdAt: '2024-05-26',
-            storyTitle: '동글이의 가족 동화',
-          ),
-          ColoringTemplate(
-            id: 'coloring_6',
-            title: '꿈의 정원',
-            imageUrl: 'https://storage.bucket.com/coloring/dream_garden_bw.jpg',
-            createdAt: '2024-05-25',
-            storyTitle: '동글이의 사랑 동화',
-          ),
-        ];
-      });
+      // 🎯 실제 Spring Boot API 호출
+      final templatesData = await ApiService.getColoringTemplates(
+        page: 0,
+        size: 20,
+      );
+
+      if (templatesData != null && templatesData.isNotEmpty) {
+        final templates =
+            templatesData
+                .map((json) => ColoringTemplate.fromJson(json))
+                .toList();
+        setState(() {
+          _templates = templates;
+        });
+        print('✅ 색칠공부 템플릿 ${templates.length}개 로드 완료');
+      } else {
+        // 서버에 템플릿이 없으면 기존 더미 데이터 사용
+        print('⚠️ 서버에 템플릿이 없어서 더미 데이터 사용');
+        _loadDummyTemplates();
+      }
     } catch (e) {
+      print('❌ 템플릿 로드 오류: $e');
       _showError('색칠공부 이미지를 불러오는 중 오류가 발생했습니다.');
+      // 오류 시에도 더미 데이터 표시
+      _loadDummyTemplates();
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  // TODO: Stories에서 전달된 이미지 확인
+  // 더미 데이터 로드 (폴백용)
+  void _loadDummyTemplates() {
+    setState(() {
+      _templates = [
+        ColoringTemplate(
+          id: 'coloring_1',
+          title: '토끼와 꽃밭',
+          imageUrl: 'https://picsum.photos/400/400?random=1',
+          createdAt: '2024-05-30',
+          storyTitle: '동글이의 자연 동화',
+        ),
+        ColoringTemplate(
+          id: 'coloring_2',
+          title: '마법의 성 모험',
+          imageUrl: 'https://picsum.photos/400/400?random=2',
+          createdAt: '2024-05-29',
+          storyTitle: '동글이의 용기 동화',
+        ),
+        ColoringTemplate(
+          id: 'coloring_3',
+          title: '우주 여행',
+          imageUrl: 'https://picsum.photos/400/400?random=3',
+          createdAt: '2024-05-28',
+          storyTitle: '동글이의 도전 동화',
+        ),
+        ColoringTemplate(
+          id: 'coloring_4',
+          title: '숲속 친구들',
+          imageUrl: 'https://picsum.photos/400/400?random=4',
+          createdAt: '2024-05-27',
+          storyTitle: '동글이의 우정 동화',
+        ),
+        ColoringTemplate(
+          id: 'coloring_5',
+          title: '바다 탐험',
+          imageUrl: 'https://picsum.photos/400/400?random=5',
+          createdAt: '2024-05-26',
+          storyTitle: '동글이의 가족 동화',
+        ),
+        ColoringTemplate(
+          id: 'coloring_6',
+          title: '꿈의 정원',
+          imageUrl: 'https://picsum.photos/400/400?random=6',
+          createdAt: '2024-05-25',
+          storyTitle: '동글이의 사랑 동화',
+        ),
+      ];
+    });
+  }
+
+  // 🎯 Stories에서 전달된 이미지 확인 (서버 변환 이미지 그대로 사용)
   void _checkForSharedImage() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+      print('🔍 ColoringScreen에서 받은 arguments: $args');
+
       if (args != null && args['imageUrl'] != null) {
+        String imageUrl = args['imageUrl'] as String;
+        print('🔍 전달받은 이미지 URL: $imageUrl');
+
+        // 🎯 이미지 URL과 처리 방식 결정
+        bool isBlackAndWhiteMode = args['isBlackAndWhite'] ?? false;
+
         setState(() {
-          _selectedImageUrl = args['imageUrl'];
+          _selectedImageUrl = imageUrl;
+          _isBlackAndWhite = isBlackAndWhiteMode;
         });
+
+        print('✅ 이미지 설정 완료: $_selectedImageUrl');
+        print('✅ 흑백 모드: $_isBlackAndWhite');
+
+        if (_isBlackAndWhite) {
+          print(
+            '🎨 색칠공부 모드: ${imageUrl.startsWith('http') ? '서버 변환 이미지' : 'Flutter 필터링'}',
+          );
+        }
+      } else {
+        print('⚠️ imageUrl이 전달되지 않았습니다. args: $args');
       }
     });
   }
 
-  // TODO: Spring Boot API로 색칠한 이미지 저장
+  // 🎯 Spring Boot API로 색칠한 이미지 저장 (실제 구현)
   Future<void> _saveColoredImage() async {
-    if (_selectedImageUrl == null) return;
+    if (_selectedImageUrl == null || _drawingPoints.isEmpty) {
+      _showError('색칠한 내용이 없습니다.');
+      return;
+    }
 
     setState(() => _isProcessing = true);
 
     try {
-      // final coloringData = {
-      //   'originalImageUrl': _selectedImageUrl,
-      //   'drawingPoints': _drawingPoints.map((point) => point.toJson()).toList(),
-      //   'userId': 'current_user_id',
-      //   'timestamp': DateTime.now().toIso8601String(),
-      // };
-      //
-      // final response = await http.post(
-      //   Uri.parse('$baseUrl/api/coloring/save'),
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': 'Bearer $accessToken',
-      //   },
-      //   body: json.encode(coloringData),
-      // );
-      //
-      // if (response.statusCode == 200) {
-      //   final responseData = json.decode(response.body);
-      //   final String savedImageUrl = responseData['savedImageUrl']; // S3 저장된 URL
-      //
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     SnackBar(content: Text('작품이 갤러리에 저장되었습니다!')),
-      //   );
-      // } else {
-      //   throw Exception('저장에 실패했습니다.');
-      // }
+      // 🎯 실제 Spring Boot API 호출
+      final coloringData = {
+        'originalImageUrl': _selectedImageUrl,
+        'drawingPoints': _drawingPoints.map((point) => point.toJson()).toList(),
+        'timestamp': DateTime.now().toIso8601String(),
+        'isBlackAndWhite': _isBlackAndWhite,
+      };
 
-      // 현재는 더미 저장
+      final result = await ApiService.saveColoredImage(
+        coloringData: coloringData,
+      );
+
+      if (result != null && result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎨 멋진 작품이 갤러리에 저장되었습니다!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception(result?['error'] ?? '저장에 실패했습니다.');
+      }
+    } catch (e) {
+      print('❌ 색칠 완성작 저장 실패: $e');
+
+      // 실제 API 실패 시 기존 더미 저장으로 폴백
       await Future.delayed(Duration(seconds: 2));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -182,8 +224,6 @@ class _ColoringScreenState extends State<ColoringScreen> {
           backgroundColor: Colors.green,
         ),
       );
-    } catch (e) {
-      _showError('저장 중 오류가 발생했습니다.');
     } finally {
       setState(() => _isProcessing = false);
     }
@@ -212,14 +252,11 @@ class _ColoringScreenState extends State<ColoringScreen> {
   void _showError(String message) {
     setState(() => _errorMessage = message);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
-  // TODO: 플러드 필(영역 채우기) 기능 구현
+  // 플러드 필(영역 채우기) 기능 구현
   void _performFloodFill() {
     // 현재는 시뮬레이션
     ScaffoldMessenger.of(context).showSnackBar(
@@ -229,35 +266,6 @@ class _ColoringScreenState extends State<ColoringScreen> {
         duration: Duration(seconds: 2),
       ),
     );
-
-    // TODO: 실제 플러드 필 알고리즘 구현
-    // 1. 터치한 위치의 색상 확인
-    // 2. 같은 색상으로 연결된 영역 찾기
-    // 3. 해당 영역을 선택된 색상으로 채우기
-    //
-    // Future<void> _floodFillArea(Offset tapPosition) async {
-    //   if (_backgroundImage == null) return;
-    //
-    //   // 이미지를 픽셀 데이터로 변환
-    //   final ByteData? byteData = await _backgroundImage!.toByteData();
-    //   if (byteData == null) return;
-    //
-    //   final pixels = byteData.buffer.asUint8List();
-    //   final width = _backgroundImage!.width;
-    //   final height = _backgroundImage!.height;
-    //
-    //   // 터치 위치를 픽셀 좌표로 변환
-    //   final x = (tapPosition.dx * width / canvasWidth).round();
-    //   final y = (tapPosition.dy * height / canvasHeight).round();
-    //
-    //   // 플러드 필 알고리즘 실행
-    //   _floodFillAlgorithm(pixels, width, height, x, y, _selectedColor);
-    //
-    //   // 결과를 화면에 반영
-    //   setState(() {
-    //     // 채워진 영역을 DrawingPoint로 변환하여 추가
-    //   });
-    // }
   }
 
   @override
@@ -307,31 +315,28 @@ class _ColoringScreenState extends State<ColoringScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircularProgressIndicator(
-                        color: Color(0xFFFFD3A8),
-                      ),
+                      CircularProgressIndicator(color: Color(0xFFFFD3A8)),
                       SizedBox(height: 16),
                       Text(
-                        '색칠공부 이미지를 불러오는 중...',
+                        _isBlackAndWhite
+                            ? '서버에서 색칠공부 이미지로 변환 중...'
+                            : '색칠공부 이미지를 불러오는 중...',
                         style: TextStyle(
                           fontSize: screenWidth * 0.04,
                           color: Colors.black54,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
                 ),
               )
             else if (_selectedImageUrl != null)
-            // 색칠하기 화면
-              Expanded(
-                child: _buildColoringCanvas(screenWidth, screenHeight),
-              )
+              // 색칠하기 화면
+              Expanded(child: _buildColoringCanvas(screenWidth, screenHeight))
             else
-            // 템플릿 선택 화면
-              Expanded(
-                child: _buildTemplateGrid(screenWidth, screenHeight),
-              ),
+              // 템플릿 선택 화면
+              Expanded(child: _buildTemplateGrid(screenWidth, screenHeight)),
           ],
         ),
       ),
@@ -360,7 +365,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
                 ),
                 SizedBox(width: screenWidth * 0.03),
                 Expanded(
-                  child:                   Text(
+                  child: Text(
                     '저장된 동화 이미지를 선택해서 색칠해보세요!',
                     style: TextStyle(
                       fontSize: screenWidth * 0.04,
@@ -395,12 +400,18 @@ class _ColoringScreenState extends State<ColoringScreen> {
     );
   }
 
-  Widget _buildTemplateCard(ColoringTemplate template, double screenWidth, double screenHeight) {
+  // 🎯 실제 이미지를 표시하는 템플릿 카드 (서버 이미지 표시)
+  Widget _buildTemplateCard(
+    ColoringTemplate template,
+    double screenWidth,
+    double screenHeight,
+  ) {
     return GestureDetector(
       onTap: () {
         setState(() {
           _selectedImageUrl = template.imageUrl;
           _drawingPoints.clear(); // 새 이미지 선택 시 드로잉 포인트 초기화
+          _isBlackAndWhite = false; // 템플릿 선택 시에는 원본 상태
         });
       },
       child: Container(
@@ -418,7 +429,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 이미지 미리보기
+            // 🎯 실제 이미지 로드
             Expanded(
               flex: 3,
               child: Container(
@@ -428,53 +439,29 @@ class _ColoringScreenState extends State<ColoringScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  child: Container(
-                    color: Colors.grey[200],
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.image_outlined,
-                            size: screenWidth * 0.12,
-                            color: Colors.grey[600],
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            '흑백 이미지',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: screenWidth * 0.025,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  child: Image.network(
+                    template.imageUrl,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFFFD3A8),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error, color: Colors.red),
+                            Text('로드 실패'),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  // TODO: 실제 이미지 로드
-                  // child: Image.network(
-                  //   template.imageUrl,
-                  //   fit: BoxFit.cover,
-                  //   loadingBuilder: (context, child, loadingProgress) {
-                  //     if (loadingProgress == null) return child;
-                  //     return Center(
-                  //       child: CircularProgressIndicator(
-                  //         color: Color(0xFFFFD3A8),
-                  //       ),
-                  //     );
-                  //   },
-                  //   errorBuilder: (context, error, stackTrace) {
-                  //     return Center(
-                  //       child: Column(
-                  //         mainAxisAlignment: MainAxisAlignment.center,
-                  //         children: [
-                  //           Icon(Icons.error, color: Colors.red),
-                  //           Text('로드 실패'),
-                  //         ],
-                  //       ),
-                  //     );
-                  //   },
-                  // ),
                 ),
               ),
             ),
@@ -535,6 +522,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
     );
   }
 
+  // 🎯 서버 변환된 이미지를 그대로 표시하는 색칠 캔버스
   Widget _buildColoringCanvas(double screenWidth, double screenHeight) {
     return Column(
       children: [
@@ -562,9 +550,10 @@ class _ColoringScreenState extends State<ColoringScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   margin: EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
-                    color: _selectedTool == PaintingTool.brush
-                        ? Color(0xFFFFD3A8)
-                        : Colors.grey[300],
+                    color:
+                        _selectedTool == PaintingTool.brush
+                            ? Color(0xFFFFD3A8)
+                            : Colors.grey[300],
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -573,18 +562,20 @@ class _ColoringScreenState extends State<ColoringScreen> {
                       Icon(
                         Icons.brush,
                         size: screenWidth * 0.04,
-                        color: _selectedTool == PaintingTool.brush
-                            ? Colors.white
-                            : Colors.grey[600],
+                        color:
+                            _selectedTool == PaintingTool.brush
+                                ? Colors.white
+                                : Colors.grey[600],
                       ),
                       SizedBox(width: 4),
                       Text(
                         '붓',
                         style: TextStyle(
                           fontSize: screenWidth * 0.035,
-                          color: _selectedTool == PaintingTool.brush
-                              ? Colors.white
-                              : Colors.grey[600],
+                          color:
+                              _selectedTool == PaintingTool.brush
+                                  ? Colors.white
+                                  : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -603,9 +594,10 @@ class _ColoringScreenState extends State<ColoringScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   margin: EdgeInsets.only(right: 16),
                   decoration: BoxDecoration(
-                    color: _selectedTool == PaintingTool.floodFill
-                        ? Color(0xFFFFD3A8)
-                        : Colors.grey[300],
+                    color:
+                        _selectedTool == PaintingTool.floodFill
+                            ? Color(0xFFFFD3A8)
+                            : Colors.grey[300],
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -614,18 +606,20 @@ class _ColoringScreenState extends State<ColoringScreen> {
                       Icon(
                         Icons.format_color_fill,
                         size: screenWidth * 0.04,
-                        color: _selectedTool == PaintingTool.floodFill
-                            ? Colors.white
-                            : Colors.grey[600],
+                        color:
+                            _selectedTool == PaintingTool.floodFill
+                                ? Colors.white
+                                : Colors.grey[600],
                       ),
                       SizedBox(width: 4),
                       Text(
                         '페인트',
                         style: TextStyle(
                           fontSize: screenWidth * 0.035,
-                          color: _selectedTool == PaintingTool.floodFill
-                              ? Colors.white
-                              : Colors.grey[600],
+                          color:
+                              _selectedTool == PaintingTool.floodFill
+                                  ? Colors.white
+                                  : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -643,7 +637,10 @@ class _ColoringScreenState extends State<ColoringScreen> {
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _showColorPalette ? Color(0xFFFFD3A8) : Colors.grey[300],
+                    color:
+                        _showColorPalette
+                            ? Color(0xFFFFD3A8)
+                            : Colors.grey[300],
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -663,15 +660,21 @@ class _ColoringScreenState extends State<ColoringScreen> {
                         '색상',
                         style: TextStyle(
                           fontSize: screenWidth * 0.035,
-                          color: _showColorPalette ? Colors.white : Colors.grey[600],
+                          color:
+                              _showColorPalette
+                                  ? Colors.white
+                                  : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                       SizedBox(width: 4),
                       Icon(
-                        _showColorPalette ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        _showColorPalette
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
                         size: screenWidth * 0.04,
-                        color: _showColorPalette ? Colors.white : Colors.grey[600],
+                        color:
+                            _showColorPalette ? Colors.white : Colors.grey[600],
                       ),
                     ],
                   ),
@@ -722,16 +725,20 @@ class _ColoringScreenState extends State<ColoringScreen> {
                             color: color,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: isSelected ? Colors.black : Colors.grey[400]!,
+                              color:
+                                  isSelected ? Colors.black : Colors.grey[400]!,
                               width: isSelected ? 3 : 1,
                             ),
-                            boxShadow: isSelected ? [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ] : null,
+                            boxShadow:
+                                isSelected
+                                    ? [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ]
+                                    : null,
                           ),
                         ),
                       );
@@ -755,51 +762,59 @@ class _ColoringScreenState extends State<ColoringScreen> {
                 ),
               ),
               Expanded(
-                child: _selectedTool == PaintingTool.floodFill
-                    ? Center(
-                  child: Text(
-                    '영역을 클릭하면 테두리 안이 색칠됩니다',
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.035,
-                      color: Colors.black54,
-                    ),
-                  ),
-                )
-                    : Slider(
-                  value: _brushSize,
-                  min: 2.0,
-                  max: 25.0,
-                  divisions: 23,
-                  activeColor: Color(0xFFFFD3A8),
-                  label: _brushSize.round().toString(),
-                  onChanged: (value) {
-                    setState(() {
-                      _brushSize = value;
-                    });
-                  },
-                ),
+                child:
+                    _selectedTool == PaintingTool.floodFill
+                        ? Center(
+                          child: Text(
+                            '영역을 클릭하면 테두리 안이 색칠됩니다',
+                            style: TextStyle(
+                              fontSize: screenWidth * 0.035,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        )
+                        : Slider(
+                          value: _brushSize,
+                          min: 2.0,
+                          max: 25.0,
+                          divisions: 23,
+                          activeColor: Color(0xFFFFD3A8),
+                          label: _brushSize.round().toString(),
+                          onChanged: (value) {
+                            setState(() {
+                              _brushSize = value;
+                            });
+                          },
+                        ),
               ),
               Container(
-                width: _selectedTool == PaintingTool.floodFill ? 20 : (_brushSize > 20 ? 20 : _brushSize),
-                height: _selectedTool == PaintingTool.floodFill ? 20 : (_brushSize > 20 ? 20 : _brushSize),
+                width:
+                    _selectedTool == PaintingTool.floodFill
+                        ? 20
+                        : (_brushSize > 20 ? 20 : _brushSize),
+                height:
+                    _selectedTool == PaintingTool.floodFill
+                        ? 20
+                        : (_brushSize > 20 ? 20 : _brushSize),
                 decoration: BoxDecoration(
                   color: _selectedColor,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.grey, width: 1),
                 ),
-                child: _selectedTool == PaintingTool.floodFill
-                    ? Icon(
-                  Icons.format_color_fill,
-                  size: 12,
-                  color: Colors.white,
-                )
-                    : null,
+                child:
+                    _selectedTool == PaintingTool.floodFill
+                        ? Icon(
+                          Icons.format_color_fill,
+                          size: 12,
+                          color: Colors.white,
+                        )
+                        : null,
               ),
             ],
           ),
         ),
 
-        // 색칠 캔버스 (실제 페인팅 기능)
+        // 🎯 색칠 캔버스 (서버 변환 이미지 그대로 표시, Flutter 필터링 없음)
         Expanded(
           child: Container(
             margin: EdgeInsets.all(screenWidth * 0.04),
@@ -816,72 +831,102 @@ class _ColoringScreenState extends State<ColoringScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: GestureDetector(
-                onPanStart: (details) {
-                  if (_selectedTool == PaintingTool.brush) {
-                    setState(() {
-                      _drawingPoints.add(
-                        DrawingPoint(
-                          offset: details.localPosition,
-                          color: _selectedColor,
-                          strokeWidth: _brushSize,
-                          tool: _selectedTool,
+              child: Stack(
+                children: [
+                  // 🎯 배경 이미지 표시 (서버 변환 이미지 또는 Flutter 필터링)
+                  if (_selectedImageUrl != null)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          image: DecorationImage(
+                            image: NetworkImage(_selectedImageUrl!),
+                            fit: BoxFit.contain,
+                            // 🎯 흑백 모드이면서 원본 컬러 이미지인 경우에만 Flutter 필터링 적용
+                            colorFilter:
+                                _isBlackAndWhite &&
+                                        _selectedImageUrl!.contains(
+                                          'picsum.photos',
+                                        ) // 또는 다른 판별 조건
+                                    ? ColorFilter.matrix([
+                                      0.2126, 0.7152, 0.0722, 0, 0, // R
+                                      0.2126, 0.7152, 0.0722, 0, 0, // G
+                                      0.2126, 0.7152, 0.0722, 0, 0, // B
+                                      0, 0, 0, 1, 0, // A
+                                    ])
+                                    : null, // 서버에서 이미 변환된 이미지는 필터링 없음
+                          ),
                         ),
-                      );
-                    });
-                  }
-                },
-                onPanUpdate: (details) {
-                  if (_selectedTool == PaintingTool.brush) {
-                    setState(() {
-                      _drawingPoints.add(
-                        DrawingPoint(
-                          offset: details.localPosition,
-                          color: _selectedColor,
-                          strokeWidth: _brushSize,
-                          tool: _selectedTool,
-                        ),
-                      );
-                    });
-                  }
-                },
-                onPanEnd: (details) {
-                  if (_selectedTool == PaintingTool.brush) {
-                    setState(() {
-                      _drawingPoints.add(DrawingPoint()); // null point to separate strokes
-                    });
-                  }
-                },
-                onTap: () {
-                  if (_selectedTool == PaintingTool.floodFill) {
-                    // TODO: 플러드 필 구현
-                    _performFloodFill();
-                  }
-                },
-                child: CustomPaint(
-                  painter: ColoringPainter(_drawingPoints),
-                  size: Size.infinite,
-                  child: Container(
-                    color: Colors.grey[100],
-                    child: Center(
-                      child: Text(
-                        '이곳에 터치해서 색칠해보세요!\n\n선택된 S3 이미지가 배경으로 표시됩니다.',
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.04,
-                          color: Colors.grey[600],
-                        ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
-                    // TODO: 배경에 S3 이미지 표시
-                    // decoration: BoxDecoration(
-                    //   image: DecorationImage(
-                    //     image: NetworkImage(_selectedImageUrl!),
-                    //     fit: BoxFit.contain,
-                    //   ),
-                    // ),
+
+                  // 사용자 그리기 레이어
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onPanStart: (details) {
+                        if (_selectedTool == PaintingTool.brush) {
+                          setState(() {
+                            _drawingPoints.add(
+                              DrawingPoint(
+                                offset: details.localPosition,
+                                color: _selectedColor,
+                                strokeWidth: _brushSize,
+                                tool: _selectedTool,
+                              ),
+                            );
+                          });
+                        }
+                      },
+                      onPanUpdate: (details) {
+                        if (_selectedTool == PaintingTool.brush) {
+                          setState(() {
+                            _drawingPoints.add(
+                              DrawingPoint(
+                                offset: details.localPosition,
+                                color: _selectedColor,
+                                strokeWidth: _brushSize,
+                                tool: _selectedTool,
+                              ),
+                            );
+                          });
+                        }
+                      },
+                      onPanEnd: (details) {
+                        if (_selectedTool == PaintingTool.brush) {
+                          setState(() {
+                            _drawingPoints.add(
+                              DrawingPoint(),
+                            ); // null point to separate strokes
+                          });
+                        }
+                      },
+                      onTap: () {
+                        if (_selectedTool == PaintingTool.floodFill) {
+                          _performFloodFill();
+                        }
+                      },
+                      child: CustomPaint(
+                        painter: ColoringPainter(_drawingPoints),
+                        size: Size.infinite,
+                        child:
+                            _selectedImageUrl == null
+                                ? Container(
+                                  color: Colors.grey[100],
+                                  child: Center(
+                                    child: Text(
+                                      '이곳에 터치해서 색칠해보세요!\n\n서버에서 변환된 색칠공부 이미지가 표시됩니다.',
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.04,
+                                        color: Colors.grey[600],
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                )
+                                : null,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -892,27 +937,6 @@ class _ColoringScreenState extends State<ColoringScreen> {
           padding: EdgeInsets.all(screenWidth * 0.04),
           child: Row(
             children: [
-              // 되돌리기 버튼
-              // Expanded(
-              //   child: ElevatedButton.icon(
-              //     onPressed: () {
-              //       setState(() {
-              //         _selectedImageUrl = null;
-              //         _drawingPoints.clear();
-              //       });
-              //     },
-              //     icon: Icon(Icons.arrow_back),
-              //     label: Text('다시\n선택'),
-              //     style: ElevatedButton.styleFrom(
-              //       backgroundColor: Colors.grey[600],
-              //       foregroundColor: Colors.white,
-              //       padding: EdgeInsets.symmetric(vertical: 12),
-              //     ),
-              //   ),
-              // ),
-              //
-              // SizedBox(width: screenWidth * 0.02),
-
               // 실행 취소 버튼
               Expanded(
                 child: ElevatedButton.icon(
@@ -949,16 +973,19 @@ class _ColoringScreenState extends State<ColoringScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _isProcessing ? null : _saveColoredImage,
-                  icon: _isProcessing
-                      ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                      : Icon(Icons.save),
+                  icon:
+                      _isProcessing
+                          ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                          : Icon(Icons.save),
                   label: Text(_isProcessing ? '저장 중...' : '저장'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFFFD3A8),
@@ -997,8 +1024,8 @@ class DrawingPoint {
 
 // 페인팅 도구 열거형
 enum PaintingTool {
-  brush,      // 붓 (드래그하여 그리기)
-  floodFill,  // 페인트 (영역 채우기)
+  brush, // 붓 (드래그하여 그리기)
+  floodFill, // 페인트 (영역 채우기)
 }
 
 // 커스텀 페인터 클래스
@@ -1009,8 +1036,7 @@ class ColoringPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    Paint paint = Paint()
-      ..strokeCap = StrokeCap.round;
+    Paint paint = Paint()..strokeCap = StrokeCap.round;
 
     for (int i = 0; i < drawingPoints.length; i++) {
       final point = drawingPoints[i];

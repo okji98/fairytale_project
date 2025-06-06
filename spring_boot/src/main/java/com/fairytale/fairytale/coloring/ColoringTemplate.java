@@ -38,7 +38,8 @@ public class ColoringTemplate {
     private LocalDateTime updatedAt;
 
     // 기본 생성자
-    public ColoringTemplate() {}
+    public ColoringTemplate() {
+    }
 
     // Builder 패턴용 생성자
     public ColoringTemplate(String title, String storyId, String originalImageUrl, String blackWhiteImageUrl) {

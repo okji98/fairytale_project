@@ -5,7 +5,6 @@ from controllers.music_controller import search_tracks_by_tag
 from controllers.video_controller import search_videos
 from datetime import datetime
 
-
 # FastAPI 애플리케이션 생성
 app = FastAPI()
 
@@ -17,7 +16,6 @@ async def health_check():
         "service": "fastapi",
         "timestamp": datetime.now().isoformat()
     }
-
 
 # 동화 생성 클래스
 class StoryRequest(BaseModel):

@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/oauth/**").permitAll()
 
                         // 기타 API 경로 허용
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/coloring/**").permitAll()
 
                         // FastAPI 경로 허용
                         .requestMatchers("/api/fairytale/**", "/health", "/actuator/**", "/h2-console/**").permitAll()

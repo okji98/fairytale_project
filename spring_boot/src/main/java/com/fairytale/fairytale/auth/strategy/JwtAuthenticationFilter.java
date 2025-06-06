@@ -24,6 +24,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 🔧 OAuth 경로와 기타 공개 경로는 JWT 필터를 건너뛰기
         if (path.startsWith("/oauth/") ||
                 path.startsWith("/api/auth/") ||
+                path.startsWith("/api/coloring") ||
                 path.equals("/health") ||
                 path.startsWith("/actuator/") ||
                 path.startsWith("/h2-console/")) {

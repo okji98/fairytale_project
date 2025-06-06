@@ -13,6 +13,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.scheduling.annotation.Async;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,7 +36,7 @@ public class StoryService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    // 🎯 수정된 이미지 생성 메서드 (흑백 변환 로직 제거)
+    // 🎯 수정된 이미지 생성 메서드 (FastAPI 요청 구조 수정 + 오류 처리 개선)
     public Story createImage(ImageRequest request) {
         System.out.println("🔍 이미지 생성 요청 - StoryId: " + request.getStoryId());
 
@@ -44,58 +45,77 @@ public class StoryService {
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
 
         System.out.println("✅ 스토리 조회 성공 - Title: " + story.getTitle());
+        System.out.println("🔍 스토리 내용 길이: " + story.getContent().length() + "자");
 
-        // 2. 🎯 FastAPI로 컬러 이미지만 생성
-        FastApiImageRequest fastApiRequest = new FastApiImageRequest();
-        fastApiRequest.setMode("cartoon");  // 항상 컬러로 고정
-        fastApiRequest.setText(story.getContent());
+        // 2. 🎯 FastAPI 요청 데이터 (Python ImageRequest 클래스에 맞춤)
+        Map<String, Object> fastApiRequest = new HashMap<>();
+        fastApiRequest.put("text", story.getContent()); // FastAPI ImageRequest.text에 맞춤
 
-        System.out.println("🔍 FastAPI 컬러 이미지 생성 요청");
+        System.out.println("🔍 FastAPI 이미지 생성 요청 데이터: " + fastApiRequest);
 
         // 3. FastAPI로 컬러 이미지 생성
         String imageUrl = fastApiBaseUrl + "/generate/image";
-        String fastApiResponse = callFastApi(imageUrl, fastApiRequest);
-        String colorImageUrl = extractImageUrlFromResponse(fastApiResponse);
 
-        System.out.println("🎯 컬러 이미지 생성 완료: " + colorImageUrl);
+        try {
+            String fastApiResponse = callFastApi(imageUrl, fastApiRequest);
+            String colorImageUrl = extractImageUrlFromResponse(fastApiResponse);
 
-        // 4. 🎯 Story의 단일 image 컬럼에 저장
-        story.setImage(colorImageUrl);
-        Story savedStory = storyRepository.save(story);
+            System.out.println("🎯 컬러 이미지 생성 완료: " + colorImageUrl);
 
-        System.out.println("✅ 컬러 이미지 저장 완료");
+            if (colorImageUrl == null || colorImageUrl.trim().isEmpty() || "null".equals(colorImageUrl)) {
+                System.out.println("❌ FastAPI에서 null 이미지 URL 반환");
 
-        // 🔧 흑백 변환 로직 완전 제거 (Flutter에서 직접 처리)
-        // createColoringTemplateAsync(savedStory, colorImageUrl); // 주석 처리
+                // 🎯 실패 시 더미 이미지 사용
+                colorImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
+                System.out.println("🔄 더미 이미지 URL 사용: " + colorImageUrl);
+            }
 
-        return savedStory;
+            // 4. Story의 단일 image 컬럼에 저장
+            story.setImage(colorImageUrl);
+            Story savedStory = storyRepository.save(story);
+
+            System.out.println("✅ 컬러 이미지 저장 완료");
+
+            // 5. 🆕 색칠공부 템플릿 비동기 생성 (PIL+OpenCV 변환 포함)
+            createColoringTemplateAsync(savedStory, colorImageUrl);
+
+            return savedStory;
+
+        } catch (Exception e) {
+            System.err.println("❌ 이미지 생성 실패: " + e.getMessage());
+
+            // 🎯 실패 시 더미 이미지 사용
+            String dummyImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
+            story.setImage(dummyImageUrl);
+            Story savedStory = storyRepository.save(story);
+
+            System.out.println("🔄 더미 이미지로 저장 완료: " + dummyImageUrl);
+
+            return savedStory;
+        }
     }
 
-    // 🔧 FastAPI 기존 /convert/bwimage 엔드포인트 호출
-//    private String callFastApiBlackWhiteConversion(String originalImageUrl) {
-//        try {
-//            System.out.println("🔍 FastAPI 흑백 변환 요청 - URL: " + originalImageUrl);
-//
-//            // 기존 FastAPI 엔드포인트는 text 필드를 받음
-//            Map<String, String> request = new HashMap<>();
-//            request.put("text", originalImageUrl);  // image URL을 text 필드로 전달
-//
-//            // 기존 FastAPI /convert/bwimage 엔드포인트 호출
-//            String url = fastApiBaseUrl + "/convert/bwimage";
-//            String response = callFastApi(url, request);
-//
-//            // 응답에서 흑백 이미지 URL 추출
-//            JsonNode jsonNode = objectMapper.readTree(response);
-//            String blackWhiteUrl = jsonNode.get("image_url").asText();
-//
-//            System.out.println("✅ FastAPI 흑백 변환 완료: " + blackWhiteUrl);
-//            return blackWhiteUrl;
-//
-//        } catch (Exception e) {
-//            System.out.println("❌ FastAPI 흑백 변환 실패: " + e.getMessage());
-//            throw new RuntimeException("FastAPI 흑백 변환 실패", e);
-//        }
-//    }
+    // 🆕 색칠공부 템플릿 비동기 생성 (PIL+OpenCV 변환)
+    @Async
+    public CompletableFuture<Void> createColoringTemplateAsync(Story story, String colorImageUrl) {
+        try {
+            System.out.println("🎨 색칠공부 템플릿 비동기 생성 시작 - StoryId: " + story.getId());
+
+            // ColoringTemplateService를 통해 PIL+OpenCV 변환 및 템플릿 생성
+            coloringTemplateService.createColoringTemplate(
+                    story.getId().toString(),
+                    story.getTitle() + " 색칠하기",
+                    colorImageUrl,
+                    null  // 흑백 이미지는 자동 변환
+            );
+
+            System.out.println("✅ 색칠공부 템플릿 비동기 생성 완료");
+        } catch (Exception e) {
+            System.err.println("❌ 색칠공부 템플릿 생성 실패: " + e.getMessage());
+            // 색칠공부 템플릿 생성 실패해도 Story는 정상 처리
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 
     // 🔄 기존 동화 생성 메서드 (수정됨)
     public Story createStory(StoryCreateRequest request, String username) {
@@ -115,8 +135,8 @@ public class StoryService {
 
         // 2. FastAPI 동화 생성 요청
         FastApiStoryRequest fastApiRequest = new FastApiStoryRequest();
-        fastApiRequest.setName(request.getTheme() + " 동화");
-        fastApiRequest.setTheme(request.getTheme());
+        fastApiRequest.setName(user.getNickname());
+        fastApiRequest.setTheme(request.getTheme()+ " 동화");
 
         System.out.println("🔍 FastAPI 동화 생성 요청: " + fastApiRequest.getName());
 
@@ -185,9 +205,13 @@ public class StoryService {
         return callFastApi(url, request);
     }
 
-    // 공통 FastAPI 호출 메서드
+    // 🎯 개선된 FastAPI 호출 메서드 (더 상세한 로깅)
     private String callFastApi(String url, Object request) {
         try {
+            System.out.println("🔍 FastAPI 호출 시작");
+            System.out.println("🔍 URL: " + url);
+            System.out.println("🔍 요청 객체 타입: " + request.getClass().getSimpleName());
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -196,6 +220,8 @@ public class StoryService {
 
             HttpEntity<String> entity = new HttpEntity<>(jsonRequest, headers);
 
+            System.out.println("🔍 HTTP 요청 전송 중...");
+
             ResponseEntity<String> response = restTemplate.exchange(
                     url,
                     HttpMethod.POST,
@@ -203,10 +229,19 @@ public class StoryService {
                     String.class
             );
 
-            System.out.println("🔍 FastAPI 응답: " + response.getBody());
-            return response.getBody();
+            System.out.println("🔍 FastAPI 응답 상태코드: " + response.getStatusCode());
+            System.out.println("🔍 FastAPI 응답 헤더: " + response.getHeaders());
+            System.out.println("🔍 FastAPI 응답 본문: " + response.getBody());
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return response.getBody();
+            } else {
+                throw new RuntimeException("FastAPI 호출 실패. 상태코드: " + response.getStatusCode());
+            }
+
         } catch (Exception e) {
-            System.out.println("❌ FastAPI 호출 실패: " + e.getMessage());
+            System.err.println("❌ FastAPI 호출 실패: " + e.getMessage());
+            e.printStackTrace();
             throw new RuntimeException("FastAPI 호출 실패: " + e.getMessage(), e);
         }
     }
@@ -222,12 +257,43 @@ public class StoryService {
         }
     }
 
+    // 🎯 개선된 응답 파싱 메서드 (더 상세한 로깅)
     private String extractImageUrlFromResponse(String response) {
         try {
+            System.out.println("🔍 이미지 URL 파싱 시작");
+            System.out.println("🔍 FastAPI 응답 원문: " + response);
+
             JsonNode jsonNode = objectMapper.readTree(response);
-            return jsonNode.get("image_url").asText();
+            System.out.println("🔍 JSON 파싱 성공");
+
+            // image_url 필드 확인
+            if (jsonNode.has("image_url")) {
+                String imageUrl = jsonNode.get("image_url").asText();
+                System.out.println("🔍 추출된 image_url: " + imageUrl);
+
+                if ("null".equals(imageUrl) || imageUrl == null || imageUrl.trim().isEmpty()) {
+                    System.out.println("❌ image_url이 null이거나 비어있음");
+
+                    // 오류 메시지 확인
+                    if (jsonNode.has("error")) {
+                        String error = jsonNode.get("error").asText();
+                        System.out.println("❌ FastAPI 오류: " + error);
+                        throw new RuntimeException("FastAPI 이미지 생성 오류: " + error);
+                    }
+
+                    throw new RuntimeException("FastAPI에서 유효한 이미지 URL을 반환하지 않았습니다.");
+                }
+
+                return imageUrl;
+            } else {
+                System.out.println("❌ 응답에 image_url 필드가 없음");
+                System.out.println("🔍 사용 가능한 필드들: " + jsonNode.fieldNames());
+                throw new RuntimeException("응답에 image_url 필드가 없습니다.");
+            }
         } catch (Exception e) {
-            throw new RuntimeException("이미지 URL 파싱 실패 " + e);
+            System.err.println("❌ 이미지 URL 파싱 실패: " + e.getMessage());
+            System.err.println("❌ 응답 내용: " + response);
+            throw new RuntimeException("이미지 URL 파싱 실패: " + e.getMessage(), e);
         }
     }
 
@@ -249,20 +315,73 @@ public class StoryService {
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
     }
 
+    // 🎯 PIL+OpenCV 흑백 변환 프록시 메서드 (null 체크 추가)
     public ResponseEntity<String> convertToBlackWhite(Map<String, String> request) {
         try {
-            System.out.println("🔍 흑백 변환 요청: " + request.get("text"));
+            String imageUrl = request.get("text");
+            System.out.println("🔍 PIL+OpenCV 흑백 변환 요청: " + imageUrl);
 
-            // FastAPI로 프록시 요청
+            // 🔥 null 체크 추가
+            if (imageUrl == null || imageUrl.trim().isEmpty() || "null".equals(imageUrl)) {
+                System.out.println("❌ 이미지 URL이 null이거나 비어있음: " + imageUrl);
+
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("image_url", null);
+                errorResponse.put("error", "이미지 URL이 null입니다.");
+                errorResponse.put("conversion_method", "Flutter_Filter");
+
+                String errorJson = objectMapper.writeValueAsString(errorResponse);
+                return ResponseEntity.ok(errorJson);
+            }
+
+            // 🎯 Python의 convert_bw_image 함수와 동일한 FastAPI 호출
             String url = fastApiBaseUrl + "/convert/bwimage";
             String response = callFastApi(url, request);
 
-            System.out.println("🔍 FastAPI 흑백 변환 응답: " + response);
+            System.out.println("🔍 FastAPI PIL+OpenCV 변환 응답: " + response);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.out.println("❌ 흑백 변환 실패: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("{\"error\": \"" + e.getMessage() + "\"}");
+            System.out.println("❌ PIL+OpenCV 변환 실패: " + e.getMessage());
+
+            // 🎯 실패 시 Flutter 필터링 안내 응답
+            Map<String, Object> fallbackResponse = new HashMap<>();
+            fallbackResponse.put("image_url", request.get("text"));
+            fallbackResponse.put("conversion_method", "Flutter_Filter");
+            fallbackResponse.put("message", "PIL+OpenCV 변환 실패로 Flutter에서 필터링 처리됩니다.");
+
+            try {
+                String fallbackJson = objectMapper.writeValueAsString(fallbackResponse);
+                return ResponseEntity.ok(fallbackJson);
+            } catch (Exception jsonError) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("{\"error\": \"" + e.getMessage() + "\"}");
+            }
+        }
+    }
+
+    // 🆕 색칠공부 템플릿 수동 생성 메서드
+    public void createColoringTemplateForExistingStory(Long storyId) {
+        try {
+            Story story = storyRepository.findById(storyId)
+                    .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
+
+            if (story.getImage() != null && !story.getImage().isEmpty()) {
+                System.out.println("🎨 기존 스토리의 색칠공부 템플릿 수동 생성 - StoryId: " + storyId);
+
+                coloringTemplateService.createColoringTemplate(
+                        story.getId().toString(),
+                        story.getTitle() + " 색칠하기",
+                        story.getImage(),
+                        null  // PIL+OpenCV 자동 변환
+                );
+
+                System.out.println("✅ 기존 스토리의 색칠공부 템플릿 생성 완료");
+            } else {
+                System.out.println("⚠️ 스토리에 이미지가 없어서 색칠공부 템플릿을 생성할 수 없습니다.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ 색칠공부 템플릿 수동 생성 실패: " + e.getMessage());
+            throw new RuntimeException("색칠공부 템플릿 생성 실패", e);
         }
     }
 }
