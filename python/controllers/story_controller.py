@@ -80,7 +80,7 @@ def play_openai_voice(text, voice="alloy", speed=1):
 
 
 # 이미지 생성 함수
-def generate_image_from_fairy_tale(fairy_tale_text, save_path="generated_image.png"):
+def generate_image_from_fairy_tale(fairy_tale_text):
     # 프롬프트 영어로 생성 시 응답 내용 더 정확해짐
     try:
         base_prompt = fairy_tale_text[:300].replace('\n', ' ')
@@ -99,28 +99,28 @@ def generate_image_from_fairy_tale(fairy_tale_text, save_path="generated_image.p
             n=1
         )
         
-        if hasattr(response, "data") and response.data and len(response.data) > 0:
-            # URL 가져오기
-            image_url = response.data[0].url
-            print(f"이미지 생성 성공: {image_url}")
+        # if hasattr(response, "data") and response.data and len(response.data) > 0:
+        #     # URL 가져오기
+        #     image_url = response.data[0].url
+        #     print(f"이미지 생성 성공: {image_url}")
 
-            # 이미지 다운로드 및 파일로 저장
-            image_response = requests.get(image_url, stream=True)
-            if image_response.status_code == 200:
-                # PIL을 사용해 이미지 열기
-                image = Image.open(BytesIO(image_response.content))
-                image.save(save_path)  # 저장 경로에 이미지 저장
-                print(f"이미지가 성공적으로 저장되었습니다: {save_path}")
-                return save_path
+        #     # 이미지 다운로드 및 파일로 저장
+        #     image_response = requests.get(image_url, stream=True)
+        #     if image_response.status_code == 200:
+        #         # PIL을 사용해 이미지 열기
+        #         image = Image.open(BytesIO(image_response.content))
+        #         image.save(save_path)  # 저장 경로에 이미지 저장
+        #         print(f"이미지가 성공적으로 저장되었습니다: {save_path}")
+        #         return save_path
            
-            else:
-                print(f"이미지 다운로드 실패: {image_response.status_code}")
-                return None
-        else:
-            print("이미지 생성 실패: 응답이 비어 있거나 형식이 잘못됨.")
-            print("전체 응답:", response)
-            return None
-        
+        #     else:
+        #         print(f"이미지 다운로드 실패: {image_response.status_code}")
+        #         return None
+        # else:
+        #     print("이미지 생성 실패: 응답이 비어 있거나 형식이 잘못됨.")
+        #     print("전체 응답:", response)
+        #     return None
+        return response
     except Exception as e:
         print(f"이미지 생성 중 오류 발생:\n{e}")
         return None

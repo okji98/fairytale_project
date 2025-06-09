@@ -1,4 +1,5 @@
 // lib/main.dart
+import 'package:app/screens/gallery/GalleryScreen.dart';
 import 'package:app/screens/share/share_screen.dart';
 import 'package:app/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
@@ -36,11 +37,8 @@ class BaseScaffold extends StatelessWidget {
   final Widget child;
   final Widget? background;
 
-  const BaseScaffold({
-    required this.child,
-    this.background,
-    Key? key,
-  }) : super(key: key);
+  const BaseScaffold({required this.child, this.background, Key? key})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -48,23 +46,19 @@ class BaseScaffold extends StatelessWidget {
       body: Container(
         // background 파라미터가 있으면 Stack으로 덮어주고,
         // 없으면 bg_image.png를 BoxDecoration으로 그립니다.
-        decoration: background == null
-            ? BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/bg_image.png'),
-            fit: BoxFit.cover,
-          ),
-        )
-            : null,
-        child: background != null
-            ? Stack(
-          fit: StackFit.expand,
-          children: [
-            background!,
-            child,
-          ],
-        )
-            : child,
+        decoration:
+            background == null
+                ? BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/bg_image.png'),
+                    fit: BoxFit.cover,
+                  ),
+                )
+                : null,
+        child:
+            background != null
+                ? Stack(fit: StackFit.expand, children: [background!, child])
+                : child,
       ),
     );
   }
@@ -183,21 +177,23 @@ class MyApp extends StatelessWidget {
         ),
       ),
       initialRoute: '/onboarding',
-    routes: {
-    '/onboarding': (context) => OnboardingScreen(),  // 첫 화면 그대로 유지
-    '/login': (context) => LoginScreen(),
-    '/child-info': (context) => ChildInfoScreen(),  // childInfo → child-info로만 변경
-    '/home': (context) => HomeScreen(),
-    '/stories': (ctx) => StoriesScreen(),
-    '/profile': (context) => ProfileScreen(),
-    '/profile-details': (context) => ProfileDetailsScreen(),
-    '/settings': (context) => SettingsScreen(),
-    '/contacts': (context) => ContactsScreen(),
-    '/support': (context) => SupportScreen(),
-    '/coloring': (context) => ColoringScreen(),
-    '/share': (context) => ShareScreen(),
-    '/lullaby': (context) => LullabyScreen(),
-    },
+      routes: {
+        '/onboarding': (context) => OnboardingScreen(), // 첫 화면 그대로 유지
+        '/login': (context) => LoginScreen(),
+        '/child-info':
+            (context) => ChildInfoScreen(), // childInfo → child-info로만 변경
+        '/home': (context) => HomeScreen(),
+        '/stories': (ctx) => StoriesScreen(),
+        '/profile': (context) => ProfileScreen(),
+        '/profile-details': (context) => ProfileDetailsScreen(),
+        '/settings': (context) => SettingsScreen(),
+        '/contacts': (context) => ContactsScreen(),
+        '/support': (context) => SupportScreen(),
+        '/coloring': (context) => ColoringScreen(),
+        '/share': (context) => ShareScreen(),
+        '/lullaby': (context) => LullabyScreen(),
+        '/gallery': (context) => GalleryScreen(),
+      },
     );
   }
 }

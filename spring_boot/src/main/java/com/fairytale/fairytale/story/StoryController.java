@@ -1,7 +1,6 @@
 package com.fairytale.fairytale.story;
 
 import com.fairytale.fairytale.story.dto.*;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -10,7 +9,11 @@ import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.util.StreamUtils;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -53,6 +56,134 @@ public class StoryController {
       return ResponseEntity.ok(result);
     } catch (Exception e) {
       return ResponseEntity.badRequest().build();
+    }
+  }
+
+  // 🎯 로컬 오디오 파일 다운로드 API (새로 추가)
+  @PostMapping("/download/audio")
+  public ResponseEntity<byte[]> downloadAudioFile(@RequestBody Map<String, String> request) {
+    try {
+      String filePath = request.get("filePath");
+      System.out.println("🔍 [오디오 다운로드] 요청된 파일 경로: " + filePath);
+
+      if (filePath == null || filePath.trim().isEmpty()) {
+        System.out.println("❌ 파일 경로가 비어있음");
+        return ResponseEntity.badRequest()
+                .body("파일 경로가 제공되지 않았습니다.".getBytes());
+      }
+
+      // 🔥 보안 검사: 허용된 경로만 접근 가능
+      if (!isValidAudioPath(filePath)) {
+        System.out.println("❌ 허용되지 않은 파일 경로: " + filePath);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body("접근이 허용되지 않은 파일 경로입니다.".getBytes());
+      }
+
+      File audioFile = new File(filePath);
+
+      if (!audioFile.exists()) {
+        System.out.println("❌ 파일이 존재하지 않음: " + filePath);
+        return ResponseEntity.notFound().build();
+      }
+
+      if (!audioFile.canRead()) {
+        System.out.println("❌ 파일을 읽을 수 없음: " + filePath);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body("파일에 대한 읽기 권한이 없습니다.".getBytes());
+      }
+
+      System.out.println("✅ 파일 존재 확인: " + audioFile.getAbsolutePath());
+      System.out.println("🔍 파일 크기: " + audioFile.length() + " bytes");
+
+      // 🎯 파일을 바이트 배열로 읽기
+      try (FileInputStream fileInputStream = new FileInputStream(audioFile)) {
+        byte[] audioBytes = StreamUtils.copyToByteArray(fileInputStream);
+
+        System.out.println("✅ 파일 읽기 완료: " + audioBytes.length + " bytes");
+
+        // 🎯 HTTP 응답 헤더 설정
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(getAudioMediaType(filePath));
+        headers.setContentLength(audioBytes.length);
+        headers.setCacheControl("no-cache");
+
+        // 🔥 CORS 헤더 추가 (Flutter 웹에서 접근 가능하도록)
+        headers.add("Access-Control-Allow-Origin", "*");
+        headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+        System.out.println("✅ 오디오 파일 다운로드 성공");
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(audioBytes);
+
+      } catch (IOException e) {
+        System.err.println("❌ 파일 읽기 실패: " + e.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(("파일 읽기 실패: " + e.getMessage()).getBytes());
+      }
+
+    } catch (Exception e) {
+      System.err.println("❌ 오디오 다운로드 처리 실패: " + e.getMessage());
+      e.printStackTrace();
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+              .body(("서버 오류: " + e.getMessage()).getBytes());
+    }
+  }
+
+  // 🎯 오디오 파일 경로 보안 검사
+  private boolean isValidAudioPath(String filePath) {
+    try {
+      // 허용된 디렉토리 패턴들
+      String[] allowedPatterns = {
+              "/tmp/",           // 임시 파일
+              "/var/folders/",   // macOS 임시 폴더
+              "/temp/",          // Windows 임시 폴더
+              "temp",            // 상대 경로 temp
+              ".mp3",            // mp3 확장자
+              ".wav",            // wav 확장자
+              ".m4a"             // m4a 확장자
+      };
+
+      // 경로에 허용된 패턴이 포함되어 있는지 확인
+      for (String pattern : allowedPatterns) {
+        if (filePath.contains(pattern)) {
+          System.out.println("✅ 허용된 경로 패턴 발견: " + pattern);
+
+          // 🔥 추가 보안: 상위 디렉토리 접근 차단
+          if (filePath.contains("../") || filePath.contains("..\\")) {
+            System.out.println("❌ 상위 디렉토리 접근 시도 차단: " + filePath);
+            return false;
+          }
+
+          return true;
+        }
+      }
+
+      System.out.println("❌ 허용되지 않은 경로 패턴: " + filePath);
+      return false;
+
+    } catch (Exception e) {
+      System.err.println("❌ 경로 검사 중 오류: " + e.getMessage());
+      return false;
+    }
+  }
+
+  // 🎯 파일 확장자에 따른 MediaType 반환
+  private MediaType getAudioMediaType(String filePath) {
+    String lowerPath = filePath.toLowerCase();
+
+    if (lowerPath.endsWith(".mp3")) {
+      return MediaType.valueOf("audio/mpeg");
+    } else if (lowerPath.endsWith(".wav")) {
+      return MediaType.valueOf("audio/wav");
+    } else if (lowerPath.endsWith(".m4a")) {
+      return MediaType.valueOf("audio/mp4");
+    } else if (lowerPath.endsWith(".ogg")) {
+      return MediaType.valueOf("audio/ogg");
+    } else {
+      // 기본값
+      return MediaType.APPLICATION_OCTET_STREAM;
     }
   }
 
@@ -193,4 +324,27 @@ public class StoryController {
       return ResponseEntity.badRequest().body("Error: " + e.getMessage());
     }
   }
+
+  // 🆕 추후 S3 업로드를 위한 메서드 (주석 처리)
+  /*
+  @PostMapping("/upload/audio/s3")
+  public ResponseEntity<Map<String, String>> uploadAudioToS3(@RequestBody Map<String, String> request) {
+    try {
+      String localFilePath = request.get("filePath");
+
+      // S3 업로드 로직
+      // String s3Url = s3Service.uploadAudioFile(localFilePath);
+
+      Map<String, String> response = new HashMap<>();
+      // response.put("s3Url", s3Url);
+      // response.put("status", "uploaded");
+
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      Map<String, String> errorResponse = new HashMap<>();
+      errorResponse.put("error", e.getMessage());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+    }
+  }
+  */
 }

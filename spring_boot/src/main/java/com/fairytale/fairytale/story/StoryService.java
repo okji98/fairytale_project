@@ -1,5 +1,7 @@
 package com.fairytale.fairytale.story;
 
+import com.fairytale.fairytale.baby.Baby;
+import com.fairytale.fairytale.baby.BabyRepository;
 import com.fairytale.fairytale.story.dto.*;
 import com.fairytale.fairytale.users.Users;
 import com.fairytale.fairytale.users.UsersRepository;
@@ -25,6 +27,8 @@ import java.util.concurrent.CompletableFuture;
 public class StoryService {
     private final StoryRepository storyRepository;
     private final UsersRepository usersRepository;
+    private final BabyRepository babyRepository;
+    private final Baby baby;
 
     // 🆕 색칠공부 서비스 추가
     @Autowired
@@ -133,10 +137,21 @@ public class StoryService {
 
         System.out.println("🔍 사용자 조회 성공 - ID: " + user.getId());
 
-        // 2. FastAPI 동화 생성 요청
+        // 2. Baby 조회 (babyId가 요청에 있다면)
+        Baby baby = null;
+        if (request.getBabyId() != null) {
+            baby = babyRepository.findById(request.getBabyId())
+                    .orElseThrow(() -> new RuntimeException("아기 정보를 찾을 수 없습니다."));
+        }
+
+        // 3. FastAPI 요청 객체 생성
         FastApiStoryRequest fastApiRequest = new FastApiStoryRequest();
-        fastApiRequest.setName(user.getNickname());
-        fastApiRequest.setTheme(request.getTheme()+ " 동화");
+        if (baby != null) {
+            fastApiRequest.setName(baby.getBabyName());  // Baby의 이름 사용
+        } else {
+            fastApiRequest.setName("친구");  // 기본값
+        }
+        fastApiRequest.setTheme(request.getTheme() + " 동화");
 
         System.out.println("🔍 FastAPI 동화 생성 요청: " + fastApiRequest.getName());
 
@@ -154,7 +169,7 @@ public class StoryService {
         story.setTitle(request.getTheme() + " 동화");
         story.setContent(storyContent);
         story.setUser(user);
-        story.setVoiceContent("");
+        story.setVoiceContent("");  // 🎯 초기값: 빈 문자열
         story.setImage("");  // 🎯 단일 image 컬럼 사용
 
         System.out.println("🔍 스토리 저장 전 - Title: " + story.getTitle());
@@ -164,7 +179,7 @@ public class StoryService {
         return saved;
     }
 
-    // 음성 생성 메서드
+    // 🎯 로컬 파일 경로 처리가 가능한 음성 생성 메서드
     public Story createVoice(VoiceRequest request) {
         System.out.println("🔍 음성 생성 시작 - StoryId: " + request.getStoryId());
 
@@ -184,14 +199,120 @@ public class StoryService {
         String url = fastApiBaseUrl + "/generate/voice";
         String fastApiResponse = callFastApi(url, fastApiRequest);
 
-        // 4. 응답 파싱
+        // 4. 응답 파싱 (로컬 파일 경로 처리)
         String voiceUrl = extractVoiceUrlFromResponse(fastApiResponse);
-        System.out.println("🔍 음성 URL: " + voiceUrl);
+        System.out.println("🔍 FastAPI에서 받은 음성 경로: " + voiceUrl);
+
+        // 🎯 로컬 파일 경로와 HTTP URL 모두 처리
+        String processedVoiceUrl = processVoiceUrl(voiceUrl);
+        System.out.println("🔍 처리된 음성 URL: " + processedVoiceUrl);
 
         // 5. 저장
-        story.setVoiceContent(voiceUrl);
+        story.setVoiceContent(processedVoiceUrl);
         return storyRepository.save(story);
     }
+
+    // 🎯 음성 URL 처리 (로컬 파일 경로와 HTTP URL 구분)
+    private String processVoiceUrl(String voiceUrl) {
+        if (voiceUrl == null || voiceUrl.trim().isEmpty()) {
+            System.out.println("⚠️ 음성 URL이 null이거나 비어있음");
+            return "";
+        }
+
+        // HTTP URL인 경우 그대로 반환
+        if (voiceUrl.startsWith("http://") || voiceUrl.startsWith("https://")) {
+            System.out.println("✅ HTTP URL 음성 파일: " + voiceUrl);
+            return voiceUrl;
+        }
+
+        // 로컬 파일 경로인 경우
+        if (voiceUrl.startsWith("/") || voiceUrl.contains("/tmp/") || voiceUrl.contains("/var/")) {
+            System.out.println("🔍 로컬 파일 경로 감지: " + voiceUrl);
+
+            // 🔥 보안 검사
+            if (isValidAudioPath(voiceUrl)) {
+                System.out.println("✅ 유효한 로컬 오디오 파일 경로");
+                return voiceUrl; // 로컬 경로 그대로 반환 (Flutter에서 다운로드 API 호출)
+            } else {
+                System.out.println("❌ 유효하지 않은 오디오 파일 경로");
+                return "";
+            }
+        }
+
+        // 🎯 추후 S3 업로드 처리 (주석으로 준비)
+        /*
+        if (voiceUrl.startsWith("/") || voiceUrl.contains("tmp")) {
+            // S3에 업로드하고 URL 반환
+            try {
+                String s3Url = uploadToS3(voiceUrl);
+                System.out.println("✅ S3 업로드 완료: " + s3Url);
+                return s3Url;
+            } catch (Exception e) {
+                System.err.println("❌ S3 업로드 실패: " + e.getMessage());
+                return voiceUrl; // 실패 시 원본 경로 반환
+            }
+        }
+        */
+
+        System.out.println("⚠️ 알 수 없는 음성 URL 형식: " + voiceUrl);
+        return voiceUrl;
+    }
+
+    // 🎯 오디오 파일 경로 보안 검사 (Controller와 동일한 로직)
+    private boolean isValidAudioPath(String filePath) {
+        try {
+            // 허용된 디렉토리 패턴들
+            String[] allowedPatterns = {
+                    "/tmp/",           // 임시 파일
+                    "/var/folders/",   // macOS 임시 폴더
+                    "/temp/",          // Windows 임시 폴더
+                    "temp",            // 상대 경로 temp
+                    ".mp3",            // mp3 확장자
+                    ".wav",            // wav 확장자
+                    ".m4a"             // m4a 확장자
+            };
+
+            // 경로에 허용된 패턴이 포함되어 있는지 확인
+            for (String pattern : allowedPatterns) {
+                if (filePath.contains(pattern)) {
+                    // 🔥 추가 보안: 상위 디렉토리 접근 차단
+                    if (filePath.contains("../") || filePath.contains("..\\")) {
+                        System.out.println("❌ 상위 디렉토리 접근 시도 차단: " + filePath);
+                        return false;
+                    }
+                    return true;
+                }
+            }
+
+            return false;
+
+        } catch (Exception e) {
+            System.err.println("❌ 경로 검사 중 오류: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // 🆕 추후 S3 업로드를 위한 메서드 (주석 처리)
+    /*
+    private String uploadToS3(String localFilePath) {
+        try {
+            // S3 업로드 로직
+            // 1. 로컬 파일 읽기
+            // 2. S3에 업로드
+            // 3. 공개 URL 반환
+
+            // 예시:
+            // File localFile = new File(localFilePath);
+            // String s3Key = "audio/" + UUID.randomUUID() + ".mp3";
+            // s3Client.putObject(bucketName, s3Key, localFile);
+            // return "https://" + bucketName + ".s3.amazonaws.com/" + s3Key;
+
+            return "https://example-bucket.s3.amazonaws.com/audio/example.mp3";
+        } catch (Exception e) {
+            throw new RuntimeException("S3 업로드 실패: " + e.getMessage(), e);
+        }
+    }
+    */
 
     // 음악 검색 메서드
     public String searchMusic(MusicRequest request) {
@@ -297,12 +418,36 @@ public class StoryService {
         }
     }
 
+    // 🎯 음성 URL 파싱 (로컬 파일 경로 처리 포함)
     private String extractVoiceUrlFromResponse(String response) {
         try {
+            System.out.println("🔍 음성 URL 파싱 시작");
+            System.out.println("🔍 FastAPI 음성 응답: " + response);
+
             JsonNode jsonNode = objectMapper.readTree(response);
-            return jsonNode.get("audio_path").asText();
+
+            // 🎯 여러 가능한 필드명 확인
+            String[] possibleFields = {"audio_path", "voice_url", "file_path", "audio_url", "path"};
+
+            for (String field : possibleFields) {
+                if (jsonNode.has(field)) {
+                    String audioPath = jsonNode.get(field).asText();
+                    System.out.println("🔍 " + field + " 필드에서 추출: " + audioPath);
+
+                    if (audioPath != null && !audioPath.trim().isEmpty() && !"null".equals(audioPath)) {
+                        return audioPath;
+                    }
+                }
+            }
+
+            System.out.println("❌ 유효한 음성 경로를 찾을 수 없음");
+            System.out.println("🔍 사용 가능한 필드들: " + jsonNode.fieldNames());
+            throw new RuntimeException("응답에서 유효한 음성 경로를 찾을 수 없습니다.");
+
         } catch (Exception e) {
-            throw new RuntimeException("보이스 URL 파싱 실패 " + e);
+            System.err.println("❌ 음성 URL 파싱 실패: " + e.getMessage());
+            System.err.println("❌ 응답 내용: " + response);
+            throw new RuntimeException("음성 URL 파싱 실패: " + e.getMessage(), e);
         }
     }
 

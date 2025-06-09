@@ -1,5 +1,6 @@
 package com.fairytale.fairytale.story;
 
+import com.fairytale.fairytale.baby.Baby;
 import com.fairytale.fairytale.users.Users;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -56,5 +57,10 @@ public class Story {
     @JoinColumn(name = "users_id")
     @JsonIgnore
     private Users user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "baby_id")  // baby_name이 아니라 baby_id로
+    @JsonIgnore
+    private Baby baby;  // String이 아니라 Baby 엔티티로
 }
 

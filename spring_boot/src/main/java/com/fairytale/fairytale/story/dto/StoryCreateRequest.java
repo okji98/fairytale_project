@@ -15,4 +15,5 @@ public class StoryCreateRequest {
     private String imageMode;
     private String name;
     private String voiceSpeed;
+    private Long babyId;  // 아기 ID 추가 (선택사항)
 }
