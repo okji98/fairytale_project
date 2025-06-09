@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../main.dart';
+import '../gallery/GalleryScreen.dart';
 import '../service/api_service.dart';
 
 class ColoringScreen extends StatefulWidget {
@@ -181,7 +182,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
     });
   }
 
-  // 🎯 Spring Boot API로 색칠한 이미지 저장 (실제 구현)
+  // 🎯 Spring Boot API로 색칠한 이미지 저장 후 갤러리로 이동
   Future<void> _saveColoredImage() async {
     if (_selectedImageUrl == null || _drawingPoints.isEmpty) {
       _showError('색칠한 내용이 없습니다.');
@@ -204,10 +205,17 @@ class _ColoringScreenState extends State<ColoringScreen> {
       );
 
       if (result != null && result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎨 멋진 작품이 갤러리에 저장되었습니다!'),
-            backgroundColor: Colors.green,
+        // 🎯 즉시 갤러리로 이동하면서 성공 메시지도 함께 전달
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => GalleryScreen(),
+            settings: RouteSettings(
+              arguments: {
+                'selectedTab': 'coloring',
+                'showSuccessMessage': true, // 성공 메시지 표시 플래그
+              },
+            ),
           ),
         );
       } else {
@@ -218,10 +226,25 @@ class _ColoringScreenState extends State<ColoringScreen> {
 
       // 실제 API 실패 시 기존 더미 저장으로 폴백
       await Future.delayed(Duration(seconds: 2));
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('🎨 멋진 작품이 갤러리에 저장되었습니다!'),
           backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // 더미 저장 후에도 갤러리로 이동
+      await Future.delayed(Duration(seconds: 2));
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => GalleryScreen(),
+          settings: RouteSettings(
+            arguments: {'selectedTab': 'coloring'}, // 색칠 탭으로 이동
+          ),
         ),
       );
     } finally {

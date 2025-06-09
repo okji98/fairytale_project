@@ -20,6 +20,32 @@ class _GalleryScreenState extends State<GalleryScreen> {
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+      if (args != null) {
+        // 탭 설정
+        if (args['selectedTab'] != null) {
+          setState(() {
+            _selectedTab = args['selectedTab'] as String;
+          });
+        }
+
+        // 🎯 성공 메시지 표시
+        if (args['showSuccessMessage'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🎨 멋진 작품이 갤러리에 저장되었습니다!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    });
+
     _loadGalleryData();
   }
 
