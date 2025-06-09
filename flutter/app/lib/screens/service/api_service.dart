@@ -182,4 +182,227 @@ class ApiService {
       return false;
     }
   }
+
+  // 🎯 색칠 완성작 저장 (Base64 이미지 포함) - 새로 추가
+  static Future<Map<String, dynamic>?> saveColoredImageWithCapture({
+    required Map<String, dynamic> coloringData,
+  }) async {
+    try {
+      print('🎨 [ApiService] 색칠 완성작 저장 시작 (캡처 방식)');
+      print('🎨 [ApiService] 원본 이미지: ${coloringData['originalImageUrl']}');
+      print(
+        '🎨 [ApiService] Base64 길이: ${coloringData['completedImageBase64']?.length ?? 0}',
+      );
+
+      final response = await _dio.post(
+        '/api/coloring/save',
+        data: coloringData,
+      );
+
+      print('🎨 [ApiService] 색칠 완성작 저장 응답 상태: ${response.statusCode}');
+      print('🎨 [ApiService] 응답 본문: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        // 🎯 응답을 Map으로 안전하게 변환
+        Map<String, dynamic> resultMap;
+        if (responseData is Map<String, dynamic>) {
+          resultMap = responseData;
+        } else if (responseData is Map) {
+          // Map이지만 타입이 다른 경우 변환
+          resultMap = Map<String, dynamic>.from(responseData);
+        } else {
+          // Map이 아닌 경우 기본 성공 응답 생성
+          print('⚠️ [ApiService] 응답이 Map이 아님: ${responseData.runtimeType}');
+          print('⚠️ [ApiService] 응답 내용: $responseData');
+          resultMap = {
+            'success': true,
+            'message': '색칠 완성작이 저장되었습니다.',
+            'data': responseData,
+          };
+        }
+
+        // 🎯 success 필드 확인 및 처리
+        if (resultMap['success'] == true || !resultMap.containsKey('success')) {
+          // success가 true이거나 success 필드가 없는 경우 성공으로 처리
+          if (!resultMap.containsKey('success')) {
+            resultMap['success'] = true;
+          }
+          print('✅ [ApiService] 색칠 완성작 저장 성공');
+          return resultMap;
+        } else {
+          print(
+            '❌ [ApiService] 서버에서 실패 응답: ${resultMap['error'] ?? '알 수 없는 오류'}',
+          );
+          return resultMap;
+        }
+      } else {
+        print('❌ [ApiService] 색칠 완성작 저장 실패: ${response.statusCode}');
+        return {'success': false, 'error': '서버 오류: ${response.statusCode}'};
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 색칠 완성작 저장 네트워크 오류:');
+      print('  - 오류 타입: ${e.type}');
+      print('  - 오류 메시지: ${e.message}');
+
+      if (e.response != null) {
+        print('  - 서버 응답 코드: ${e.response?.statusCode}');
+        print('  - 서버 응답 데이터: ${e.response?.data}');
+      }
+
+      return {'success': false, 'error': e.message ?? '네트워크 오류'};
+    } catch (e) {
+      print('❌ [ApiService] 색칠 완성작 저장 오류: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // 🎨 색칠공부 템플릿 검색 - 새로 추가
+  static Future<List<Map<String, dynamic>>?> searchColoringTemplates({
+    required String keyword,
+    int page = 0,
+    int size = 20,
+  }) async {
+    try {
+      print('🎨 [ApiService] 색칠공부 템플릿 검색 시작 - 키워드: $keyword');
+
+      final response = await _dio.get(
+        '/api/coloring/templates/search',
+        queryParameters: {'keyword': keyword, 'page': page, 'size': size},
+      );
+
+      print('🎨 [ApiService] 색칠공부 템플릿 검색 응답 상태: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        if (responseData is Map && responseData['success'] == true) {
+          final List<dynamic> templatesJson = responseData['templates'] ?? [];
+
+          final templates =
+              templatesJson
+                  .map((json) => Map<String, dynamic>.from(json))
+                  .toList();
+
+          print('✅ [ApiService] 색칠공부 템플릿 검색 결과 ${templates.length}개');
+          return templates;
+        } else {
+          print('❌ [ApiService] 예상과 다른 검색 응답 구조: $responseData');
+        }
+      } else {
+        print('❌ [ApiService] 색칠공부 템플릿 검색 실패: ${response.statusCode}');
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 색칠공부 템플릿 검색 오류: ${e.message}');
+    } catch (e) {
+      print('❌ [ApiService] 색칠공부 템플릿 검색 오류: $e');
+    }
+    return null;
+  }
+
+  // 🎯 특정 템플릿 상세 조회 - 새로 추가
+  static Future<Map<String, dynamic>?> getColoringTemplateDetail(
+    int templateId,
+  ) async {
+    try {
+      print('🎨 [ApiService] 색칠공부 템플릿 상세 조회 - ID: $templateId');
+
+      final response = await _dio.get('/api/coloring/templates/$templateId');
+
+      print('🎨 [ApiService] 템플릿 상세 조회 응답 상태: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        if (responseData is Map && responseData['success'] == true) {
+          print('✅ [ApiService] 템플릿 상세 조회 성공');
+          return responseData['template'];
+        }
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 템플릿 상세 조회 오류: ${e.message}');
+    } catch (e) {
+      print('❌ [ApiService] 템플릿 상세 조회 오류: $e');
+    }
+    return null;
+  }
+
+  // 🎯 동화 ID로 색칠공부 템플릿 조회 - 새로 추가
+  static Future<Map<String, dynamic>?> getColoringTemplateByStoryId(
+    String storyId,
+  ) async {
+    try {
+      print('🎨 [ApiService] 동화별 색칠공부 템플릿 조회 - StoryId: $storyId');
+
+      final response = await _dio.get('/api/coloring/templates/story/$storyId');
+
+      print('🎨 [ApiService] 동화별 템플릿 조회 응답 상태: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        if (responseData is Map && responseData['success'] == true) {
+          print('✅ [ApiService] 동화별 템플릿 조회 성공');
+          return responseData['template'];
+        }
+      } else if (response.statusCode == 404) {
+        print('⚠️ [ApiService] 해당 동화의 색칠공부 템플릿이 없음');
+        return null;
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 동화별 템플릿 조회 오류: ${e.message}');
+    } catch (e) {
+      print('❌ [ApiService] 동화별 템플릿 조회 오류: $e');
+    }
+    return null;
+  }
+
+  // 🎯 서버 연결 상태 확인 - 새로 추가
+  static Future<Map<String, dynamic>> checkServerStatus() async {
+    try {
+      print('🔍 [ApiService] 서버 상태 확인 시작: $baseUrl');
+
+      final response = await _dio
+          .get('/actuator/health')
+          .timeout(Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        print('✅ [ApiService] 서버 연결 성공');
+        return {
+          'connected': true,
+          'status': 'UP',
+          'message': '서버가 정상적으로 작동 중입니다.',
+        };
+      } else {
+        return {
+          'connected': false,
+          'status': 'ERROR',
+          'message': '서버 응답 오류: ${response.statusCode}',
+        };
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 서버 연결 실패: ${e.message}');
+
+      String errorMessage;
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        errorMessage = '서버 연결 시간 초과';
+      } else if (e.type == DioExceptionType.connectionError) {
+        errorMessage = '서버에 연결할 수 없습니다';
+      } else {
+        errorMessage = '네트워크 오류: ${e.message}';
+      }
+
+      return {'connected': false, 'status': 'DOWN', 'message': errorMessage};
+    } catch (e) {
+      print('❌ [ApiService] 서버 상태 확인 오류: $e');
+      return {
+        'connected': false,
+        'status': 'UNKNOWN',
+        'message': '알 수 없는 오류: $e',
+      };
+    }
+  }
 }

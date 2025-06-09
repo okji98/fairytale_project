@@ -21,6 +21,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   void initState() {
     super.initState();
 
+    // 🎯 전달받은 arguments에서 선택할 탭과 성공 메시지 확인
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -31,6 +32,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           setState(() {
             _selectedTab = args['selectedTab'] as String;
           });
+          print('🎯 갤러리 초기 탭 설정: $_selectedTab');
         }
 
         // 🎯 성공 메시지 표시

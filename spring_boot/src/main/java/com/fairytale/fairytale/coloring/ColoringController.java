@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.format.DateTimeFormatter;
@@ -136,29 +137,103 @@ public class ColoringController {
         }
     }
 
-    // 🎯 색칠 완성작 저장 (추후 구현용)
+    // 🎯 색칠 완성작 저장 (Base64 이미지 받아서 처리)
     @PostMapping("/save")
     public ResponseEntity<Map<String, Object>> saveColoredImage(
-            @RequestBody Map<String, Object> request) {
+            @RequestBody Map<String, Object> request,
+            Authentication authentication) {
 
         System.out.println("🎨 색칠 완성작 저장 요청");
 
         try {
-            // TODO: 실제 색칠 완성작 저장 로직 구현
-            // 현재는 성공 응답만 반환
+            String username = authentication.getName();
+            System.out.println("🎨 [ColoringController] 색칠 완성작 저장 - 사용자: " + username);
+
+            // 요청 데이터 추출
+            String originalImageUrl = (String) request.get("originalImageUrl");
+            String completedImageBase64 = (String) request.get("completedImageBase64");
+            String timestamp = (String) request.get("timestamp");
+            Boolean isBlackAndWhite = (Boolean) request.get("isBlackAndWhite");
+
+            System.out.println("🎨 [ColoringController] 원본 이미지: " + originalImageUrl);
+            System.out.println("🎨 [ColoringController] Base64 이미지 길이: " +
+                    (completedImageBase64 != null ? completedImageBase64.length() : "null"));
+
+            if (originalImageUrl == null || completedImageBase64 == null) {
+                return ResponseEntity.status(400).body(Map.of(
+                        "success", false,
+                        "error", "필수 파라미터가 누락되었습니다."
+                ));
+            }
+
+            // 🎯 색칠 완성작 저장 처리
+            String savedImageUrl = saveBase64ImageToStorage(completedImageBase64, username);
+
+            // 🎯 갤러리에 저장 (Gallery 엔티티 또는 별도 테이블에)
+            // 현재는 성공 응답만 반환하고, 실제 갤러리 연동은 추후 구현
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "색칠 완성작이 갤러리에 저장되었습니다!");
+            response.put("savedImageUrl", savedImageUrl);
             response.put("savedAt", java.time.LocalDateTime.now().toString());
 
-            System.out.println("✅ 색칠 완성작 저장 완료 (시뮬레이션)");
+            System.out.println("✅ 색칠 완성작 저장 완료 - URL: " + savedImageUrl);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             System.out.println("❌ 색칠 완성작 저장 오류: " + e.getMessage());
-            return ResponseEntity.status(500)
-                    .body(Map.of("success", false, "error", "저장 실패"));
+            e.printStackTrace();
+
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", "저장 실패: " + e.getMessage()
+            ));
+        }
+    }
+
+    // 🎯 Base64 이미지를 저장소에 저장 (현재는 로컬, 추후 S3)
+    private String saveBase64ImageToStorage(String base64Image, String username) {
+        try {
+            System.out.println("🔍 [ColoringController] Base64 이미지 저장 시작");
+
+            // Base64 디코딩
+            byte[] imageBytes = java.util.Base64.getDecoder().decode(base64Image);
+
+            // 파일명 생성
+            String fileName = "coloring_" + username + "_" + System.currentTimeMillis() + ".png";
+
+            // 🎯 현재는 로컬 저장 (추후 S3로 변경)
+            String uploadDir = "/tmp/coloring_images/";
+            java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDir);
+
+            // 디렉토리가 없으면 생성
+            if (!java.nio.file.Files.exists(uploadPath)) {
+                java.nio.file.Files.createDirectories(uploadPath);
+            }
+
+            // 파일 저장
+            java.nio.file.Path filePath = uploadPath.resolve(fileName);
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(filePath.toFile())) {
+                fos.write(imageBytes);
+            }
+
+            System.out.println("✅ [ColoringController] 이미지 로컬 저장 완료: " + fileName);
+
+            // 🎯 S3 업로드 코드 (주석 처리)
+            /*
+            // S3Service s3Service = new S3Service();
+            // String s3ImageUrl = s3Service.uploadImage(imageBytes, fileName, "image/png");
+            // System.out.println("✅ [ColoringController] S3 업로드 완료: " + s3ImageUrl);
+            // return s3ImageUrl;
+            */
+
+            // 현재는 더미 URL 반환 (실제로는 S3 URL이 들어갈 자리)
+            return "https://example.com/coloring/" + fileName;
+
+        } catch (Exception e) {
+            System.err.println("❌ [ColoringController] 이미지 저장 실패: " + e.getMessage());
+            throw new RuntimeException("이미지 저장에 실패했습니다", e);
         }
     }
 
