@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:math' as math;
 
+
+
 class ApiService {
   // 🚀 플랫폼에 따라 자동으로 서버 주소 선택
   static String get baseUrl {
@@ -602,4 +604,5 @@ class ApiService {
       print('❌ [JWT Debug] 디버깅 실패: $e');
     }
   }
+  static Dio get dio => _dio;
 }

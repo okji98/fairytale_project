@@ -62,9 +62,8 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
         return false;
       }
 
-      final dio = Dio();
-      final response = await dio.post(
-        'http://10.0.2.2:8080/api/baby',
+      final response = await ApiService.dio.post(
+        '/api/baby',
         data: {
           'userId': userId,
           'name': _nameController.text.trim(),
