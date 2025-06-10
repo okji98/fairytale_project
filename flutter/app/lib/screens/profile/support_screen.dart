@@ -1,10 +1,12 @@
-// lib/support_screen.dart
+// lib/screens/profile/support_screen.dart
 import 'package:flutter/material.dart';
-
+import 'package:flutter/services.dart';
 import '../../main.dart';
 
-
 class SupportScreen extends StatelessWidget {
+  // ⭐ 지원 이메일 주소
+  static const String supportEmail = 'team1@donggeul.com';
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -49,40 +51,104 @@ class SupportScreen extends StatelessWidget {
 
                 SizedBox(height: screenHeight * 0.02),
 
-                // 서포트 안내
+                // ⭐ 도움이 필요하신가요? 섹션
                 Container(
                   padding: EdgeInsets.all(screenWidth * 0.04),
                   decoration: BoxDecoration(
                     color: Color(0xFF8E97FD).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.support_agent,
-                        color: Color(0xFF8E97FD),
-                        size: screenWidth * 0.08,
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.support_agent,
+                            color: Color(0xFF8E97FD),
+                            size: screenWidth * 0.08,
+                          ),
+                          SizedBox(width: screenWidth * 0.03),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '도움이 필요하신가요?',
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.045,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  '언제든지 문의해주세요!\n빠른 시간 내에 답변드리겠습니다.',
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.035,
+                                    color: Colors.black54,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(width: screenWidth * 0.03),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+
+                      SizedBox(height: screenHeight * 0.02),
+
+                      // ⭐ 이메일 주소 표시 및 복사 기능
+                      Container(
+                        padding: EdgeInsets.all(screenWidth * 0.03),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Color(0xFF8E97FD).withOpacity(0.3)),
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              '도움이 필요하신가요?',
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.042,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                            Icon(
+                              Icons.email,
+                              color: Color(0xFF8E97FD),
+                              size: screenWidth * 0.05,
+                            ),
+                            SizedBox(width: screenWidth * 0.03),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '문의 이메일',
+                                    style: TextStyle(
+                                      fontSize: screenWidth * 0.032,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                  Text(
+                                    supportEmail,
+                                    style: TextStyle(
+                                      fontSize: screenWidth * 0.038,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF8E97FD),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            SizedBox(height: 4),
-                            Text(
-                              '자주 묻는 질문을 확인하거나\n직접 문의를 남겨주세요.',
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.035,
-                                color: Colors.black54,
-                                height: 1.3,
+                            GestureDetector(
+                              onTap: () => _copyEmailToClipboard(context),
+                              child: Container(
+                                padding: EdgeInsets.all(screenWidth * 0.02),
+                                decoration: BoxDecoration(
+                                  color: Color(0xFF8E97FD),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Icon(
+                                  Icons.copy,
+                                  color: Colors.white,
+                                  size: screenWidth * 0.04,
+                                ),
                               ),
                             ),
                           ],
@@ -94,8 +160,16 @@ class SupportScreen extends StatelessWidget {
 
                 SizedBox(height: screenHeight * 0.04),
 
-                // FAQ 섹션
-                _buildSectionTitle(context, '자주 묻는 질문'),
+                // ⭐ 자주 묻는 질문 섹션
+                Text(
+                  '자주 묻는 질문',
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.04,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF8B5A6B),
+                  ),
+                ),
+
                 SizedBox(height: screenHeight * 0.02),
 
                 _buildFAQItem(
@@ -128,79 +202,59 @@ class SupportScreen extends StatelessWidget {
                   answer: '아이와 함께한 동화 읽기 경험과 추억을 기록하고 공유할 수 있는 기능입니다. 사진과 함께 특별한 순간들을 저장하세요.',
                 ),
 
-                SizedBox(height: screenHeight * 0.04),
+                SizedBox(height: screenHeight * 0.015),
 
-                // 빠른 도움말
-                _buildSectionTitle(context, '빠른 도움말'),
-                SizedBox(height: screenHeight * 0.02),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildQuickHelpCard(
-                        context,
-                        icon: Icons.video_library,
-                        title: '사용법 영상',
-                        onTap: () {
-                          // TODO: 사용법 영상 화면으로 이동
-                          _showComingSoonDialog(context, '사용법 영상');
-                        },
-                      ),
-                    ),
-                    SizedBox(width: screenWidth * 0.03),
-                    Expanded(
-                      child: _buildQuickHelpCard(
-                        context,
-                        icon: Icons.quiz,
-                        title: '튜토리얼',
-                        onTap: () {
-                          // TODO: 튜토리얼 화면으로 이동
-                          _showComingSoonDialog(context, '튜토리얼');
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                SizedBox(height: screenHeight * 0.04),
-
-                // 문의하기
-                _buildSectionTitle(context, '문의하기'),
-                SizedBox(height: screenHeight * 0.02),
-
-                _buildContactOption(
+                _buildFAQItem(
                   context,
-                  icon: Icons.bug_report,
-                  title: '버그 신고',
-                  subtitle: '앱에서 발생한 문제를 신고해주세요',
-                  onTap: () {
-                    _showBugReportDialog(context);
-                  },
+                  question: '아이 정보를 수정하려면 어떻게 하나요?',
+                  answer: '프로필 화면에서 "Profile details"를 선택하시면 아이의 이름, 성별, 생년월일 정보를 수정할 수 있습니다.',
                 ),
 
                 SizedBox(height: screenHeight * 0.015),
 
-                _buildContactOption(
+                _buildFAQItem(
                   context,
-                  icon: Icons.lightbulb,
-                  title: '기능 제안',
-                  subtitle: '새로운 기능이나 개선사항을 제안해주세요',
-                  onTap: () {
-                    _showFeatureRequestDialog(context);
-                  },
+                  question: '로그인 정보를 잊어버렸어요.',
+                  answer: '소셜 로그인(카카오, 구글)을 사용하시기 때문에 해당 계정으로 다시 로그인하시면 됩니다. 문제가 지속되면 고객센터로 문의해주세요.',
                 ),
 
-                SizedBox(height: screenHeight * 0.015),
+                SizedBox(height: screenHeight * 0.04),
 
-                _buildContactOption(
-                  context,
-                  icon: Icons.star,
-                  title: '리뷰 작성',
-                  subtitle: '앱스토어에서 리뷰를 남겨주세요',
-                  onTap: () {
-                    // TODO: 앱스토어 리뷰 화면으로 이동
-                    _showComingSoonDialog(context, '리뷰 작성');
-                  },
+                // ⭐ 추가 문의 안내
+                Container(
+                  padding: EdgeInsets.all(screenWidth * 0.04),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF5E6A3).withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.help_center,
+                        color: Color(0xFF8B5A6B),
+                        size: screenWidth * 0.08,
+                      ),
+                      SizedBox(height: screenHeight * 0.015),
+                      Text(
+                        '더 궁금한 점이 있으신가요?',
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.04,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.01),
+                      Text(
+                        '위 이메일로 언제든지 문의해주세요.\n자세한 답변을 드리겠습니다.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: Colors.black54,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
 
                 SizedBox(height: screenHeight * 0.03),
@@ -208,19 +262,6 @@ class SupportScreen extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(BuildContext context, String title) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: screenWidth * 0.04,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF8B5A6B),
       ),
     );
   }
@@ -244,12 +285,15 @@ class SupportScreen extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.help,
-                color: Color(0xFF8E97FD),
-                size: screenWidth * 0.05,
+              Container(
+                margin: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.help,
+                  color: Color(0xFF8E97FD),
+                  size: screenWidth * 0.05,
+                ),
               ),
-              SizedBox(width: screenWidth * 0.02),
+              SizedBox(width: screenWidth * 0.03),
               Expanded(
                 child: Text(
                   question,
@@ -264,7 +308,7 @@ class SupportScreen extends StatelessWidget {
           ),
           SizedBox(height: screenHeight * 0.01),
           Padding(
-            padding: EdgeInsets.only(left: screenWidth * 0.07),
+            padding: EdgeInsets.only(left: screenWidth * 0.08),
             child: Text(
               answer,
               style: TextStyle(
@@ -279,224 +323,26 @@ class SupportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildQuickHelpCard(BuildContext context, {
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
+  // ⭐ 이메일 주소 클립보드 복사
+  void _copyEmailToClipboard(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: supportEmail));
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(screenWidth * 0.04),
-        decoration: BoxDecoration(
-          color: Color(0xFF8E97FD).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Color(0xFF8E97FD).withOpacity(0.3),
-            width: 1,
-          ),
-        ),
-        child: Column(
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
           children: [
-            Icon(
-              icon,
-              color: Color(0xFF8E97FD),
-              size: screenWidth * 0.08,
-            ),
-            SizedBox(height: screenHeight * 0.01),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: screenWidth * 0.035,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-              textAlign: TextAlign.center,
-            ),
+            Icon(Icons.check_circle, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text('이메일 주소가 복사되었습니다!'),
           ],
+        ),
+        backgroundColor: Color(0xFF8E97FD),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
-    );
-  }
-
-  Widget _buildContactOption(BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(screenWidth * 0.04),
-        decoration: BoxDecoration(
-          color: Color(0xFFF5E6A3).withOpacity(0.3),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: screenWidth * 0.1,
-              height: screenWidth * 0.1,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-              ),
-              child: Icon(
-                icon,
-                color: Color(0xFF8B5A6B),
-                size: screenWidth * 0.05,
-              ),
-            ),
-            SizedBox(width: screenWidth * 0.04),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.04,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.032,
-                      color: Colors.black54,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios,
-              color: Colors.black38,
-              size: screenWidth * 0.04,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showBugReportDialog(BuildContext context) {
-    final TextEditingController reportController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('버그 신고'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('발생한 문제를 자세히 설명해주세요.'),
-              SizedBox(height: 16),
-              TextField(
-                controller: reportController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: '문제 상황을 입력해주세요...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // TODO: 실제 버그 신고 기능 구현
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('버그 신고가 접수되었습니다.'),
-                    backgroundColor: Color(0xFF8E97FD),
-                  ),
-                );
-              },
-              child: Text('신고하기'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showFeatureRequestDialog(BuildContext context) {
-    final TextEditingController requestController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('기능 제안'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('원하시는 기능이나 개선사항을 알려주세요.'),
-              SizedBox(height: 16),
-              TextField(
-                controller: requestController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: '제안하고 싶은 기능을 입력해주세요...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // TODO: 실제 기능 제안 기능 구현
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('소중한 제안 감사합니다!'),
-                    backgroundColor: Color(0xFF8E97FD),
-                  ),
-                );
-              },
-              child: Text('제안하기'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showComingSoonDialog(BuildContext context, String feature) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('준비중'),
-          content: Text('$feature 기능을 준비 중입니다.\n곧 만나보실 수 있어요!'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('확인'),
-            ),
-          ],
-        );
-      },
     );
   }
 }

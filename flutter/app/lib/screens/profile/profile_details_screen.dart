@@ -1,8 +1,9 @@
-// lib/profile_details_screen.dart
+// lib/screens/profile/profile_details_screen.dart
 import 'package:flutter/material.dart';
-
+import 'package:dio/dio.dart';
 import '../../main.dart';
-
+import '../service/auth_service.dart';
+import '../service/api_service.dart';
 
 class ProfileDetailsScreen extends StatefulWidget {
   @override
@@ -10,42 +11,279 @@ class ProfileDetailsScreen extends StatefulWidget {
 }
 
 class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
-  // TODO: Spring Boot API에서 가져올 데이터 - 현재는 더미 데이터
-  String _profileImagePath = 'assets/myphoto.png';
-  final _nameController = TextEditingController(text: '동글이');
-  final _emailController = TextEditingController(text: 'donggeul@example.com');
-  final _phoneController = TextEditingController(text: '010-1234-5678');
-  final _birthController = TextEditingController(text: '2024-03-15');
+  bool _isLoading = true;
+  bool _isSaving = false;
+
+  // 사용자 정보 (읽기 전용)
+  String _userEmail = '';
+  int? _userId;
+
+  // 아이 정보 (수정 가능)
+  final _childNameController = TextEditingController();
+  DateTime? _selectedDate;
+  String _selectedGender = 'male';
+
+  int? _childId;
+  bool _hasChild = false;
 
   @override
   void initState() {
     super.initState();
-    // TODO: Spring Boot API에서 사용자 데이터 불러오기
-    _loadUserData();
+    _loadData();
   }
 
-  // TODO: Spring Boot API에서 사용자 데이터 불러오기
-  Future<void> _loadUserData() async {
-    // API 호출 예시:
-    // final response = await http.get(Uri.parse('$baseUrl/api/user/profile'));
-    // if (response.statusCode == 200) {
-    //   final userData = json.decode(response.body);
-    //   setState(() {
-    //     _nameController.text = userData['name'] ?? '';
-    //     _emailController.text = userData['email'] ?? '';
-    //     _phoneController.text = userData['phone'] ?? '';
-    //     _birthController.text = userData['birth'] ?? '';
-    //     _profileImagePath = userData['profileImage'] ?? 'assets/myphoto.png';
-    //   });
-    // }
+  // ⭐ 사용자 정보와 아이 정보 불러오기
+  Future<void> _loadData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // 1. 사용자 기본 정보
+      final accessToken = await AuthService.getAccessToken();
+      final userId = await AuthService.getUserId();
+      final userEmail = await AuthService.getUserEmail();
+
+      if (accessToken == null || userId == null) {
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+
+      setState(() {
+        _userId = userId;
+        _userEmail = userEmail ?? 'Unknown';
+      });
+
+      // 2. 아이 정보 불러오기
+      await _loadChildInfo();
+
+    } catch (e) {
+      print('❌ [ProfileDetails] 데이터 로드 오류: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ⭐ 아이 정보 불러오기
+  Future<void> _loadChildInfo() async {
+    try {
+      final childInfo = await AuthService.checkChildInfo();
+
+      if (childInfo != null && childInfo['hasChild'] == true) {
+        final childData = childInfo['childData'];
+
+        setState(() {
+          _hasChild = true;
+          _childId = childData['id'];
+          _childNameController.text = childData['name'] ?? '';
+
+          // 날짜 파싱
+          String birthDateString = childData['birthDate'] ?? childData['baby_birth_date'] ?? '';
+          if (birthDateString.isNotEmpty) {
+            try {
+              _selectedDate = DateTime.parse(birthDateString);
+            } catch (e) {
+              print('날짜 파싱 오류: $e');
+            }
+          }
+
+          _selectedGender = childData['gender'] ?? childData['baby_gender'] ?? 'male';
+        });
+
+        print('✅ [ProfileDetails] 아이 정보 로드: ${childData['name']}');
+      } else {
+        setState(() {
+          _hasChild = false;
+          _selectedGender = 'male';
+        });
+        print('🔍 [ProfileDetails] 등록된 아이 정보 없음');
+      }
+    } catch (e) {
+      print('❌ [ProfileDetails] 아이 정보 로드 오류: $e');
+    }
+  }
+
+  // ⭐ 날짜 선택
+  Future<void> _pickDate() async {
+    DateTime initialDate = DateTime.now();
+
+    if (_selectedDate != null) {
+      initialDate = _selectedDate!;
+    } else {
+      initialDate = DateTime.now().subtract(Duration(days: 365)); // 1년 전
+    }
+
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(Duration(days: 365)), // 1년 후까지
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Color(0xFF8B5A6B),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
+  // ⭐ 아이 정보 저장/업데이트
+  Future<void> _saveChildInfo() async {
+    if (_isSaving) return;
+
+    // 입력 검증
+    if (_childNameController.text.trim().isEmpty) {
+      _showErrorDialog('아이 이름을 입력해주세요.');
+      return;
+    }
+
+    if (_selectedDate == null) {
+      _showErrorDialog('아이 생년월일을 선택해주세요.');
+      return;
+    }
+
+    try {
+      setState(() {
+        _isSaving = true;
+      });
+
+      final accessToken = await AuthService.getAccessToken();
+      if (accessToken == null || _userId == null) {
+        _showErrorDialog('로그인 정보가 없습니다.');
+        return;
+      }
+
+      final childData = {
+        'userId': _userId,
+        'name': _childNameController.text.trim(),
+        'gender': _selectedGender,
+        'birthDate': '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
+      };
+
+      print('🔍 [ProfileDetails] 아이 정보 저장 요청: $childData');
+
+      final dio = ApiService.dio;
+      Response response;
+
+      if (_hasChild && _childId != null) {
+        // 기존 아이 정보 업데이트
+        response = await dio.put(
+          '/api/baby/$_childId',
+          data: childData,
+          options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+        );
+        print('🔄 [ProfileDetails] 아이 정보 업데이트 API 호출');
+      } else {
+        // 새로운 아이 정보 생성
+        response = await dio.post(
+          '/api/baby',
+          data: childData,
+          options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+        );
+        print('🆕 [ProfileDetails] 새 아이 정보 생성 API 호출');
+      }
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        if (responseData['success'] == true) {
+          // 성공 시 로컬 상태 업데이트
+          if (!_hasChild) {
+            setState(() {
+              _hasChild = true;
+              _childId = responseData['data']['id'];
+            });
+          }
+
+          print('✅ [ProfileDetails] 아이 정보 저장 성공');
+          _showSuccessDialog();
+        } else {
+          _showErrorDialog(responseData['message'] ?? '저장에 실패했습니다.');
+        }
+      } else {
+        _showErrorDialog('서버 오류가 발생했습니다.');
+      }
+
+    } catch (e) {
+      print('❌ [ProfileDetails] 아이 정보 저장 오류: $e');
+
+      if (e is DioException) {
+        if (e.response?.statusCode == 403) {
+          _showErrorDialog('로그인이 만료되었습니다. 다시 로그인해주세요.');
+          await AuthService.logout();
+          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+          return;
+        } else if (e.response?.statusCode == 400) {
+          _showErrorDialog('입력 정보를 확인해주세요.');
+        } else {
+          _showErrorDialog('네트워크 오류가 발생했습니다.');
+        }
+      } else {
+        _showErrorDialog('저장 중 오류가 발생했습니다.');
+      }
+    } finally {
+      setState(() {
+        _isSaving = false;
+      });
+    }
+  }
+
+  // ⭐ 성공 다이얼로그
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('저장 완료'),
+          content: Text('아이 정보가 성공적으로 저장되었습니다.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // 다이얼로그 닫기
+                Navigator.pop(context, true); // 프로필 화면으로 돌아가기
+              },
+              child: Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ⭐ 에러 다이얼로그
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('오류'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _birthController.dispose();
+    _childNameController.dispose();
     super.dispose();
   }
 
@@ -54,383 +292,346 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return BaseScaffold(
-      child: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
+    if (_isLoading) {
+      return BaseScaffold(
+        child: SafeArea(
+          child: Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 상단 앱바
-                Container(
-                  padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Icon(
-                          Icons.arrow_back,
-                          color: Colors.black54,
-                          size: screenWidth * 0.06,
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          'Profile Details',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: screenWidth * 0.045,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: screenWidth * 0.06),
-                    ],
-                  ),
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5A6B)),
                 ),
-
-                SizedBox(height: screenHeight * 0.03),
-
-                // 프로필 이미지
-                Center(
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: screenWidth * 0.25,
-                        height: screenWidth * 0.25,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Color(0xFFECA666),
-                            width: 2.0, // 얇은 테두리
-                          ),
-                        ),
-                        child: ClipOval(
-                          child: Container(
-                            width: screenWidth * 0.25,
-                            height: screenWidth * 0.25,
-                            child: Image.asset(
-                              _profileImagePath,
-                              fit: BoxFit.cover,
-                              // TODO: 이미지 로드 실패 시 기본 이미지 표시
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Color(0xFFFDB5A6),
-                                  child: Center(
-                                    child: Text(
-                                      '👶',
-                                      style: TextStyle(fontSize: screenWidth * 0.08),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: () {
-                            // TODO: 프로필 사진 변경 기능
-                            _showImagePickerDialog();
-                          },
-                          child: Container(
-                            width: screenWidth * 0.07,
-                            height: screenWidth * 0.07,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFF8B5A6B),
-                            ),
-                            child: Icon(
-                              Icons.camera_alt,
-                              color: Colors.white,
-                              size: screenWidth * 0.035,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                SizedBox(height: 16),
+                Text(
+                  '정보를 불러오는 중...',
+                  style: TextStyle(fontSize: 16, color: Colors.black54),
                 ),
-
-                SizedBox(height: screenHeight * 0.04),
-
-                // 입력 필드들
-                _buildInputField(
-                  context,
-                  label: '이름',
-                  controller: _nameController,
-                  icon: Icons.person,
-                ),
-
-                SizedBox(height: screenHeight * 0.02),
-
-                _buildInputField(
-                  context,
-                  label: '이메일',
-                  controller: _emailController,
-                  icon: Icons.email,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-
-                SizedBox(height: screenHeight * 0.02),
-
-                _buildInputField(
-                  context,
-                  label: '전화번호',
-                  controller: _phoneController,
-                  icon: Icons.phone,
-                  keyboardType: TextInputType.phone,
-                ),
-
-                SizedBox(height: screenHeight * 0.02),
-
-                _buildInputField(
-                  context,
-                  label: '생년월일',
-                  controller: _birthController,
-                  icon: Icons.cake,
-                  readOnly: true,
-                  onTap: () => _selectDate(context),
-                ),
-
-                SizedBox(height: screenHeight * 0.05),
-
-                // 저장 버튼
-                Container(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _saveProfile();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF8E97FD),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
-                    ),
-                    child: Text(
-                      '저장하기',
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.04,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: screenHeight * 0.03),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildInputField(
-      BuildContext context, {
-        required String label,
-        required TextEditingController controller,
-        required IconData icon,
-        TextInputType? keyboardType,
-        bool readOnly = false,
-        VoidCallback? onTap,
-      }) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: screenWidth * 0.035,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        SizedBox(height: screenHeight * 0.01),
-        Container(
-          decoration: BoxDecoration(
-            color: Color(0xFFF5E6A3).withOpacity(0.3),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Color(0xFFE0E0E0),
-              width: 1,
-            ),
-          ),
-          child: TextField(
-            controller: controller,
-            keyboardType: keyboardType,
-            readOnly: readOnly,
-            onTap: onTap,
-            style: TextStyle(
-              fontSize: screenWidth * 0.04,
-              color: Colors.black87,
-            ),
-            decoration: InputDecoration(
-              prefixIcon: Icon(
-                icon,
-                color: Color(0xFF8B5A6B),
-                size: screenWidth * 0.05,
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: screenWidth * 0.04,
-                vertical: screenHeight * 0.02,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(2024, 3, 15),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Color(0xFF8E97FD),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _birthController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-      });
+      );
     }
-  }
 
-  void _saveProfile() {
-    // TODO: Spring Boot API로 프로필 저장
-    // final userData = {
-    //   'name': _nameController.text,
-    //   'email': _emailController.text,
-    //   'phone': _phoneController.text,
-    //   'birth': _birthController.text,
-    //   'profileImage': _profileImagePath,
-    // };
-    //
-    // final response = await http.put(
-    //   Uri.parse('$baseUrl/api/user/profile'),
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: json.encode(userData),
-    // );
-    //
-    // if (response.statusCode == 200) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(content: Text('프로필이 저장되었습니다.'))
-    //   );
-    //   Navigator.pop(context);
-    // } else {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(content: Text('저장에 실패했습니다.'))
-    //   );
-    // }
-
-    // 현재는 더미 저장
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('프로필이 저장되었습니다.'),
-        backgroundColor: Color(0xFF8E97FD),
-      ),
-    );
-    Navigator.pop(context);
-  }
-
-  // TODO: 프로필 사진 변경 다이얼로그
-  void _showImagePickerDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('프로필 사진 변경'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+    return BaseScaffold(
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(screenWidth * 0.06),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ListTile(
-                leading: Icon(Icons.camera_alt),
-                title: Text('카메라로 촬영'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImageFromCamera();
-                },
+              // 상단 헤더
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Color(0xFF8B5A6B)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Text(
+                      _hasChild ? '아이 정보 수정' : '아이 정보 등록',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.05,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF8B5A6B),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48), // 균형 맞추기
+                ],
               ),
-              ListTile(
-                leading: Icon(Icons.photo_library),
-                title: Text('갤러리에서 선택'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImageFromGallery();
-                },
+
+              SizedBox(height: screenHeight * 0.04),
+
+              // ⭐ 사용자 정보 (읽기 전용)
+              Container(
+                padding: EdgeInsets.all(screenWidth * 0.04),
+                decoration: BoxDecoration(
+                  color: Color(0xFFFFE7B0).withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Color(0xFFECA666), width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person,
+                      color: Color(0xFF8B5A6B),
+                      size: screenWidth * 0.05,
+                    ),
+                    SizedBox(width: screenWidth * 0.03),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '부모님 정보',
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.035,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF8B5A6B),
+                          ),
+                        ),
+                        Text(
+                          _userEmail,
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.035,
+                            color: Color(0xFF8B5A6B).withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+
+              SizedBox(height: screenHeight * 0.04),
+
+              // 안내 텍스트 (child_info_screen과 동일한 스타일)
+              Container(
+                padding: EdgeInsets.all(screenWidth * 0.04),
+                decoration: BoxDecoration(
+                  color: Color(0xFFFFE7B0).withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Color(0xFFECA666), width: 1),
+                ),
+                child: Text(
+                  _hasChild
+                      ? '우리 아이의 정보를 수정해보세요! ✏️✨'
+                      : '우리 아이만을 위한 특별한 동화를 만들어드려요! 📚✨\n아이의 정보를 입력해주세요.',
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.035,
+                    color: Color(0xFF8B5A6B),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              SizedBox(height: screenHeight * 0.04),
+
+              // 이름 입력 (child_info_screen 스타일)
+              Text(
+                '아이 이름 (태명)',
+                style: TextStyle(
+                  fontSize: screenWidth * 0.04,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8B5A6B),
+                ),
+              ),
+              SizedBox(height: screenHeight * 0.01),
+              TextField(
+                controller: _childNameController,
+                keyboardType: TextInputType.text,
+                textInputAction: TextInputAction.done,
+                maxLength: 20,
+                buildCounter: (context, {required currentLength, required isFocused, maxLength}) {
+                  return null; // 글자 수 카운터 숨김
+                },
+                decoration: InputDecoration(
+                  hintText: '아이의 이름(태명)을 입력해 주세요',
+                  hintStyle: TextStyle(color: Colors.grey[600]),
+                  fillColor: Color(0xFFFFE7B0),
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: Color(0xFF8B5A6B), width: 2),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.04,
+                    vertical: screenHeight * 0.02,
+                  ),
+                ),
+                style: TextStyle(
+                  fontSize: screenWidth * 0.04,
+                  color: Colors.black87,
+                ),
+                cursorColor: Color(0xFF8B5A6B),
+              ),
+
+              SizedBox(height: screenHeight * 0.03),
+
+              // 성별 선택 (child_info_screen 스타일)
+              Text(
+                '성별',
+                style: TextStyle(
+                  fontSize: screenWidth * 0.04,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8B5A6B),
+                ),
+              ),
+              SizedBox(height: screenHeight * 0.01),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedGender = 'male'),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                        decoration: BoxDecoration(
+                          color: _selectedGender == 'male'
+                              ? Color(0xFF8B5A6B)
+                              : Color(0xFFFFE7B0),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _selectedGender == 'male'
+                                ? Color(0xFF8B5A6B)
+                                : Color(0xFFECA666),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '👦',
+                              style: TextStyle(fontSize: screenWidth * 0.05),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              '남아',
+                              style: TextStyle(
+                                color: _selectedGender == 'male'
+                                    ? Colors.white
+                                    : Color(0xFF8B5A6B),
+                                fontWeight: FontWeight.w500,
+                                fontSize: screenWidth * 0.035,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedGender = 'female'),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                        decoration: BoxDecoration(
+                          color: _selectedGender == 'female'
+                              ? Color(0xFF8B5A6B)
+                              : Color(0xFFFFE7B0),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _selectedGender == 'female'
+                                ? Color(0xFF8B5A6B)
+                                : Color(0xFFECA666),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '👧',
+                              style: TextStyle(fontSize: screenWidth * 0.05),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              '여아',
+                              style: TextStyle(
+                                color: _selectedGender == 'female'
+                                    ? Colors.white
+                                    : Color(0xFF8B5A6B),
+                                fontWeight: FontWeight.w500,
+                                fontSize: screenWidth * 0.035,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: screenHeight * 0.03),
+
+              // 생일 선택 (child_info_screen 스타일)
+              Text(
+                '생일 (출산 예정일)',
+                style: TextStyle(
+                  fontSize: screenWidth * 0.04,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8B5A6B),
+                ),
+              ),
+              SizedBox(height: screenHeight * 0.01),
+              GestureDetector(
+                onTap: _pickDate,
+                child: Container(
+                  height: screenHeight * 0.07,
+                  padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFFFE7B0),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Color(0xFFECA666), width: 1),
+                  ),
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        color: Color(0xFF8B5A6B),
+                        size: screenWidth * 0.05,
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _selectedDate != null
+                              ? '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
+                              : '아이의 생일(출산 예정일)을 입력해 주세요',
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.035,
+                            color: _selectedDate != null ? Color(0xFF3B2D2C) : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              Spacer(),
+
+              // 저장 버튼 (child_info_screen 스타일)
+              ElevatedButton(
+                onPressed: _isSaving ? null : _saveChildInfo,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF8B5A6B),
+                  foregroundColor: Colors.white,
+                  minimumSize: Size(double.infinity, screenHeight * 0.06),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  textStyle: TextStyle(
+                    fontSize: screenWidth * 0.04,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: _isSaving
+                    ? SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+                    : Text(_hasChild ? '정보 수정하기' : '정보 등록하기'),
+              ),
+
+              SizedBox(height: screenHeight * 0.015),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('취소'),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
-
-  // TODO: 카메라 촬영 기능
-  void _pickImageFromCamera() {
-    // image_picker 패키지와 Spring Boot API 연동
-    // final picker = ImagePicker();
-    // final pickedFile = await picker.pickImage(source: ImageSource.camera);
-    // if (pickedFile != null) {
-    //   await _uploadImage(File(pickedFile.path));
-    // }
-    print('카메라로 사진 촬영');
-  }
-
-  // TODO: 갤러리 선택 기능
-  void _pickImageFromGallery() {
-    // image_picker 패키지와 Spring Boot API 연동
-    // final picker = ImagePicker();
-    // final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    // if (pickedFile != null) {
-    //   await _uploadImage(File(pickedFile.path));
-    // }
-    print('갤러리에서 사진 선택');
-  }
-
-// TODO: Spring Boot API로 이미지 업로드
-// Future<void> _uploadImage(File imageFile) async {
-//   final request = http.MultipartRequest(
-//     'POST',
-//     Uri.parse('$baseUrl/api/user/profile/image'),
-//   );
-//   request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
-//
-//   final response = await request.send();
-//   if (response.statusCode == 200) {
-//     final responseData = await response.stream.bytesToString();
-//     final result = json.decode(responseData);
-//     setState(() {
-//       _profileImagePath = result['imageUrl'];
-//     });
-//   }
-// }
 }
