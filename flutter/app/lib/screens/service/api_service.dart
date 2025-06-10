@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 
 class ApiService {
@@ -403,6 +404,163 @@ class ApiService {
         'status': 'UNKNOWN',
         'message': '알 수 없는 오류: $e',
       };
+    }
+  }
+
+  // 🔐 JWT 토큰 관련 메서드들 추가
+
+  // JWT 토큰 저장
+  static Future<void> saveAccessToken(String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('access_token', token);
+      print('✅ [ApiService] JWT 토큰 저장 완료');
+    } catch (e) {
+      print('❌ [ApiService] JWT 토큰 저장 실패: $e');
+    }
+  }
+
+  // JWT 토큰 가져오기
+  static Future<String?> getStoredAccessToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+      print('🔍 [ApiService] 저장된 JWT 토큰: ${token != null ? '있음' : '없음'}');
+      return token;
+    } catch (e) {
+      print('❌ [ApiService] JWT 토큰 조회 실패: $e');
+      return null;
+    }
+  }
+
+  // JWT 토큰 삭제
+  static Future<void> removeAccessToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('access_token');
+      print('✅ [ApiService] JWT 토큰 삭제 완료');
+    } catch (e) {
+      print('❌ [ApiService] JWT 토큰 삭제 실패: $e');
+    }
+  }
+
+  // JWT 토큰 포함 색칠 완성작 저장 (인증 필요)
+  static Future<Map<String, dynamic>?> saveColoredImageWithAuth({
+    required Map<String, dynamic> coloringData,
+  }) async {
+    try {
+      print('🎨 [ApiService] 인증된 색칠 완성작 저장 시작');
+
+      // JWT 토큰 가져오기
+      String? accessToken = await getStoredAccessToken();
+
+      if (accessToken == null) {
+        print('❌ [ApiService] JWT 토큰이 없습니다. 로그인이 필요합니다.');
+        return {'success': false, 'error': '로그인이 필요합니다', 'needLogin': true};
+      }
+
+      print('🎨 [ApiService] 원본 이미지: ${coloringData['originalImageUrl']}');
+      print(
+        '🎨 [ApiService] Base64 길이: ${coloringData['completedImageBase64']?.length ?? 0}',
+      );
+
+      final response = await _dio.post(
+        '/api/coloring/save',
+        data: coloringData,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+        ),
+      );
+
+      print('🎨 [ApiService] 색칠 완성작 저장 응답 상태: ${response.statusCode}');
+      print('🎨 [ApiService] 응답 본문: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        // 🎯 응답을 Map으로 안전하게 변환
+        Map<String, dynamic> resultMap;
+        if (responseData is Map<String, dynamic>) {
+          resultMap = responseData;
+        } else if (responseData is Map) {
+          resultMap = Map<String, dynamic>.from(responseData);
+        } else {
+          print('⚠️ [ApiService] 응답이 Map이 아님: ${responseData.runtimeType}');
+          resultMap = {
+            'success': true,
+            'message': '색칠 완성작이 저장되었습니다.',
+            'data': responseData,
+          };
+        }
+
+        // success 필드 확인 및 처리
+        if (resultMap['success'] == true || !resultMap.containsKey('success')) {
+          if (!resultMap.containsKey('success')) {
+            resultMap['success'] = true;
+          }
+          print('✅ [ApiService] 인증된 색칠 완성작 저장 성공');
+          return resultMap;
+        } else {
+          print('❌ [ApiService] 서버에서 실패 응답: ${resultMap['error']}');
+          return resultMap;
+        }
+      } else {
+        print('❌ [ApiService] 색칠 완성작 저장 실패: ${response.statusCode}');
+        return {'success': false, 'error': '서버 오류: ${response.statusCode}'};
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 인증된 색칠 완성작 저장 네트워크 오류:');
+      print('  - 오류 타입: ${e.type}');
+      print('  - 오류 메시지: ${e.message}');
+
+      if (e.response != null) {
+        print('  - 서버 응답 코드: ${e.response?.statusCode}');
+        print('  - 서버 응답 데이터: ${e.response?.data}');
+
+        // 401 Unauthorized 에러 처리
+        if (e.response?.statusCode == 401) {
+          print('🔐 [ApiService] 인증 토큰이 만료되었거나 유효하지 않습니다.');
+          await removeAccessToken(); // 만료된 토큰 삭제
+          return {
+            'success': false,
+            'error': '인증이 만료되었습니다. 다시 로그인해주세요.',
+            'needLogin': true,
+          };
+        }
+      }
+
+      return {'success': false, 'error': e.message ?? '네트워크 오류'};
+    } catch (e) {
+      print('❌ [ApiService] 인증된 색칠 완성작 저장 오류: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // 로그인 상태 확인
+  static Future<bool> isLoggedIn() async {
+    final token = await getStoredAccessToken();
+    return token != null;
+  }
+
+  // 토큰 유효성 검사 (옵션)
+  static Future<bool> isTokenValid() async {
+    try {
+      final token = await getStoredAccessToken();
+      if (token == null) return false;
+
+      // 간단한 토큰 검증 API 호출 (실제 구현 시 서버에 검증 엔드포인트 필요)
+      final response = await _dio.get(
+        '/api/auth/validate',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('❌ [ApiService] 토큰 유효성 검사 실패: $e');
+      return false;
     }
   }
 }

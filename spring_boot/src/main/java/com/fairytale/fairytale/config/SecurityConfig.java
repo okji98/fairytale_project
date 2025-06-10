@@ -5,6 +5,7 @@ import com.fairytale.fairytale.auth.strategy.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -44,7 +45,12 @@ public class SecurityConfig {
                         .requestMatchers("/oauth/**").permitAll()
 
                         // 기타 API 경로 허용
-                        .requestMatchers("/api/auth/**", "/api/coloring/**").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        // 색칠 조회는 허용, 저장은 인증 필요
+                        .requestMatchers(HttpMethod.GET, "/api/coloring/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/coloring/save").authenticated() // 저장만 인증 필요
+                        .requestMatchers("/api/coloring/**").permitAll() // 나머지는 허용
 
                         // FastAPI 경로 허용
                         .requestMatchers("/api/fairytale/**", "/health", "/actuator/**", "/h2-console/**").permitAll()
