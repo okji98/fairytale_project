@@ -1,12 +1,16 @@
-package com.fairytale.fairytale.gallery.dto;
+package com.fairytale.fairytale.gallery;
 
-import com.fairytale.fairytale.gallery.GalleryService;
+import com.fairytale.fairytale.gallery.dto.ColoringImageRequest;
+import com.fairytale.fairytale.gallery.dto.GalleryImageDTO;
+import com.fairytale.fairytale.gallery.dto.GalleryStatsDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/gallery")
@@ -132,6 +136,45 @@ public class GalleryController {
             System.err.println("❌ 갤러리 통계 조회 실패: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(500).build();
+        }
+    }
+
+    @GetMapping("/gallery")
+    public ResponseEntity<?> getGallery(
+            @RequestParam(defaultValue = "all") String type,
+            Authentication authentication) {
+
+        String username = authentication.getName();
+
+        try {
+            List<GalleryImageDTO> galleryImages;
+
+            switch (type) {
+                case "story":
+                    galleryImages = galleryService.getUserStoryImages(username);
+                    break;
+                case "coloring":
+                    galleryImages = galleryService.getUserColoringWorks(username);
+                    break;
+                case "all":
+                default:
+                    galleryImages = galleryService.getUserGalleryImages(username);
+                    break;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("images", galleryImages);
+            response.put("count", galleryImages.size());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.out.println("❌ 갤러리 조회 오류: " + e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", "갤러리 조회 실패: " + e.getMessage()
+            ));
         }
     }
 }

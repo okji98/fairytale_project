@@ -47,6 +47,9 @@ public class SecurityConfig {
                         // 기타 API 경로 허용
                         .requestMatchers("/api/auth/**").permitAll()
 
+                        // 🎯 정적 리소스 경로 허용 (색칠 이미지 접근용) - 추가!
+                        .requestMatchers("/coloring/**").permitAll()
+
                         // 색칠 조회는 허용, 저장은 인증 필요
                         .requestMatchers(HttpMethod.GET, "/api/coloring/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/coloring/save").authenticated() // 저장만 인증 필요

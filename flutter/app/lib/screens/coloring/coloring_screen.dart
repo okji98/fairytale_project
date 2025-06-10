@@ -96,6 +96,9 @@ class _ColoringScreenState extends State<ColoringScreen> {
 
   // 🎯 색칠한 이미지 저장
   Future<void> _saveColoredImage() async {
+    // 🔍 JWT 토큰 디버깅
+    await ApiService.debugJwtToken();
+
     if (_selectedImageUrl == null || _drawingPoints.isEmpty) {
       _showError('색칠한 내용이 없습니다.');
       return;

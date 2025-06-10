@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import 'dart:math' as math;
 
 class ApiService {
   // 🚀 플랫폼에 따라 자동으로 서버 주소 선택
@@ -459,20 +460,30 @@ class ApiService {
         return {'success': false, 'error': '로그인이 필요합니다', 'needLogin': true};
       }
 
+      // 🔍 JWT 토큰 디버깅 정보 추가
+      print(
+        '🔐 [ApiService] JWT 토큰 첫 20자: ${accessToken.substring(0, math.min(20, accessToken.length))}...',
+      );
+      print('🔐 [ApiService] JWT 토큰 전체 길이: ${accessToken.length}');
+
       print('🎨 [ApiService] 원본 이미지: ${coloringData['originalImageUrl']}');
       print(
         '🎨 [ApiService] Base64 길이: ${coloringData['completedImageBase64']?.length ?? 0}',
       );
 
+      // 🔍 요청 헤더 디버깅
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      };
+
+      print('🔍 [ApiService] 요청 헤더: $headers');
+      print('🔍 [ApiService] 요청 URL: $baseUrl/api/coloring/save');
+
       final response = await _dio.post(
         '/api/coloring/save',
         data: coloringData,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $accessToken',
-          },
-        ),
+        options: Options(headers: headers),
       );
 
       print('🎨 [ApiService] 색칠 완성작 저장 응답 상태: ${response.statusCode}');
@@ -561,6 +572,34 @@ class ApiService {
     } catch (e) {
       print('❌ [ApiService] 토큰 유효성 검사 실패: $e');
       return false;
+    }
+  }
+
+  // 🔍 JWT 토큰 디버깅 메서드 추가
+  static Future<void> debugJwtToken() async {
+    try {
+      final token = await getStoredAccessToken();
+      if (token == null) {
+        print('🔍 [JWT Debug] 토큰 없음');
+        return;
+      }
+
+      print('🔍 [JWT Debug] 토큰 길이: ${token.length}');
+      print(
+        '🔍 [JWT Debug] 토큰 시작: ${token.substring(0, math.min(50, token.length))}...',
+      );
+
+      // JWT 토큰 구조 확인 (header.payload.signature)
+      final parts = token.split('.');
+      print('🔍 [JWT Debug] 토큰 부분 개수: ${parts.length} (정상: 3개)');
+
+      if (parts.length == 3) {
+        print('🔍 [JWT Debug] Header 길이: ${parts[0].length}');
+        print('🔍 [JWT Debug] Payload 길이: ${parts[1].length}');
+        print('🔍 [JWT Debug] Signature 길이: ${parts[2].length}');
+      }
+    } catch (e) {
+      print('❌ [JWT Debug] 디버깅 실패: $e');
     }
   }
 }

@@ -1,5 +1,6 @@
 package com.fairytale.fairytale.coloring;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -13,12 +14,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+// S3 사용 시 주석 해제할 import들
+/*
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+*/
+
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/coloring")
 public class ColoringController {
-
-    @Autowired
-    private ColoringTemplateService coloringTemplateService;
+    private final ColoringTemplateService coloringTemplateService;
+    private final ColoringWorkRepository coloringWorkRepository;
 
     // 🎯 색칠공부 템플릿 목록 조회
     @GetMapping("/templates")
@@ -144,10 +155,21 @@ public class ColoringController {
             Authentication authentication) {
 
         System.out.println("🎨 색칠 완성작 저장 요청");
+        System.out.println("🔍 [ColoringController] Authentication: " + authentication);
+        System.out.println("🔍 [ColoringController] 인증 여부: " + (authentication != null && authentication.isAuthenticated()));
 
         try {
-            String username = authentication.getName();
-            System.out.println("🎨 [ColoringController] 색칠 완성작 저장 - 사용자: " + username);
+            String username;
+            if (authentication != null && authentication.isAuthenticated()) {
+                username = authentication.getName();
+                System.out.println("✅ [ColoringController] 인증된 사용자: " + username);
+            } else {
+                System.out.println("❌ [ColoringController] 인증 실패 - 401 반환");
+                return ResponseEntity.status(401).body(Map.of(
+                        "success", false,
+                        "error", "사용자 인증이 필요합니다"
+                ));
+            }
 
             // 요청 데이터 추출
             String originalImageUrl = (String) request.get("originalImageUrl");
@@ -169,8 +191,16 @@ public class ColoringController {
             // 🎯 색칠 완성작 저장 처리
             String savedImageUrl = saveBase64ImageToStorage(completedImageBase64, username);
 
-            // 🎯 갤러리에 저장 (Gallery 엔티티 또는 별도 테이블에)
-            // 현재는 성공 응답만 반환하고, 실제 갤러리 연동은 추후 구현
+            // 🎯 DB에 색칠 완성작 정보 저장 (새로 추가)
+            ColoringWork coloringWork = ColoringWork.builder()
+                    .username(username)
+                    .originalImageUrl(originalImageUrl)
+                    .completedImageUrl(savedImageUrl)
+                    .storyTitle("색칠 완성작") // 또는 실제 동화 제목
+                    .build();
+
+            coloringWorkRepository.save(coloringWork);
+            System.out.println("✅ [ColoringController] DB에 색칠 완성작 저장 완료: " + coloringWork.getId());
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -192,7 +222,7 @@ public class ColoringController {
         }
     }
 
-    // 🎯 Base64 이미지를 저장소에 저장 (현재는 로컬, 추후 S3)
+    // 🎯 Base64 이미지를 저장소에 저장 (로컬 + S3 옵션)
     private String saveBase64ImageToStorage(String base64Image, String username) {
         try {
             System.out.println("🔍 [ColoringController] Base64 이미지 저장 시작");
@@ -200,11 +230,30 @@ public class ColoringController {
             // Base64 디코딩
             byte[] imageBytes = java.util.Base64.getDecoder().decode(base64Image);
 
-            // 파일명 생성
+            // 파일명 생성 (로컬/S3 공통)
             String fileName = "coloring_" + username + "_" + System.currentTimeMillis() + ".png";
 
-            // 🎯 현재는 로컬 저장 (추후 S3로 변경)
-            String uploadDir = "/tmp/coloring_images/";
+            // ===========================================
+            // 🏠 로컬 저장소 (현재 사용 중)
+            // ===========================================
+            return saveToLocalStorage(imageBytes, fileName);
+
+            // ===========================================
+            // ☁️ S3 저장소 (나중에 사용할 때 주석 해제)
+            // ===========================================
+            // return saveToS3Storage(imageBytes, fileName);
+
+        } catch (Exception e) {
+            System.err.println("❌ [ColoringController] 이미지 저장 실패: " + e.getMessage());
+            throw new RuntimeException("이미지 저장에 실패했습니다", e);
+        }
+    }
+
+    // 🏠 로컬 저장소에 저장
+    private String saveToLocalStorage(byte[] imageBytes, String fileName) {
+        try {
+            // 🎯 static/coloring 폴더에 저장 (웹에서 접근 가능)
+            String uploadDir = "src/main/resources/static/coloring/";
             java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDir);
 
             // 디렉토리가 없으면 생성
@@ -218,24 +267,59 @@ public class ColoringController {
                 fos.write(imageBytes);
             }
 
-            System.out.println("✅ [ColoringController] 이미지 로컬 저장 완료: " + fileName);
+            System.out.println("✅ [ColoringController] 로컬 저장 완료: " + fileName);
 
-            // 🎯 S3 업로드 코드 (주석 처리)
-            /*
-            // S3Service s3Service = new S3Service();
-            // String s3ImageUrl = s3Service.uploadImage(imageBytes, fileName, "image/png");
-            // System.out.println("✅ [ColoringController] S3 업로드 완료: " + s3ImageUrl);
-            // return s3ImageUrl;
-            */
-
-            // 현재는 더미 URL 반환 (실제로는 S3 URL이 들어갈 자리)
-            return "https://example.com/coloring/" + fileName;
+            // 🎯 로컬 서버에서 접근 가능한 URL 반환
+            return "http://localhost:8080/coloring/" + fileName;
 
         } catch (Exception e) {
-            System.err.println("❌ [ColoringController] 이미지 저장 실패: " + e.getMessage());
-            throw new RuntimeException("이미지 저장에 실패했습니다", e);
+            System.err.println("❌ [ColoringController] 로컬 저장 실패: " + e.getMessage());
+            throw new RuntimeException("로컬 이미지 저장에 실패했습니다", e);
         }
     }
+
+    // ☁️ S3 저장소에 저장 (나중에 사용)
+    /*
+    private String saveToS3Storage(byte[] imageBytes, String fileName) {
+        try {
+            // 🎯 S3 설정 (application.yml에서 설정값 읽어오기)
+            String bucketName = "your-fairytale-bucket"; // 실제 버킷명으로 변경
+            String s3Region = "ap-northeast-2"; // 서울 리전
+            String folderPath = "coloring/" + fileName; // S3 내 경로
+
+            // 🔧 AWS S3 클라이언트 생성
+            S3Client s3Client = S3Client.builder()
+                    .region(Region.of(s3Region))
+                    .credentialsProvider(DefaultCredentialsProvider.create()) // AWS 자격증명
+                    .build();
+
+            // 🔧 S3 업로드 요청 생성
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(folderPath)
+                    .contentType("image/png")
+                    .contentLength((long) imageBytes.length)
+                    .build();
+
+            // 🔧 파일 업로드
+            PutObjectResponse response = s3Client.putObject(
+                    putObjectRequest,
+                    RequestBody.fromBytes(imageBytes)
+            );
+
+            System.out.println("✅ [ColoringController] S3 업로드 완료: " + fileName);
+            System.out.println("✅ [ColoringController] S3 ETag: " + response.eTag());
+
+            // 🎯 S3 공개 URL 반환
+            return String.format("https://%s.s3.%s.amazonaws.com/%s",
+                    bucketName, s3Region, folderPath);
+
+        } catch (Exception e) {
+            System.err.println("❌ [ColoringController] S3 업로드 실패: " + e.getMessage());
+            throw new RuntimeException("S3 이미지 업로드에 실패했습니다", e);
+        }
+    }
+    */
 
     // 🔧 ColoringTemplate을 DTO로 변환
     private Map<String, Object> convertToDTO(ColoringTemplate template) {

@@ -9,7 +9,11 @@
       <change beforePath="$PROJECT_DIR$/app/lib/screens/coloring/coloring_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/app/lib/screens/coloring/coloring_screen.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/lib/screens/service/api_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/app/lib/screens/service/api_service.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../python/bw_image.png" beforeDir="false" afterPath="$PROJECT_DIR$/../python/bw_image.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/auth/strategy/JwtAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/auth/strategy/JwtAuthenticationFilter.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/coloring/ColoringController.java" beforeDir="false" afterPath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/coloring/ColoringController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/gallery/GalleryService.java" beforeDir="false" afterPath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/gallery/GalleryService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/gallery/dto/GalleryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/../spring_boot/src/main/java/com/fairytale/fairytale/gallery/GalleryController.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
