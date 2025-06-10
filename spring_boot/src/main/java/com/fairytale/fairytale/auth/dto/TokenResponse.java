@@ -12,6 +12,11 @@ public class TokenResponse {
     private String refreshToken;
     private String type;
 
+    // 🆕 추가!
+    private Long userId;        // DB PK
+    private String userEmail;   // 이메일
+    private String userName;    // username
+
     public TokenResponse(String accessToken, String refreshToken) {
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;

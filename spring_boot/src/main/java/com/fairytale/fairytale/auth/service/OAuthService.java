@@ -61,7 +61,17 @@ public class OAuthService {
         System.out.println("🔍 JWT 토큰 발급 완료");
         // RefreshToken 저장
         refreshTokenRepository.save(new RefreshToken(savedUser.getId(), tokens.getRefreshToken()));
-        return tokens;
+        // =========================== 여기서 반환값을 직접 새로 만듦! =============================
+        // jwtAuthStrategy.generateTokens()가 기본 TokenResponse만 반환할 수 있으므로,
+        // 필요한 정보를 직접 넣어서 새 TokenResponse 생성 (userId, userEmail, userName 포함)
+        return TokenResponse.builder()
+                .accessToken(tokens.getAccessToken())
+                .refreshToken(tokens.getRefreshToken())
+                .type(tokens.getType())
+                .userId(savedUser.getId())            // ✅ PK 추가!
+                .userEmail(savedUser.getEmail())      // ✅ 이메일 추가!
+                .userName(savedUser.getUsername())    // ✅ username 추가!
+                .build();
     }
 
     private Users getUserInfoFromProvider(String provider, String accessToken) {
