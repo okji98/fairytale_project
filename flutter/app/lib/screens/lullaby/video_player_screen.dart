@@ -6,10 +6,7 @@ import '../../models/lullaby_models.dart'; // ⭐ 기존 모델 파일 임포트
 class VideoPlayerScreen extends StatefulWidget {
   final LullabyVideoTheme theme;
 
-  const VideoPlayerScreen({
-    super.key,
-    required this.theme,
-  });
+  const VideoPlayerScreen({super.key, required this.theme});
 
   @override
   State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();

@@ -1,6 +1,8 @@
 // lib/screens/lullaby/lullaby_music_screen.dart
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class LullabyMusicScreen extends StatefulWidget {
   const LullabyMusicScreen({super.key});
@@ -12,59 +14,25 @@ class LullabyMusicScreen extends StatefulWidget {
 class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlaying = false;
+  bool _isLoading = true;
   String? _currentPlayingTheme;
-  Duration _duration = const Duration(minutes: 45); // 임시 duration
-  Duration _position = const Duration(minutes: 1, seconds: 30); // 임시 position
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
   int _selectedThemeIndex = 0;
 
-  // TODO: S3 연동 - 실제 S3 URL로 교체 필요
-  final List<LullabyTheme> _themes = [
-    LullabyTheme(
-      title: 'Focus Attention',
-      duration: '10 MIN',
-      s3Url: 'https://your-s3-bucket.com/lullaby/focus.mp3', // TODO: 실제 S3 URL 연결
-      description: '집중력 향상을 위한 잔잔한 음악',
-    ),
-    LullabyTheme(
-      title: 'Body Scan',
-      duration: '6 MIN',
-      s3Url: 'https://your-s3-bucket.com/lullaby/body-scan.mp3', // TODO: 실제 S3 URL 연결
-      description: '몸과 마음의 긴장을 풀어주는 음악',
-    ),
-    LullabyTheme(
-      title: 'Making Happiness',
-      duration: '3 MIN',
-      s3Url: 'https://your-s3-bucket.com/lullaby/happiness.mp3', // TODO: 실제 S3 URL 연결
-      description: '행복한 기분을 만들어주는 음악',
-    ),
-    LullabyTheme(
-      title: '잔잔한 피아노',
-      duration: '30 MIN',
-      s3Url: 'https://your-s3-bucket.com/lullaby/piano.mp3', // TODO: 실제 S3 URL 연결
-      description: '부드러운 피아노 선율',
-    ),
-    LullabyTheme(
-      title: '기타 멜로디',
-      duration: '25 MIN',
-      s3Url: 'https://your-s3-bucket.com/lullaby/guitar.mp3', // TODO: 실제 S3 URL 연결
-      description: '따뜻한 기타 선율',
-    ),
-    LullabyTheme(
-      title: '자연의 소리',
-      duration: '60 MIN',
-      s3Url: 'https://your-s3-bucket.com/lullaby/nature.mp3', // TODO: 실제 S3 URL 연결
-      description: '새소리와 물소리',
-    ),
-  ];
+  // 스프링부트 서버 URL (실제 서버 주소로 변경 필요)
+  static const String SPRING_SERVER_URL = 'http://localhost:8080';
+
+  List<LullabyTheme> _themes = [];
 
   @override
   void initState() {
     super.initState();
     _setupAudioPlayer();
+    _loadThemesFromSpringBoot();
   }
 
   void _setupAudioPlayer() {
-    // TODO: S3 오디오 스트리밍 연동
     _audioPlayer.onDurationChanged.listen((duration) {
       setState(() {
         _duration = duration;
@@ -86,6 +54,159 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
     });
   }
 
+  /**
+   * 스프링부트 서버에서 자장가 테마 목록을 가져오는 함수
+   *
+   * 왜 스프링부트를 거치는가?
+   * - 파이썬 FastAPI에 직접 접근하지 않고 스프링부트를 경유
+   * - 스프링부트에서 데이터 가공, 에러 처리, 로깅 등 담당
+   * - 일관된 API 응답 형식 제공
+   * - 보안 및 접근 제어 가능
+   */
+  Future<void> _loadThemesFromSpringBoot() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final response = await http.get(
+        Uri.parse('$SPRING_SERVER_URL/api/lullaby/themes'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonData = json.decode(response.body);
+
+        // 스프링부트의 ApiResponse 형식 파싱
+        if (jsonData['success'] == true && jsonData['data'] != null) {
+          final List<dynamic> themesData = jsonData['data'];
+
+          setState(() {
+            _themes =
+                themesData.map((json) => LullabyTheme.fromJson(json)).toList();
+            _isLoading = false;
+          });
+
+          print('스프링부트에서 ${_themes.length}개 테마를 로드했습니다.');
+          print('메시지: ${jsonData['message']}');
+        } else {
+          print('스프링부트 응답 오류: ${jsonData['message']}');
+          _loadFallbackThemes();
+        }
+      } else {
+        print('스프링부트 서버 응답 오류: ${response.statusCode}');
+        _loadFallbackThemes();
+      }
+    } catch (e) {
+      print('테마 로드 중 오류: $e');
+      _loadFallbackThemes();
+    }
+  }
+
+  /**
+   * 특정 테마로 음악 검색
+   * 스프링부트 API를 통해 파이썬 FastAPI 호출
+   */
+  Future<void> _searchByTheme(String themeName) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // URL 인코딩 (한국어 테마명 처리)
+      final encodedThemeName = Uri.encodeComponent(themeName);
+
+      final response = await http.get(
+        Uri.parse(
+          '$SPRING_SERVER_URL/api/lullaby/theme/$encodedThemeName?limit=5',
+        ),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonData = json.decode(response.body);
+
+        if (jsonData['success'] == true && jsonData['data'] != null) {
+          final List<dynamic> themesData = jsonData['data'];
+
+          setState(() {
+            _themes =
+                themesData.map((json) => LullabyTheme.fromJson(json)).toList();
+            _selectedThemeIndex = 0; // 첫 번째 곡으로 선택
+            _isLoading = false;
+          });
+
+          print('$themeName 테마로 ${_themes.length}개 곡을 찾았습니다.');
+          print('메시지: ${jsonData['message']}');
+        }
+      }
+    } catch (e) {
+      print('테마 검색 중 오류: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  /**
+   * 서버 연결 실패시 사용할 기본 테마들
+   */
+  void _loadFallbackThemes() {
+    setState(() {
+      _themes = [
+        LullabyTheme(
+          title: 'Focus Attention',
+          duration: '10:00',
+          audioUrl: '',
+          description: '서버 연결 실패 - 임시 데이터',
+          artist: 'System',
+          imageUrl: '',
+        ),
+        LullabyTheme(
+          title: 'Body Scan',
+          duration: '6:00',
+          audioUrl: '',
+          description: '서버 연결 실패 - 임시 데이터',
+          artist: 'System',
+          imageUrl: '',
+        ),
+      ];
+      _isLoading = false;
+    });
+  }
+
+  /**
+   * 스프링부트 및 파이썬 서버 상태 확인
+   */
+  Future<void> _checkServerHealth() async {
+    try {
+      // 스프링부트 서버 상태 확인
+      final springResponse = await http.get(
+        Uri.parse('$SPRING_SERVER_URL/api/lullaby/health'),
+      );
+
+      // 파이썬 서버 상태 확인 (스프링부트를 통해)
+      final pythonResponse = await http.get(
+        Uri.parse('$SPRING_SERVER_URL/api/lullaby/python-health'),
+      );
+
+      if (springResponse.statusCode == 200 &&
+          pythonResponse.statusCode == 200) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('모든 서버가 정상 작동 중입니다!')));
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('일부 서버에 문제가 있습니다.')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('서버 상태 확인 실패: $e')));
+    }
+  }
+
   @override
   void dispose() {
     _audioPlayer.dispose();
@@ -93,28 +214,50 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
   }
 
   Future<void> _togglePlayPause() async {
-    if (_isPlaying) {
-      await _audioPlayer.pause();
-    } else {
-      // TODO: S3에서 실제 음악 파일 재생
-      // await _audioPlayer.play(UrlSource(_themes[_selectedThemeIndex].s3Url));
-      print('재생: ${_themes[_selectedThemeIndex].title}'); // 임시 로그
+    if (_themes.isEmpty) return;
+
+    try {
+      if (_isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        // 실제 Jamendo 음악 URL로 재생
+        final currentTheme = _themes[_selectedThemeIndex];
+        if (currentTheme.audioUrl.isNotEmpty) {
+          await _audioPlayer.play(UrlSource(currentTheme.audioUrl));
+          print('재생: ${currentTheme.title} - ${currentTheme.audioUrl}');
+        } else {
+          print('재생할 수 있는 URL이 없습니다: ${currentTheme.title}');
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('재생할 수 있는 음악이 없습니다.')));
+          return;
+        }
+      }
+
+      setState(() {
+        _isPlaying = !_isPlaying;
+        _currentPlayingTheme = _themes[_selectedThemeIndex].title;
+      });
+    } catch (e) {
+      print('재생 중 오류: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('음악 재생 중 오류가 발생했습니다.')));
     }
-    setState(() {
-      _isPlaying = !_isPlaying;
-      _currentPlayingTheme = _themes[_selectedThemeIndex].title;
-    });
   }
 
   void _playTheme(int index) {
+    if (_themes.isEmpty || index >= _themes.length) return;
+
     setState(() {
       _selectedThemeIndex = index;
       _currentPlayingTheme = _themes[index].title;
-      _isPlaying = true;
+      _isPlaying = false; // 일시 정지 상태로 설정
       _position = Duration.zero;
     });
-    // TODO: S3에서 선택된 테마 재생
-    print('테마 변경: ${_themes[index].title}'); // 임시 로그
+
+    // 자동으로 재생 시작
+    _togglePlayPause();
   }
 
   String _formatDuration(Duration duration) {
@@ -130,14 +273,13 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/bg_sleep.png'), // 배경 이미지 변경
+            image: AssetImage('assets/bg_sleep.png'),
             fit: BoxFit.cover,
           ),
         ),
         child: SafeArea(
           child: Stack(
             children: [
-              // 전체 컬럼 레이아웃
               Column(
                 children: [
                   // 상단 헤더
@@ -161,19 +303,55 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                             ),
                           ),
                         ),
+                        const Spacer(),
+                        // 새로고침 버튼
+                        GestureDetector(
+                          onTap: _loadThemesFromSpringBoot,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(
+                              Icons.refresh,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // 서버 상태 확인 버튼
+                        GestureDetector(
+                          onTap: _checkServerHealth,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(
+                              Icons.health_and_safety,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
 
-                  // 곰돌이 일러스트 영역 (상단) - 크기 조정
+                  // 곰돌이 일러스트 영역
                   Expanded(
-                    flex: 2, // ⭐ 곰돌이 영역 비율 줄임: 4 → 2 (하단 플레이어 공간 확보)
+                    flex: 2,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // 별들 (선택사항으로 유지)
+                          // 별들
                           Positioned(
                             top: 20,
                             left: 50,
@@ -203,12 +381,12 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                     ),
                   ),
 
-                  // 하단 플레이어 영역 (음악 리스트) - 비율 증가
+                  // 하단 플레이어 영역
                   Expanded(
-                    flex: 8, // ⭐ 하단 플레이어 영역 비율 크게 증가: 6 → 8
+                    flex: 8,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.95), // 반투명으로 변경
+                        color: Colors.white.withOpacity(0.95),
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(30),
                           topRight: Radius.circular(30),
@@ -226,7 +404,7 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 80), // ⭐ 곰돌이 이미지 공간 확보
+                            const SizedBox(height: 80),
 
                             // 제목과 설명
                             const Text(
@@ -239,22 +417,72 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '깊고 풍부한 음성으로 마음을 편안하게 숙면하세요',
+                              _themes.isNotEmpty
+                                  ? '${_themes.length}개의 음악이 준비되어 있습니다 (via SpringBoot → Python)'
+                                  : '음악을 불러오는 중...',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: Colors.grey[600],
                               ),
                             ),
-                            const SizedBox(height: 30),
+                            const SizedBox(height: 20),
+
+                            // 테마 검색 버튼 추가
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children:
+                                    [
+                                          '잔잔한 피아노',
+                                          '기타 멜로디',
+                                          '자연의 소리',
+                                          '달빛',
+                                          '하늘',
+                                          '클래식',
+                                        ]
+                                        .map(
+                                          (theme) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: 8,
+                                            ),
+                                            child: ElevatedButton(
+                                              onPressed:
+                                                  () => _searchByTheme(theme),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(
+                                                  0xFF6B73FF,
+                                                ),
+                                                foregroundColor: Colors.white,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
+                                                    ),
+                                                textStyle: const TextStyle(
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              child: Text(theme),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
 
                             // 플레이어 컨트롤
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                // 이전 버튼 (15초 뒤로)
+                                // 이전 버튼 (10초 뒤로)
                                 GestureDetector(
-                                  onTap: () {
-                                    // TODO: 10초 뒤로 이동 구현
+                                  onTap: () async {
+                                    final newPosition =
+                                        _position - const Duration(seconds: 10);
+                                    if (newPosition.inSeconds >= 0) {
+                                      await _audioPlayer.seek(newPosition);
+                                    }
                                   },
                                   child: Container(
                                     width: 50,
@@ -281,18 +509,31 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                                       color: Color(0xFF4A4A4A),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: Icon(
-                                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                                      color: Colors.white,
-                                      size: 30,
-                                    ),
+                                    child:
+                                        _isLoading
+                                            ? const CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            )
+                                            : Icon(
+                                              _isPlaying
+                                                  ? Icons.pause
+                                                  : Icons.play_arrow,
+                                              color: Colors.white,
+                                              size: 30,
+                                            ),
                                   ),
                                 ),
                                 const SizedBox(width: 30),
-                                // 다음 버튼 (15초 앞으로)
+                                // 다음 버튼 (10초 앞으로)
                                 GestureDetector(
-                                  onTap: () {
-                                    // TODO: 10초 앞으로 이동 구현
+                                  onTap: () async {
+                                    final newPosition =
+                                        _position + const Duration(seconds: 10);
+                                    if (newPosition.inSeconds <=
+                                        _duration.inSeconds) {
+                                      await _audioPlayer.seek(newPosition);
+                                    }
                                   },
                                   child: Container(
                                     width: 50,
@@ -320,23 +561,38 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                                     activeTrackColor: const Color(0xFF6B73FF),
                                     inactiveTrackColor: Colors.grey[300],
                                     thumbColor: const Color(0xFF6B73FF),
-                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                    thumbShape: const RoundSliderThumbShape(
+                                      enabledThumbRadius: 8,
+                                    ),
                                     trackHeight: 4,
                                   ),
                                   child: Slider(
-                                    value: _position.inSeconds.toDouble(),
+                                    value:
+                                        _duration.inSeconds > 0
+                                            ? _position.inSeconds
+                                                .toDouble()
+                                                .clamp(
+                                                  0.0,
+                                                  _duration.inSeconds
+                                                      .toDouble(),
+                                                )
+                                            : 0.0,
                                     max: _duration.inSeconds.toDouble(),
                                     onChanged: (value) async {
-                                      final position = Duration(seconds: value.toInt());
-                                      // TODO: S3 오디오 시간 이동 구현
+                                      final position = Duration(
+                                        seconds: value.toInt(),
+                                      );
                                       await _audioPlayer.seek(position);
                                     },
                                   ),
                                 ),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         _formatDuration(_position),
@@ -359,102 +615,210 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                             ),
                             const SizedBox(height: 15),
 
-                            // 플레이리스트 (화면의 대부분 차지)
+                            // 플레이리스트
                             Expanded(
-                              child: Container(
-                                margin: const EdgeInsets.only(top: 5),
-                                child: ListView.builder(
-                                  itemCount: _themes.length,
-                                  itemBuilder: (context, index) {
-                                    final theme = _themes[index];
-                                    final isSelected = _selectedThemeIndex == index;
-
-                                    return GestureDetector(
-                                      onTap: () => _playTheme(index),
-                                      child: Container(
-                                        margin: const EdgeInsets.only(bottom: 12),
-                                        padding: const EdgeInsets.all(18),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? const Color(0xFF6B73FF).withOpacity(0.15)
-                                              : Colors.white.withOpacity(0.7),
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: isSelected
-                                              ? Border.all(
-                                            color: const Color(0xFF6B73FF).withOpacity(0.4),
-                                            width: 1.5,
-                                          )
-                                              : Border.all(
-                                            color: Colors.grey.withOpacity(0.2),
-                                            width: 1,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.05),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
+                              child:
+                                  _isLoading
+                                      ? const Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            CircularProgressIndicator(),
+                                            SizedBox(height: 16),
+                                            Text('스프링부트 → 파이썬 → 스프링부트 → 플러터'),
+                                            Text('음악을 불러오는 중...'),
+                                          ],
+                                        ),
+                                      )
+                                      : _themes.isEmpty
+                                      ? Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.music_off,
+                                              size: 48,
+                                              color: Colors.grey,
+                                            ),
+                                            const SizedBox(height: 16),
+                                            const Text('음악을 불러올 수 없습니다'),
+                                            const SizedBox(height: 8),
+                                            ElevatedButton(
+                                              onPressed:
+                                                  _loadThemesFromSpringBoot,
+                                              child: const Text('다시 시도'),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            ElevatedButton(
+                                              onPressed: _checkServerHealth,
+                                              child: const Text('서버 상태 확인'),
                                             ),
                                           ],
                                         ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 50,
-                                              height: 50,
+                                      )
+                                      : ListView.builder(
+                                        itemCount: _themes.length,
+                                        itemBuilder: (context, index) {
+                                          final theme = _themes[index];
+                                          final isSelected =
+                                              _selectedThemeIndex == index;
+
+                                          return GestureDetector(
+                                            onTap: () => _playTheme(index),
+                                            child: Container(
+                                              margin: const EdgeInsets.only(
+                                                bottom: 12,
+                                              ),
+                                              padding: const EdgeInsets.all(18),
                                               decoration: BoxDecoration(
-                                                color: isSelected
-                                                    ? const Color(0xFF6B73FF)
-                                                    : Colors.grey[300],
-                                                shape: BoxShape.circle,
+                                                color:
+                                                    isSelected
+                                                        ? const Color(
+                                                          0xFF6B73FF,
+                                                        ).withOpacity(0.15)
+                                                        : Colors.white
+                                                            .withOpacity(0.7),
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border:
+                                                    isSelected
+                                                        ? Border.all(
+                                                          color: const Color(
+                                                            0xFF6B73FF,
+                                                          ).withOpacity(0.4),
+                                                          width: 1.5,
+                                                        )
+                                                        : Border.all(
+                                                          color: Colors.grey
+                                                              .withOpacity(0.2),
+                                                          width: 1,
+                                                        ),
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: Colors.black.withOpacity(0.1),
-                                                    blurRadius: 4,
+                                                    color: Colors.black
+                                                        .withOpacity(0.05),
+                                                    blurRadius: 8,
                                                     offset: const Offset(0, 2),
                                                   ),
                                                 ],
                                               ),
-                                              child: Icon(
-                                                isSelected && _isPlaying
-                                                    ? Icons.pause
-                                                    : Icons.play_arrow,
-                                                color: isSelected ? Colors.white : Colors.grey[600],
-                                                size: 24,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 20),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                              child: Row(
                                                 children: [
-                                                  Text(
-                                                    theme.title,
-                                                    style: TextStyle(
-                                                      fontSize: 18,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: isSelected
-                                                          ? const Color(0xFF6B73FF)
-                                                          : Colors.black87,
+                                                  Container(
+                                                    width: 50,
+                                                    height: 50,
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          isSelected
+                                                              ? const Color(
+                                                                0xFF6B73FF,
+                                                              )
+                                                              : Colors
+                                                                  .grey[300],
+                                                      shape: BoxShape.circle,
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.black
+                                                              .withOpacity(0.1),
+                                                          blurRadius: 4,
+                                                          offset: const Offset(
+                                                            0,
+                                                            2,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: Icon(
+                                                      isSelected && _isPlaying
+                                                          ? Icons.pause
+                                                          : Icons.play_arrow,
+                                                      color:
+                                                          isSelected
+                                                              ? Colors.white
+                                                              : Colors
+                                                                  .grey[600],
+                                                      size: 24,
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    theme.duration,
-                                                    style: TextStyle(
-                                                      fontSize: 15,
-                                                      color: Colors.grey[600],
+                                                  const SizedBox(width: 20),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          theme.title,
+                                                          style: TextStyle(
+                                                            fontSize: 18,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color:
+                                                                isSelected
+                                                                    ? const Color(
+                                                                      0xFF6B73FF,
+                                                                    )
+                                                                    : Colors
+                                                                        .black87,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 4,
+                                                        ),
+                                                        Text(
+                                                          '${theme.duration} • ${theme.artist}',
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            color:
+                                                                Colors
+                                                                    .grey[600],
+                                                          ),
+                                                        ),
+                                                        if (theme
+                                                            .description
+                                                            .isNotEmpty) ...[
+                                                          const SizedBox(
+                                                            height: 2,
+                                                          ),
+                                                          Text(
+                                                            theme.description,
+                                                            style: TextStyle(
+                                                              fontSize: 12,
+                                                              color:
+                                                                  Colors
+                                                                      .grey[500],
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ],
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  // 음악 URL 상태 표시
+                                                  Container(
+                                                    width: 8,
+                                                    height: 8,
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          theme
+                                                                  .audioUrl
+                                                                  .isNotEmpty
+                                                              ? Colors.green
+                                                              : Colors.red,
+                                                      shape: BoxShape.circle,
                                                     ),
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                          ],
-                                        ),
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
-                                ),
-                              ),
                             ),
                           ],
                         ),
@@ -464,37 +828,33 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                 ],
               ),
 
-              // ⭐ 곰돌이 이미지를 Stack의 최상단에 위치시켜 하단 플레이어 영역까지 침범하도록 함
+              // 곰돌이 이미지
               Positioned(
-                top: 20, // 헤더 아래쪽에 위치
+                top: 20,
                 left: 0,
                 right: 0,
                 child: Center(
                   child: Container(
-                    width: 320, // ⭐ 곰돌이 크기 대폭 확대: 250 → 320
-                    height: 320, // ⭐ 곰돌이 크기 대폭 확대: 250 → 320
+                    width: 320,
+                    height: 320,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Image.asset(
                       'assets/sleep_bear.png',
-                      width: 320, // ⭐ 곰돌이 크기 대폭 확대: 250 → 320
-                      height: 320, // ⭐ 곰돌이 크기 대폭 확대: 250 → 320
+                      width: 320,
+                      height: 320,
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
-                        // 이미지 로드 실패시 대체 이모지
                         return Container(
-                          width: 320, // ⭐ 곰돌이 크기 대폭 확대: 250 → 320
-                          height: 320, // ⭐ 곰돌이 크기 대폭 확대: 250 → 320
+                          width: 320,
+                          height: 320,
                           decoration: BoxDecoration(
                             color: const Color(0xFFDEB887),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Center(
-                            child: Text(
-                              '🧸',
-                              style: TextStyle(fontSize: 150), // 이모지도 크기 증가: 120 → 150
-                            ),
+                            child: Text('🧸', style: TextStyle(fontSize: 150)),
                           ),
                         );
                       },
@@ -510,16 +870,50 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
   }
 }
 
+// LullabyTheme 클래스 - JSON 파싱 기능 포함
 class LullabyTheme {
   final String title;
   final String duration;
-  final String s3Url;
+  final String audioUrl;
   final String description;
+  final String artist;
+  final String imageUrl;
 
   LullabyTheme({
     required this.title,
     required this.duration,
-    required this.s3Url,
+    required this.audioUrl,
     required this.description,
+    required this.artist,
+    required this.imageUrl,
   });
+
+  /**
+   * JSON에서 LullabyTheme 객체로 변환하는 팩토리 생성자
+   * 스프링부트 ApiResponse의 data 부분을 파싱
+   */
+  factory LullabyTheme.fromJson(Map<String, dynamic> json) {
+    return LullabyTheme(
+      title: json['title'] ?? 'Unknown Title',
+      duration: json['duration'] ?? '0:00',
+      audioUrl: json['audioUrl'] ?? '',
+      description: json['description'] ?? '',
+      artist: json['artist'] ?? 'Unknown Artist',
+      imageUrl: json['imageUrl'] ?? '',
+    );
+  }
+
+  /**
+   * LullabyTheme 객체를 JSON으로 변환하는 메서드
+   */
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'duration': duration,
+      'audioUrl': audioUrl,
+      'description': description,
+      'artist': artist,
+      'imageUrl': imageUrl,
+    };
+  }
 }

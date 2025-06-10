@@ -314,18 +314,6 @@ public class StoryService {
     }
     */
 
-    // 음악 검색 메서드
-    public String searchMusic(MusicRequest request) {
-        String url = fastApiBaseUrl + "/search/url";
-        return callFastApi(url, request);
-    }
-
-    // 비디오 검색 메서드
-    public String searchVideo(VideoRequest request) {
-        String url = fastApiBaseUrl + "/search/video";
-        return callFastApi(url, request);
-    }
-
     // 🎯 개선된 FastAPI 호출 메서드 (더 상세한 로깅)
     private String callFastApi(String url, Object request) {
         try {
