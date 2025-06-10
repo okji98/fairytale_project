@@ -16,7 +16,7 @@ public class RestTemplateConfig {
 
         // 타임아웃 설정
         factory.setConnectTimeout(5000);     // 연결 타임아웃 5초
-        factory.setReadTimeout(10000);       // 읽기 타임아웃 10초
+        factory.setReadTimeout(300000);       // 읽기 타임아웃 10초
 
         restTemplate.setRequestFactory(factory);
 

@@ -55,6 +55,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/coloring/save").authenticated() // 저장만 인증 필요
                         .requestMatchers("/api/coloring/**").permitAll() // 나머지는 허용
 
+                        // 자장가 허용
+                        .requestMatchers("/api/lullaby/**").permitAll()
+
                         // FastAPI 경로 허용
                         .requestMatchers("/api/fairytale/**", "/health", "/actuator/**", "/h2-console/**").permitAll()
 
