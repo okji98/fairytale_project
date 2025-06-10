@@ -1,7 +1,6 @@
 // lib/main.dart
 import 'package:app/screens/gallery/GalleryScreen.dart';
 import 'package:app/screens/share/share_screen.dart';
-import 'package:app/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 // ⭐ 소셜 로그인 SDK 추가

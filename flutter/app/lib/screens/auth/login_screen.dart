@@ -351,22 +351,27 @@ class LoginScreen extends StatelessWidget {
                   horizontal: 16.0,
                   vertical: 12.0,
                 ),
-                child: Row(
+                child: Stack(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.brown),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Spacer(),
-                    const Text(
-                      '로그인',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.brown,
+                    // 뒤로가기 버튼
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.brown),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ),
-                    const Spacer(),
+                    // 중앙 제목
+                    const Center(
+                      child: Text(
+                        '로그인',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.brown,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
