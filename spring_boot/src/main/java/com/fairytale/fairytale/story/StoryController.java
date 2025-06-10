@@ -389,9 +389,6 @@ public class StoryController {
       Map<String, Object> fallbackResponse = new HashMap<>();
       fallbackResponse.put("image_url", request.get("text"));           // 원본 URL 사용
       fallbackResponse.put("original_url", request.get("text"));
-      fallbackResponse.put("conversion_method", "Fallback_Flutter_Filter");
-      fallbackResponse.put("warning", "PIL+OpenCV 변환 실패로 Flutter에서 필터링 처리됩니다.");
-      fallbackResponse.put("flutter_filter_enabled", true);            // Flutter 필터 사용 플래그
 
       return ResponseEntity.ok(fallbackResponse);
     }
