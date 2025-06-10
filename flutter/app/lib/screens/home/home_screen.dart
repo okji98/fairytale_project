@@ -11,20 +11,91 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
+  String _ddayText = 'D-day';
+  Map<String, dynamic>? _childData;
 
   @override
   void initState() {
     super.initState();
-    _checkAuth();
+    _initializeHomeScreen();
   }
 
-  Future<void> _checkAuth() async {
-    final isLoggedIn = await AuthService.isLoggedIn();
-    setState(() {
-      _isLoading = false;
-    });
-    if (!isLoggedIn) {
-      Navigator.pushReplacementNamed(context, '/login');
+  // ⭐ 홈화면 초기화 (인증 확인 + 아이 정보 로드)
+  Future<void> _initializeHomeScreen() async {
+    try {
+      // 1. 로그인 확인
+      final isLoggedIn = await AuthService.isLoggedIn();
+      if (!isLoggedIn) {
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+
+      // 2. 아이 정보 확인
+      final childInfo = await AuthService.checkChildInfo();
+      if (childInfo != null && childInfo['hasChild'] == true) {
+        setState(() {
+          _childData = childInfo['childData'];
+          _ddayText = _calculateDDay(_childData);
+        });
+      } else {
+        // 아이 정보가 없으면 아이 정보 입력 화면으로
+        Navigator.pushReplacementNamed(context, '/child-info');
+        return;
+      }
+    } catch (e) {
+      print('❌ [HomeScreen] 초기화 오류: $e');
+      // 오류 시 기본 텍스트 유지
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ⭐ D-day 계산 함수
+  String _calculateDDay(Map<String, dynamic>? childData) {
+    if (childData == null) return 'D-day';
+
+    try {
+      final babyName = childData['name'] ?? '아이';
+      final birthDateStr = childData['birthDate'] ?? childData['baby_birth_date'];
+
+      if (birthDateStr == null) {
+        print('❌ [HomeScreen] 생년월일 정보 없음');
+        return 'D-day';
+      }
+
+      print('🔍 [HomeScreen] 아이 정보: 이름=$babyName, 생년월일=$birthDateStr');
+
+      // 날짜 파싱
+      DateTime birthDate;
+      if (birthDateStr is String) {
+        birthDate = DateTime.parse(birthDateStr);
+      } else {
+        birthDate = birthDateStr as DateTime;
+      }
+
+      // 오늘 날짜
+      final today = DateTime.now();
+      final todayWithoutTime = DateTime(today.year, today.month, today.day);
+      final birthDateWithoutTime = DateTime(birthDate.year, birthDate.month, birthDate.day);
+
+      // 날짜 차이 계산
+      final difference = birthDateWithoutTime.difference(todayWithoutTime).inDays;
+
+      if (difference > 0) {
+        // 미래 = 아직 태어나지 않음
+        return '$babyName -${difference}日';
+      } else if (difference < 0) {
+        // 과거 = 이미 태어남
+        return '$babyName +${difference.abs()}日';
+      } else {
+        // 오늘 = 생일
+        return '$babyName 생일! 🎉';
+      }
+    } catch (e) {
+      print('❌ [HomeScreen] D-day 계산 오류: $e');
+      return 'D-day';
     }
   }
 
@@ -33,10 +104,42 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.pushReplacementNamed(context, '/login');
   }
 
+  // ⭐ 새로고침 함수 (pull to refresh용)
+  Future<void> _refreshData() async {
+    await _initializeHomeScreen();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/bg_image.png'),
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF6B756)),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  '로딩 중...',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF3B2D2C),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -57,263 +160,288 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: 80),
-              child: Column(
-                children: [
-                  // 상단 로고
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.04,
-                      vertical: screenHeight * 0.00,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        SizedBox(width: screenWidth * 0.06),
-                        Flexible(
-                          child: Image.asset(
-                            'assets/logo.png',
-                            height: topLogoHeight,
-                            fit: BoxFit.contain,
+          child: RefreshIndicator(
+            onRefresh: _refreshData,
+            color: const Color(0xFFF6B756),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 80),
+                child: Column(
+                  children: [
+                    // 상단 로고
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth * 0.04,
+                        vertical: screenHeight * 0.00,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          SizedBox(width: screenWidth * 0.06),
+                          Flexible(
+                            child: Image.asset(
+                              'assets/logo.png',
+                              height: topLogoHeight,
+                              fit: BoxFit.contain,
+                            ),
                           ),
-                        ),
-                        PopupMenuButton(
-                          icon: Image.asset(
-                            'assets/profile_icon.png',
-                            width: screenWidth * 0.06,
-                            height: screenWidth * 0.06,
-                          ),
-                          itemBuilder:
-                              (context) => [
-                                PopupMenuItem(
-                                  child: const Row(
-                                    children: [
-                                      Icon(Icons.person, size: 20),
-                                      SizedBox(width: 8),
-                                      Text('프로필'),
-                                    ],
-                                  ),
-                                  onTap: () {
-                                    Future.delayed(Duration.zero, () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => ProfileScreen(),
+                          PopupMenuButton(
+                            icon: Image.asset(
+                              'assets/profile_icon.png',
+                              width: screenWidth * 0.06,
+                              height: screenWidth * 0.06,
+                            ),
+                            itemBuilder:
+                                (context) => [
+                              PopupMenuItem(
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.person, size: 20),
+                                    SizedBox(width: 8),
+                                    Text('프로필'),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ProfileScreen(),
+                                      ),
+                                    );
+                                  });
+                                },
+                              ),
+                              PopupMenuItem(
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.refresh, size: 20),
+                                    SizedBox(width: 8),
+                                    Text('새로고침'),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    _refreshData();
+                                  });
+                                },
+                              ),
+                              PopupMenuItem(
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.logout, size: 20),
+                                    SizedBox(width: 8),
+                                    Text('로그아웃'),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    showDialog(
+                                      context: context,
+                                      builder:
+                                          (_) => AlertDialog(
+                                        title: const Text('로그아웃'),
+                                        content: const Text(
+                                          '정말 로그아웃하시겠습니까?',
                                         ),
-                                      );
-                                    });
-                                  },
-                                ),
-                                PopupMenuItem(
-                                  child: const Row(
-                                    children: [
-                                      Icon(Icons.logout, size: 20),
-                                      SizedBox(width: 8),
-                                      Text('로그아웃'),
-                                    ],
-                                  ),
-                                  onTap: () {
-                                    Future.delayed(Duration.zero, () {
-                                      showDialog(
-                                        context: context,
-                                        builder:
-                                            (_) => AlertDialog(
-                                              title: const Text('로그아웃'),
-                                              content: const Text(
-                                                '정말 로그아웃하시겠습니까?',
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed:
-                                                      () => Navigator.pop(
-                                                        context,
-                                                      ),
-                                                  child: const Text('취소'),
-                                                ),
-                                                TextButton(
-                                                  onPressed: () {
-                                                    Navigator.pop(context);
-                                                    _logout();
-                                                  },
-                                                  child: const Text('로그아웃'),
-                                                ),
-                                              ],
+                                        actions: [
+                                          TextButton(
+                                            onPressed:
+                                                () => Navigator.pop(
+                                              context,
                                             ),
-                                      );
-                                    });
-                                  },
+                                            child: const Text('취소'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.pop(context);
+                                              _logout();
+                                            },
+                                            child: const Text('로그아웃'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ⭐ D-day 텍스트 (동적으로 계산됨)
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth * 0.04,
+                        vertical: screenHeight * 0.005,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            Text(
+                              _ddayText,
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.035,
+                                fontStyle: FontStyle.italic,
+                                color: const Color(0xFF3B2D2C),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: screenHeight * 0.02),
+
+                    // 카드 2개 행 (동화세상, 색칠공부)
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth * 0.04,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: cardHeight,
+                              child: SquareCard(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF8E97FD), Color(0xFF6B73FF)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                              ],
-                        ),
-                      ],
+                                iconPath: 'assets/rabbit.png',
+                                iconSize: iconSizeLarge,
+                                iconTopOffset: -iconSizeLarge / 3,
+                                title: '동화세상',
+                                subtitle: '마음을 담은, \n나만의 동화',
+                                onPressed:
+                                    () =>
+                                    Navigator.pushNamed(context, '/stories'),
+                                buttonAlignment: Alignment.centerRight,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: screenWidth * 0.03),
+                          Expanded(
+                            child: SizedBox(
+                              height: cardHeight,
+                              child: SquareCard(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFFD3A8), Color(0xFFFFB84D)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                iconPath: 'assets/coloring_bear.png',
+                                iconSize: iconSizeSmall,
+                                iconTopOffset: -iconSizeSmall / 3,
+                                title: '색칠공부',
+                                subtitle: '색칠하며 펼쳐지는 \n상상의 세계',
+                                onPressed:
+                                    () =>
+                                    Navigator.pushNamed(context, '/coloring'),
+                                buttonAlignment: Alignment.centerRight,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  // D-day 텍스트
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.04,
-                      vertical: screenHeight * 0.01,
+                    SizedBox(height: screenHeight * 0.02),
+
+                    // 우리의 기록일지 + 갤러리 배너 (가로 배치)
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth * 0.04,
+                      ),
+                      child: Row(
+                        children: [
+                          // 우리의 기록일지
+                          Expanded(
+                            child: SizedBox(
+                              height: screenHeight * 0.12,
+                              child: MediumCard(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFF9F8D), Color(0xFFFF6B9D)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                iconPath: 'assets/love.png',
+                                title: '우리의 기록일지',
+                                subtitle: '사랑스러운 동화\n함께 나눠요',
+                                onPressed:
+                                    () => Navigator.pushNamed(context, '/share'),
+                                iconSize: screenWidth * 0.12,
+                                iconTopOffset: -(screenWidth * 0.12) / 3,
+                                iconRightOffset: screenWidth * 0.02,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: screenWidth * 0.03),
+                          // 갤러리
+                          Expanded(
+                            child: SizedBox(
+                              height: screenHeight * 0.12,
+                              child: MediumCard(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF81C784), Color(0xFF4CAF50)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                iconPath: '', // 빈 문자열 (사용하지 않음)
+                                title: '갤러리',
+                                subtitle: '아름다운 순간들을\n모아보세요',
+                                onPressed:
+                                    () =>
+                                    Navigator.pushNamed(context, '/gallery'),
+                                iconSize: screenWidth * 0.12,
+                                iconTopOffset: -(screenWidth * 0.12) / 3,
+                                iconRightOffset: screenWidth * 0.02,
+                                useIconWidget: true, // Icon 위젯 사용
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'D-day -100',
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.035,
-                          fontStyle: FontStyle.italic,
-                          color: const Color(0xFF3B2D2C),
+
+                    SizedBox(height: screenHeight * 0.02),
+
+                    // Sleep Music 배너
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth * 0.04,
+                      ),
+                      child: SizedBox(
+                        height: screenHeight * 0.12,
+                        child: DarkCard(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF555B6E), Color(0xFF3A4160)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          iconPath: 'assets/cloud.png',
+                          title: 'Sleep Music',
+                          subtitle: '마음을 편안하게 해주는 수면 음악',
+                          onPressed:
+                              () => Navigator.pushNamed(context, '/lullaby'),
+                          iconSize: cloudIconSize,
+                          iconTopOffset: -cloudIconSize / 3,
+                          iconRightOffset: cloudIconRightOffset,
+                          showButton: true,
                         ),
                       ),
                     ),
-                  ),
 
-                  SizedBox(height: screenHeight * 0.02),
-
-                  // 카드 2개 행 (동화세상, 색칠공부)
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.04,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: cardHeight,
-                            child: SquareCard(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF8E97FD), Color(0xFF6B73FF)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              iconPath: 'assets/rabbit.png',
-                              iconSize: iconSizeLarge,
-                              iconTopOffset: -iconSizeLarge / 3,
-                              title: '동화세상',
-                              subtitle: '마음을 담은, \n나만의 동화',
-                              onPressed:
-                                  () =>
-                                      Navigator.pushNamed(context, '/stories'),
-                              buttonAlignment: Alignment.centerRight,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: screenWidth * 0.03),
-                        Expanded(
-                          child: SizedBox(
-                            height: cardHeight,
-                            child: SquareCard(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFFD3A8), Color(0xFFFFB84D)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              iconPath: 'assets/coloring_bear.png',
-                              iconSize: iconSizeSmall,
-                              iconTopOffset: -iconSizeSmall / 3,
-                              title: '색칠공부',
-                              subtitle: '색칠하며 펼쳐지는 \n상상의 세계',
-                              onPressed:
-                                  () =>
-                                      Navigator.pushNamed(context, '/coloring'),
-                              buttonAlignment: Alignment.centerRight,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: screenHeight * 0.02),
-
-                  // 우리의 기록일지 + 갤러리 배너 (가로 배치)
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.04,
-                    ),
-                    child: Row(
-                      children: [
-                        // 우리의 기록일지
-                        Expanded(
-                          child: SizedBox(
-                            height: screenHeight * 0.12,
-                            child: MediumCard(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFF9F8D), Color(0xFFFF6B9D)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              iconPath: 'assets/love.png',
-                              title: '우리의 기록일지',
-                              subtitle: '사랑스러운 동화\n함께 나눠요',
-                              onPressed:
-                                  () => Navigator.pushNamed(context, '/share'),
-                              iconSize: screenWidth * 0.12,
-                              iconTopOffset: -(screenWidth * 0.12) / 3,
-                              iconRightOffset: screenWidth * 0.02,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: screenWidth * 0.03),
-                        // 갤러리
-                        Expanded(
-                          child: SizedBox(
-                            height: screenHeight * 0.12,
-                            child: MediumCard(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF81C784), Color(0xFF4CAF50)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              iconPath: '', // 빈 문자열 (사용하지 않음)
-                              title: '갤러리',
-                              subtitle: '아름다운 순간들을\n모아보세요',
-                              onPressed:
-                                  () =>
-                                      Navigator.pushNamed(context, '/gallery'),
-                              iconSize: screenWidth * 0.12,
-                              iconTopOffset: -(screenWidth * 0.12) / 3,
-                              iconRightOffset: screenWidth * 0.02,
-                              useIconWidget: true, // Icon 위젯 사용
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: screenHeight * 0.02),
-
-                  // Sleep Music 배너
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.04,
-                    ),
-                    child: SizedBox(
-                      height: screenHeight * 0.12,
-                      child: DarkCard(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF555B6E), Color(0xFF3A4160)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        iconPath: 'assets/cloud.png',
-                        title: 'Sleep Music',
-                        subtitle: '마음을 편안하게 해주는 수면 음악',
-                        onPressed:
-                            () => Navigator.pushNamed(context, '/lullaby'),
-                        iconSize: cloudIconSize,
-                        iconTopOffset: -cloudIconSize / 3,
-                        iconRightOffset: cloudIconRightOffset,
-                        showButton: true,
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: screenHeight * 0.02),
-                ],
+                    SizedBox(height: screenHeight * 0.02),
+                  ],
+                ),
               ),
             ),
           ),
@@ -341,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 '/home',
-                (route) => false,
+                    (route) => false,
               );
             }
           }
@@ -596,20 +724,20 @@ class MediumCard extends StatelessWidget {
             top: iconTopOffset,
             right: iconRightOffset,
             child:
-                useIconWidget
-                    ? Container(
-                      width: iconSize,
-                      height: iconSize,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(iconSize / 2),
-                      ),
-                    )
-                    : Image.asset(
-                      iconPath,
-                      width: iconSize,
-                      height: iconSize,
-                      fit: BoxFit.contain,
-                    ),
+            useIconWidget
+                ? Container(
+              width: iconSize,
+              height: iconSize,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(iconSize / 2),
+              ),
+            )
+                : Image.asset(
+              iconPath,
+              width: iconSize,
+              height: iconSize,
+              fit: BoxFit.contain,
+            ),
           ),
         ],
       ),
