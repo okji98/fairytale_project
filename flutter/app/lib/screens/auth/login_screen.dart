@@ -7,16 +7,23 @@ import 'dart:io';
 import 'dart:convert';
 import '../../main.dart';
 import '../service/api_service.dart';
-import '../service/auth_service.dart'; // 🆕 추가
+import '../service/auth_service.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
-  // ✅ 카카오 로그인 (플랫폼별 처리)
+  // ✅ 플랫폼별 카카오 로그인 (macOS는 웹 로그인)
   Future<String?> _loginWithKakao() async {
     try {
-      print('🔍 카카오 로그인 시작');
+      print('🔍 카카오 로그인 시작 - 플랫폼: ${Platform.operatingSystem}');
 
+      // ⭐ macOS에서는 웹 기반 로그인 사용
+      if (Platform.isMacOS) {
+        print('🔍 macOS 감지 - 웹 기반 카카오 로그인 사용');
+        return await _loginWithKakaoWeb();
+      }
+
+      // Android/iOS는 기존 SDK 사용
       bool isInstalled = await isKakaoTalkInstalled();
       OAuthToken token;
 
@@ -38,29 +45,38 @@ class LoginScreen extends StatelessWidget {
       return token.accessToken;
     } catch (e) {
       print('❌ 카카오 로그인 오류: $e');
+
+      // ⭐ SDK 에러인 경우 macOS에서는 웹 로그인으로 fallback
+      if (Platform.isMacOS && e.toString().contains('MissingPluginException')) {
+        print('🔄 macOS에서 SDK 오류 발생, 웹 로그인으로 전환');
+        return await _loginWithKakaoWeb();
+      }
+
       return null;
     }
   }
 
-  // 🆕 macOS용 웹 기반 카카오 로그인
+  // 🆕 macOS용 웹 기반 카카오 로그인 (REST API 키 사용)
   Future<String?> _loginWithKakaoWeb() async {
     try {
       print('🔍 macOS 웹 기반 카카오 로그인 시작');
 
-      // 로컬 서버 시작
-      final server = await HttpServer.bind('localhost', 8080);
-      print('✅ 로컬 서버 시작: http://localhost:8080');
+      // ⭐ 다른 포트 사용 (8080은 백엔드 서버가 사용 중)
+      final server = await HttpServer.bind('localhost', 8081);
+      print('✅ 로컬 서버 시작: http://localhost:8081');
 
-      // 카카오 로그인 URL 생성 및 브라우저 열기
-      const clientId =
-          'c65655b8bd8ad412ee16edb91d0ad084'; // 실제 REST API 키로 변경하세요
-      const redirectUri = 'http://localhost:8080/auth/kakao/callback';
+      // ⭐ 카카오 개발자 콘솔에 등록된 설정 사용
+      const clientId = '9b0881fcab5b67f9f17c9dd43b08fb7a'; // JavaScript 키
+      const redirectUri = 'http://localhost:8081/auth/kakao/callback'; // 콘솔에 등록된 URI
 
       final loginUrl =
           'https://kauth.kakao.com/oauth/authorize?'
           'client_id=$clientId&'
           'redirect_uri=${Uri.encodeComponent(redirectUri)}&'
           'response_type=code';
+
+      print('🔍 카카오 로그인 URL: $loginUrl');
+      print('🔍 사용 중인 Client ID: $clientId');
 
       // 시스템 브라우저로 로그인 URL 열기
       if (Platform.isMacOS) {
@@ -73,22 +89,32 @@ class LoginScreen extends StatelessWidget {
       await for (HttpRequest request in server.timeout(Duration(minutes: 5))) {
         final response = request.response;
 
+        print('🔍 요청 경로: ${request.uri.path}');
+        print('🔍 요청 쿼리: ${request.uri.queryParameters}');
+
         if (request.uri.path == '/auth/kakao/callback') {
           final authCode = request.uri.queryParameters['code'];
           final error = request.uri.queryParameters['error'];
+          final errorDescription = request.uri.queryParameters['error_description'];
 
           if (error != null) {
             print('❌ 카카오 로그인 오류: $error');
+            print('❌ 오류 설명: $errorDescription');
             response.headers.contentType = ContentType.html;
             response.write('''
               <html><body>
                 <h2>로그인 실패</h2>
                 <p>오류: $error</p>
+                <p>설명: $errorDescription</p>
                 <p>이 창을 닫고 앱으로 돌아가세요.</p>
+                <button onclick="window.close()">창 닫기</button>
               </body></html>
             ''');
+            await response.close();
             break;
           } else if (authCode != null) {
+            print('✅ 인증 코드 획득: ${authCode.substring(0, 10)}...');
+
             // Access Token 획득
             accessToken = await _getKakaoAccessToken(
               authCode,
@@ -99,11 +125,30 @@ class LoginScreen extends StatelessWidget {
             response.headers.contentType = ContentType.html;
             if (accessToken != null) {
               response.write('''
-                <html><body>
-                  <h2>로그인 성공!</h2>
-                  <p>이 창을 닫고 앱으로 돌아가세요.</p>
-                  <script>setTimeout(() => window.close(), 2000);</script>
-                </body></html>
+                <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <title>로그인 성공</title>
+                  <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-align: center; padding: 50px; }
+                    .success { color: #4CAF50; }
+                    .button { background: #FEE500; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+                  </style>
+                </head>
+                <body>
+                  <h2 class="success">✅ 로그인 성공!</h2>
+                  <p>엄빠, 읽어도! 앱으로 돌아가세요</p>
+                  <button class="button" onclick="window.close()">창 닫기</button>
+                  <script>
+                    // 3초 후 자동으로 창 닫기
+                    setTimeout(() => {
+                      window.close();
+                      // 창이 닫히지 않으면 안내 메시지
+                      document.body.innerHTML = '<h2>이 창을 수동으로 닫아주세요</h2><p>앱으로 돌아가시기 바랍니다</p>';
+                    }, 3000);
+                  </script>
+                </body>
+                </html>
               ''');
               print('✅ 카카오 웹 로그인 성공');
             } else {
@@ -111,11 +156,23 @@ class LoginScreen extends StatelessWidget {
                 <html><body>
                   <h2>토큰 획득 실패</h2>
                   <p>다시 시도해주세요.</p>
+                  <button onclick="window.close()">창 닫기</button>
                 </body></html>
               ''');
             }
+            await response.close();
             break;
           }
+        } else {
+          // 다른 경로에 대한 기본 응답
+          response.headers.contentType = ContentType.html;
+          response.write('''
+            <html><body>
+              <h2>카카오 로그인 대기 중...</h2>
+              <p>로그인을 완료해주세요.</p>
+              <p>현재 경로: ${request.uri.path}</p>
+            </body></html>
+          ''');
         }
 
         await response.close();
@@ -213,107 +270,122 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
-  // ✅ 토큰 서버에 전송 및 저장 (🔧 ApiService 사용)
-  Future<Map<String, dynamic>?> _sendTokenToServer(
-      String accessToken,
-      String provider,
-      ) async {
+  // ⭐ 카카오 로그인 처리 (macOS 웹 로그인 고려)
+  Future<Map<String, dynamic>?> _handleKakaoLogin(String kakaoToken) async {
     try {
-      print('🔍 서버로 토큰 전송 시작 - Provider: $provider');
+      print('🔍 [LoginScreen] 카카오 로그인 처리 시작');
 
-      // 🔧 ApiService 사용
-      final result = await ApiService.sendOAuthLogin(
-        provider: provider,
-        accessToken: accessToken,
+      // ⭐ macOS 웹 로그인의 경우 사용자 정보를 API로 가져와야 함
+      if (Platform.isMacOS) {
+        return await _handleKakaoWebLogin(kakaoToken);
+      }
+
+      // Android/iOS는 기존 SDK 사용
+      User user = await UserApi.instance.me();
+
+      // AuthService를 통한 로그인 처리
+      final result = await AuthService.handleKakaoLogin(
+        kakaoAccessToken: kakaoToken,
+        email: user.kakaoAccount?.email ?? '',
+        nickname: user.kakaoAccount?.profile?.nickname ?? '',
       );
 
-      if (result != null && result['success'] == true) {
-        final responseData = result['data'];
-
-        if (responseData != null && responseData['accessToken'] != null) {
-          print('🔍 JWT 토큰 저장 시작');
-          final prefs = await SharedPreferences.getInstance();
-
-          final accessTokenSaved = await prefs.setString(
-            'access_token',
-            responseData['accessToken'],
-          );
-          final refreshTokenSaved = await prefs.setString(
-            'refresh_token',
-            responseData['refreshToken'] ?? '',
-          );
-          final loginStatusSaved = await prefs.setBool('is_logged_in', true);
-
-          print('✅ Access Token 저장 성공: $accessTokenSaved');
-          print('✅ Refresh Token 저장 성공: $refreshTokenSaved');
-          print('✅ 로그인 상태 저장 성공: $loginStatusSaved');
-
-          return {
-            'success': true,
-            'accessToken': responseData['accessToken'],
-            'refreshToken': responseData['refreshToken'],
-            'userId': responseData['userId'], // 🆕 userId 추가
-            'userEmail': responseData['userEmail'], // 🆕 userEmail 추가
-          };
-        } else {
-          print('❌ 서버 응답에 accessToken이 없음');
-          return null;
-        }
-      } else {
-        // 서버 연결 실패시 임시 로그인 상태 저장 (개발용)
-        if (result != null && result['type']?.contains('connection') == true) {
-          print('🎭 서버 연결 실패 - 오프라인 모드로 로그인 상태 저장');
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('is_logged_in', true);
-          await prefs.setString(
-            'access_token',
-            'offline-${provider}-${DateTime.now().millisecondsSinceEpoch}',
-          );
-
-          return {
-            'success': true,
-            'accessToken': 'offline-${provider}-token',
-            'refreshToken': 'offline-refresh-token',
-            'userId': 1, // 임시 userId
-            'userEmail': 'test@example.com', // 임시 email
-          };
-        }
-        return null;
-      }
+      return result;
     } catch (e) {
-      print('❌ 서버 전송 오류: $e');
-      return null;
+      print('❌ [LoginScreen] 카카오 로그인 처리 오류: $e');
+      return {'success': false, 'error': e.toString()};
     }
   }
 
-  // 🆕 로그인 성공 후 아이 정보 확인하여 적절한 화면으로 이동
-  Future<void> _navigateAfterLogin(BuildContext context, Map<String, dynamic> loginData) async {
+  // ⭐ macOS 웹 로그인용 처리 함수
+  Future<Map<String, dynamic>?> _handleKakaoWebLogin(String kakaoToken) async {
     try {
-      print('🔍 로그인 성공 후 처리 시작');
+      print('🔍 [LoginScreen] macOS 웹 카카오 로그인 처리');
 
-      // 1. AuthService에 사용자 정보 저장
-      await AuthService.saveTokens(
-        accessToken: loginData['accessToken'],
-        refreshToken: loginData['refreshToken'] ?? '',
-        userId: loginData['userId'] ?? 1,
-        userEmail: loginData['userEmail'] ?? 'test@example.com',
+      // 카카오 API로 사용자 정보 가져오기
+      final dio = Dio();
+      final userResponse = await dio.get(
+        'https://kapi.kakao.com/v2/user/me',
+        options: Options(
+          headers: {'Authorization': 'Bearer $kakaoToken'},
+        ),
       );
 
-      // 2. 아이 정보 확인
-      final childInfo = await AuthService.checkChildInfo();
-      print('🔍 아이 정보 확인 결과: $childInfo');
+      if (userResponse.statusCode == 200) {
+        final userData = userResponse.data;
+        final email = userData['kakao_account']?['email'] ?? '';
+        final nickname = userData['kakao_account']?['profile']?['nickname'] ?? '';
 
-      if (childInfo != null && childInfo['hasChild'] == true) {
-        // 아이 정보가 있으면 홈으로
-        print('✅ 아이 정보 있음 - 홈화면으로 이동');
-        Navigator.pushReplacementNamed(context, '/home');
+        print('✅ 카카오 사용자 정보: email=$email, nickname=$nickname');
+
+        // AuthService를 통한 로그인 처리
+        final result = await AuthService.handleKakaoLogin(
+          kakaoAccessToken: kakaoToken,
+          email: email,
+          nickname: nickname,
+        );
+
+        return result;
       } else {
-        // 아이 정보가 없으면 아이 정보 입력 화면으로
-        print('✅ 아이 정보 없음 - 아이 정보 입력 화면으로 이동');
-        Navigator.pushReplacementNamed(context, '/child-info');
+        print('❌ 카카오 사용자 정보 조회 실패: ${userResponse.statusCode}');
+        return {'success': false, 'error': '사용자 정보 조회 실패'};
       }
     } catch (e) {
-      print('❌ 로그인 후 처리 오류: $e');
+      print('❌ [LoginScreen] macOS 웹 카카오 로그인 처리 오류: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // ⭐ 구글 로그인 처리 (기존 방식 유지하되 AuthService와 연동)
+  Future<Map<String, dynamic>?> _handleGoogleLogin(String googleToken) async {
+    try {
+      print('🔍 [LoginScreen] 구글 로그인 처리 시작');
+
+      // 기존 방식으로 서버에 토큰 전송
+      final result = await ApiService.sendOAuthLogin(
+        provider: 'google',
+        accessToken: googleToken,
+      );
+
+      if (result != null && result['success'] == true) {
+        final data = result['data'];
+
+        // AuthService에 토큰 저장
+        await AuthService.saveTokens(
+          accessToken: data['accessToken'],
+          refreshToken: data['refreshToken'],
+          userId: data['userId'],
+          userEmail: data['userEmail'] ?? 'google@example.com',
+        );
+
+        return {'success': true, 'data': data};
+      }
+
+      return result;
+    } catch (e) {
+      print('❌ [LoginScreen] 구글 로그인 처리 오류: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // ⭐ 로그인 성공 후 네비게이션 (AuthService.getNextRoute 사용)
+  Future<void> _navigateAfterLogin(BuildContext context) async {
+    try {
+      print('🔍 [LoginScreen] 로그인 성공 후 네비게이션 시작');
+
+      // AuthService를 통해 다음 라우트 결정
+      final nextRoute = await AuthService.getNextRoute();
+
+      print('✅ [LoginScreen] 다음 화면으로 이동: $nextRoute');
+
+      // 모든 이전 화면 제거하고 이동
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        nextRoute,
+            (route) => false,
+      );
+    } catch (e) {
+      print('❌ [LoginScreen] 네비게이션 오류: $e');
       // 오류 시 아이 정보 입력 화면으로 (안전장치)
       Navigator.pushReplacementNamed(context, '/child-info');
     }
@@ -342,7 +414,6 @@ class LoginScreen extends StatelessWidget {
     return BaseScaffold(
       child: SafeArea(
         child: SingleChildScrollView(
-          // 🔧 스크롤 추가
           child: Column(
             children: [
               // 상단 바
@@ -376,7 +447,7 @@ class LoginScreen extends StatelessWidget {
                 ),
               ),
 
-              // 🔧 중앙 로그인 버튼들 - Expanded를 Container로 변경
+              // 중앙 로그인 버튼들
               Container(
                 height: MediaQuery.of(context).size.height - 120,
                 child: Column(
@@ -398,26 +469,46 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
 
-                    // 카카오 로그인 버튼
+                    // ⭐ 카카오 로그인 버튼 (수정됨)
                     GestureDetector(
                       onTap: () async {
                         print('🔍 카카오 로그인 버튼 클릭');
-                        final kakaoToken = await _loginWithKakao();
-                        if (kakaoToken != null) {
-                          final loginData = await _sendTokenToServer(
-                            kakaoToken,
-                            'kakao',
-                          );
-                          if (loginData != null &&
-                              loginData['success'] == true) {
-                            print('✅ 로그인 성공! 아이 정보 확인 중...');
-                            await _navigateAfterLogin(context, loginData);
+
+                        // 로딩 다이얼로그 표시
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.brown),
+                            ),
+                          ),
+                        );
+
+                        try {
+                          final kakaoToken = await _loginWithKakao();
+
+                          if (kakaoToken != null) {
+                            final result = await _handleKakaoLogin(kakaoToken);
+
+                            // 로딩 다이얼로그 닫기
+                            Navigator.pop(context);
+
+                            if (result != null && result['success'] == true) {
+                              print('✅ 카카오 로그인 성공!');
+                              await _navigateAfterLogin(context);
+                            } else {
+                              print('❌ 카카오 로그인 실패: ${result?['error']}');
+                              _showErrorDialog(context, '카카오 로그인에 실패했습니다.');
+                            }
                           } else {
-                            print('❌ 로그인 실패');
-                            _showErrorDialog(context, '카카오 로그인에 실패했습니다.');
+                            Navigator.pop(context); // 로딩 다이얼로그 닫기
+                            print('❌ 카카오 토큰 획득 실패');
                           }
-                        } else {
-                          print('❌ 카카오 토큰 획득 실패');
+                        } catch (e) {
+                          Navigator.pop(context); // 로딩 다이얼로그 닫기
+                          print('❌ 카카오 로그인 오류: $e');
+                          _showErrorDialog(context, '카카오 로그인 중 오류가 발생했습니다.');
                         }
                       },
                       child: SizedBox(
@@ -431,26 +522,46 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
 
-                    // 구글 로그인 버튼
+                    // ⭐ 구글 로그인 버튼 (수정됨)
                     GestureDetector(
                       onTap: () async {
                         print('🔍 구글 로그인 버튼 클릭');
-                        final googleToken = await _loginWithGoogle();
-                        if (googleToken != null) {
-                          final loginData = await _sendTokenToServer(
-                            googleToken,
-                            'google',
-                          );
-                          if (loginData != null &&
-                              loginData['success'] == true) {
-                            print('✅ 로그인 성공! 아이 정보 확인 중...');
-                            await _navigateAfterLogin(context, loginData);
+
+                        // 로딩 다이얼로그 표시
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.brown),
+                            ),
+                          ),
+                        );
+
+                        try {
+                          final googleToken = await _loginWithGoogle();
+
+                          if (googleToken != null) {
+                            final result = await _handleGoogleLogin(googleToken);
+
+                            // 로딩 다이얼로그 닫기
+                            Navigator.pop(context);
+
+                            if (result != null && result['success'] == true) {
+                              print('✅ 구글 로그인 성공!');
+                              await _navigateAfterLogin(context);
+                            } else {
+                              print('❌ 구글 로그인 실패: ${result?['error']}');
+                              _showErrorDialog(context, '구글 로그인에 실패했습니다.');
+                            }
                           } else {
-                            print('❌ 로그인 실패');
-                            _showErrorDialog(context, '구글 로그인에 실패했습니다.');
+                            Navigator.pop(context); // 로딩 다이얼로그 닫기
+                            print('❌ 구글 토큰 획득 실패');
                           }
-                        } else {
-                          print('❌ 구글 토큰 획득 실패');
+                        } catch (e) {
+                          Navigator.pop(context); // 로딩 다이얼로그 닫기
+                          print('❌ 구글 로그인 오류: $e');
+                          _showErrorDialog(context, '구글 로그인 중 오류가 발생했습니다.');
                         }
                       },
                       child: SizedBox(
@@ -476,18 +587,21 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // 개발용 테스트 버튼
+                    // ⭐ 개발용 테스트 버튼 (수정됨)
                     ElevatedButton(
                       onPressed: () async {
-                        // 🆕 테스트용 로그인도 아이 정보 확인 로직 적용
-                        final testLoginData = {
-                          'success': true,
-                          'accessToken': 'fake-token-for-testing',
-                          'refreshToken': 'fake-refresh-token',
-                          'userId': 1,
-                          'userEmail': 'test@example.com',
-                        };
-                        await _navigateAfterLogin(context, testLoginData);
+                        print('🔍 테스트 로그인 버튼 클릭');
+
+                        // 테스트용 토큰 저장
+                        await AuthService.saveTokens(
+                          accessToken: 'fake-token-for-testing',
+                          refreshToken: 'fake-refresh-token',
+                          userId: 1,
+                          userEmail: 'test@example.com',
+                        );
+
+                        // AuthService를 통해 다음 화면 결정
+                        await _navigateAfterLogin(context);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.brown,
@@ -501,7 +615,7 @@ class LoginScreen extends StatelessWidget {
                         ),
                       ),
                       child: const Text(
-                        '홈화면 test 이동 (개발용)',
+                        '테스트 로그인 (개발용)',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
