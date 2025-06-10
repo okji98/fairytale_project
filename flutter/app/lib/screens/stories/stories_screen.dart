@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../../main.dart';
 import '../service/api_service.dart';
+import '../service/auth_service.dart';
 
 class StoriesScreen extends StatefulWidget {
   @override
@@ -110,11 +111,22 @@ class _StoriesScreenState extends State<StoriesScreen> {
   }
 
   // 사용자 프로필 로드
+// 사용자 프로필 로드
   Future<void> _loadUserProfile() async {
     setState(() => _isLoading = true);
     try {
-      _nameController.text = '동글이';
+      // AuthService를 통해 아이 정보 가져오기
+      final childInfo = await AuthService.checkChildInfo();
+
+      if (childInfo != null && childInfo['hasChild'] == true) {
+        final childData = childInfo['childData'];
+        _nameController.text = childData['name'] ?? '우리 아이';
+      } else {
+        _nameController.text = '우리 아이'; // 기본값
+      }
     } catch (e) {
+      print('아이 정보 로드 오류: $e');
+      _nameController.text = '우리 아이'; // 오류 시 기본값
       _showError('사용자 정보를 불러오는데 실패했습니다.');
     } finally {
       setState(() => _isLoading = false);

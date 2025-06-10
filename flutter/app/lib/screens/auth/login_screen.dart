@@ -411,65 +411,63 @@ class LoginScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return BaseScaffold(
       child: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(screenWidth * 0.06),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 상단 바
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 12.0,
-                ),
-                child: Stack(
-                  children: [
-                    // 뒤로가기 버튼
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.brown),
-                        onPressed: () => Navigator.pop(context),
+              // 상단 헤더 (다른 화면들과 일관된 스타일)
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Color(0xFF8B5A6B)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '로그인',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.05,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF8B5A6B),
                       ),
                     ),
-                    // 중앙 제목
-                    const Center(
-                      child: Text(
-                        '로그인',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.brown,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 48), // 균형 맞추기
+                ],
               ),
 
-              // 중앙 로그인 버튼들
-              Container(
-                height: MediaQuery.of(context).size.height - 120,
+              // 중앙 콘텐츠 영역
+              Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // 메인 이미지
                     Image.asset(
                       'assets/book_bear.png',
-                      width: MediaQuery.of(context).size.width * 0.6,
+                      width: screenWidth * 0.6,
                       fit: BoxFit.contain,
                     ),
-                    const SizedBox(height: 24),
-                    const Text(
+                    SizedBox(height: screenHeight * 0.03),
+
+                    // 환영 메시지
+                    Text(
                       'Welcome Back!',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: screenWidth * 0.06,
                         fontWeight: FontWeight.bold,
-                        color: Colors.brown,
+                        color: Color(0xFF8B5A6B),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: screenHeight * 0.04),
 
-                    // ⭐ 카카오 로그인 버튼 (수정됨)
+                    // 카카오 로그인 버튼
                     GestureDetector(
                       onTap: () async {
                         print('🔍 카카오 로그인 버튼 클릭');
@@ -480,7 +478,7 @@ class LoginScreen extends StatelessWidget {
                           barrierDismissible: false,
                           builder: (context) => Center(
                             child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.brown),
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5A6B)),
                             ),
                           ),
                         );
@@ -511,18 +509,21 @@ class LoginScreen extends StatelessWidget {
                           _showErrorDialog(context, '카카오 로그인 중 오류가 발생했습니다.');
                         }
                       },
-                      child: SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.8,
+                      child: Container(
+                        width: screenWidth * 0.8,
                         height: 48,
-                        child: Image.asset(
-                          'assets/kakao_login.png',
-                          fit: BoxFit.cover,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          image: DecorationImage(
+                            image: AssetImage('assets/kakao_login.png'),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: screenHeight * 0.015),
 
-                    // ⭐ 구글 로그인 버튼 (수정됨)
+                    // 구글 로그인 버튼
                     GestureDetector(
                       onTap: () async {
                         print('🔍 구글 로그인 버튼 클릭');
@@ -533,7 +534,7 @@ class LoginScreen extends StatelessWidget {
                           barrierDismissible: false,
                           builder: (context) => Center(
                             child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.brown),
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5A6B)),
                             ),
                           ),
                         );
@@ -564,19 +565,22 @@ class LoginScreen extends StatelessWidget {
                           _showErrorDialog(context, '구글 로그인 중 오류가 발생했습니다.');
                         }
                       },
-                      child: SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.83,
+                      child: Container(
+                        width: screenWidth * 0.83,
                         height: 48,
-                        child: Image.asset(
-                          'assets/google_login.png',
-                          fit: BoxFit.cover,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          image: DecorationImage(
+                            image: AssetImage('assets/google_login.png'),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    SizedBox(height: screenHeight * 0.04),
 
-                    // 플랫폼 정보 표시
+                    // 플랫폼 정보
                     Text(
                       Platform.isAndroid
                           ? '🤖 Android - 서버: ${ApiService.baseUrl}'
@@ -584,44 +588,9 @@ class LoginScreen extends StatelessWidget {
                           ? '📱 iOS - 서버: ${ApiService.baseUrl}'
                           : '💻 macOS - 서버: ${ApiService.baseUrl}',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 16),
 
-                    // ⭐ 개발용 테스트 버튼 (수정됨)
-                    ElevatedButton(
-                      onPressed: () async {
-                        print('🔍 테스트 로그인 버튼 클릭');
-
-                        // 테스트용 토큰 저장
-                        await AuthService.saveTokens(
-                          accessToken: 'fake-token-for-testing',
-                          refreshToken: 'fake-refresh-token',
-                          userId: 1,
-                          userEmail: 'test@example.com',
-                        );
-
-                        // AuthService를 통해 다음 화면 결정
-                        await _navigateAfterLogin(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.brown,
-                        foregroundColor: Colors.white,
-                        minimumSize: Size(
-                          MediaQuery.of(context).size.width * 0.8,
-                          48,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                      ),
-                      child: const Text(
-                        '테스트 로그인 (개발용)',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
