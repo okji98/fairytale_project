@@ -1,4 +1,5 @@
 // lib/screens/profile/profile_screen.dart
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
@@ -173,20 +174,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 // ⭐ 이미지 선택 및 업로드 (갤러리)
   Future<void> _pickImageFromGallery() async {
-    try {
+    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+      // 데스크톱 파일 선택 창 열기
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        await _uploadProfileImage(file);
+      }
+    } else {
+      // 모바일(기존 image_picker 사용)
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 800,
         maxHeight: 800,
         imageQuality: 85,
       );
-
       if (image != null) {
         await _uploadProfileImage(File(image.path));
       }
-    } catch (e) {
-      print('❌ [ProfileScreen] 갤러리 이미지 선택 오류: $e');
-      _showErrorSnackBar('갤러리에서 이미지를 가져오는데 실패했습니다.');
     }
   }
 // ⭐ 프로필 이미지 업로드 프로세스 (인증 오류 처리 포함)
