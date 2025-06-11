@@ -8,7 +8,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/lullaby")
@@ -75,7 +76,92 @@ public class LullabyController {
 
     // ==================== 영상 검색 API ====================
 
-    @GetMapping("/videos")
+    // Flutter에서 요청하는 POST 검색 엔드포인트 추가
+    @PostMapping("/search")
+    public ResponseEntity<Map<String, Object>> searchVideos(@RequestBody VideoSearchRequest request) {
+        try {
+            log.info("🔍 [LullabyController] Flutter 영상 검색 요청: {}", request.getThemeName());
+
+            // 검색 키워드 처리 - 첫 번째 키워드나 테마명 사용
+            String searchQuery = request.getThemeName();
+            if (request.getSearchKeywords() != null && !request.getSearchKeywords().isEmpty()) {
+                searchQuery = request.getSearchKeywords().get(0);
+            }
+
+            // 필터에서 maxResults 추출
+            int limit = 20; // 기본값
+            if (request.getFilters() != null && request.getFilters().containsKey("maxResults")) {
+                limit = ((Number) request.getFilters().get("maxResults")).intValue();
+            }
+
+            // 영상 검색
+            List<LullabyVideoTheme> videos = lullabyService.searchVideosByTheme(searchQuery, limit);
+
+            // Flutter가 기대하는 형식으로 변환
+            List<Map<String, Object>> formattedVideos = videos.stream()
+                    .map(this::formatVideoForFlutter)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("videos", formattedVideos);
+
+            log.info("✅ [LullabyController] 영상 검색 완료: {}개", formattedVideos.size());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ [LullabyController] 영상 검색 실패: {}", e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "영상 검색 중 오류가 발생했습니다.");
+            errorResponse.put("videos", new ArrayList<>());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    // Flutter 형식으로 비디오 데이터 변환
+    private Map<String, Object> formatVideoForFlutter(LullabyVideoTheme video) {
+        Map<String, Object> formatted = new HashMap<>();
+
+        // YouTube ID
+        formatted.put("id", video.getYoutubeId());
+
+        // Snippet 정보
+        Map<String, Object> snippet = new HashMap<>();
+        snippet.put("title", video.getTitle());
+        snippet.put("description", video.getDescription());
+        snippet.put("channelTitle", ""); // FastAPI에서 제공하지 않음
+        snippet.put("publishedAt", ""); // FastAPI에서 제공하지 않음
+
+        Map<String, Object> thumbnails = new HashMap<>();
+        Map<String, Object> highThumbnail = new HashMap<>();
+        highThumbnail.put("url", video.getThumbnail());
+        thumbnails.put("high", highThumbnail);
+        thumbnails.put("medium", highThumbnail);
+        thumbnails.put("default", highThumbnail);
+        snippet.put("thumbnails", thumbnails);
+
+        formatted.put("snippet", snippet);
+
+        // ContentDetails (duration은 임시값)
+        Map<String, Object> contentDetails = new HashMap<>();
+        contentDetails.put("duration", "PT30M0S"); // 30분으로 기본 설정
+        formatted.put("contentDetails", contentDetails);
+
+        // Statistics (임시값)
+        Map<String, Object> statistics = new HashMap<>();
+        statistics.put("viewCount", "0");
+        formatted.put("statistics", statistics);
+
+        // 추가 메타데이터
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("color", video.getColor());
+        metadata.put("icon", video.getIcon());
+        metadata.put("theme", video.getTheme());
+        formatted.put("metadata", metadata);
+
+        return formatted;
+    }
+
+    @GetMapping("/video")
     public ResponseEntity<ApiResponse<List<LullabyVideoTheme>>> getDefaultVideos() {
         try {
             log.info("🔍 [LullabyController] 기본 자장가 영상 목록 조회 요청");

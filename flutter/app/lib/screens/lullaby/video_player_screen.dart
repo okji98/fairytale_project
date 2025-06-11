@@ -425,16 +425,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildControlButton(
-                      icon: Icons.brightness_6,
-                      label: '화면 밝기',
-                      onTap: () => _adjustBrightness(),
-                    ),
-                    _buildControlButton(
-                      icon: Icons.volume_up,
-                      label: '볼륨 조절',
-                      onTap: () => _showVolumeControl(),
-                    ),
-                    _buildControlButton(
                       icon: Icons.timer,
                       label: '타이머',
                       onTap: () => _showTimerDialog(),
@@ -539,62 +529,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
     String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
     return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
-  }
-
-  // 화면 밝기 조절
-  void _adjustBrightness() {
-    // 실제 구현시 screen_brightness 패키지 사용
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('화면 밝기 조절 기능')));
-  }
-
-  // 볼륨 컨트롤 표시
-  void _showVolumeControl() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.black87,
-      builder: (context) {
-        double volume = _controller.value.volume * 100;
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Container(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    '볼륨 조절',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Slider(
-                    value: volume,
-                    min: 0,
-                    max: 100,
-                    activeColor: widget.theme.color,
-                    onChanged: (value) {
-                      setState(() {
-                        volume = value;
-                        _controller.setVolume((value / 100) as int);
-                      });
-                    },
-                  ),
-                  Text(
-                    '${volume.round()}%',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   // 타이머 다이얼로그

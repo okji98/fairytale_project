@@ -416,16 +416,6 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              _themes.isNotEmpty
-                                  ? '${_themes.length}개의 음악이 준비되어 있습니다 (via SpringBoot → Python)'
-                                  : '음악을 불러오는 중...',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
 
                             // 테마 검색 버튼 추가
                             SingleChildScrollView(

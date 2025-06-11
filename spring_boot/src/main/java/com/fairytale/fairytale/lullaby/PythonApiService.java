@@ -70,6 +70,8 @@ public class PythonApiService {
             log.info("🔍 [PythonApiService] 영상 검색 응답 상태: {}", response.getStatusCode());
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                // 응답 내용 로깅 추가
+                log.debug("📝 [PythonApiService] 영상 검색 원본 응답: {}", response.getBody());
                 return parseVideoResponse(response.getBody());
             }
 
@@ -118,33 +120,58 @@ public class PythonApiService {
 
     private List<YouTubeVideo> parseVideoResponse(String responseBody) {
         try {
+            // 응답 내용 로깅
+            log.info("📝 [PythonApiService] 영상 응답 파싱 시작");
+            log.debug("📝 [PythonApiService] 파싱할 응답 내용: {}", responseBody);
+
             ObjectMapper objectMapper = new ObjectMapper();
             Map<String, Object> responseMap = objectMapper.readValue(
                     responseBody, new TypeReference<Map<String, Object>>() {});
 
+            // 응답 구조 로깅
+            log.info("📝 [PythonApiService] 응답 맵 키들: {}", responseMap.keySet());
+
             Object videoResultsObj = responseMap.get("video_results");
+
+            if (videoResultsObj == null) {
+                log.warn("⚠️ [PythonApiService] video_results 키가 없습니다!");
+                return Collections.emptyList();
+            }
 
             if (videoResultsObj instanceof List) {
                 @SuppressWarnings("unchecked")
                 List<Object> videoResultsList = (List<Object>) videoResultsObj;
 
+                log.info("📝 [PythonApiService] video_results 리스트 크기: {}", videoResultsList.size());
+
                 List<YouTubeVideo> videos = new ArrayList<>();
                 for (int i = 0; i < videoResultsList.size(); i++) {
                     try {
+                        // 각 비디오 객체 로깅
+                        log.debug("📝 [PythonApiService] 비디오 {} 원본 데이터: {}", i, videoResultsList.get(i));
+
                         YouTubeVideo video = objectMapper.convertValue(videoResultsList.get(i), YouTubeVideo.class);
                         videos.add(video);
-                        log.info("✅ [PythonApiService] 영상 변환 성공 {}: {}", i, video.getTitle());
+                        log.info("✅ [PythonApiService] 영상 변환 성공 {}: {} (URL: {})",
+                                i, video.getTitle(), video.getUrl());
                     } catch (Exception e) {
                         log.error("❌ [PythonApiService] 영상 {} 변환 실패: {}", i, e.getMessage());
+                        log.error("상세 오류: ", e);
                     }
                 }
+
+                log.info("📝 [PythonApiService] 총 변환된 영상 수: {}", videos.size());
                 return videos;
+            } else {
+                log.warn("⚠️ [PythonApiService] video_results가 List 타입이 아닙니다. 실제 타입: {}",
+                        videoResultsObj.getClass().getName());
             }
 
             return Collections.emptyList();
 
         } catch (Exception e) {
             log.error("❌ [PythonApiService] 영상 응답 파싱 실패: {}", e.getMessage());
+            log.error("상세 오류: ", e);
             return Collections.emptyList();
         }
     }
