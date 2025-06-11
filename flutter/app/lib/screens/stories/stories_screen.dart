@@ -111,7 +111,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
   }
 
   // 사용자 프로필 로드
-// 사용자 프로필 로드
+  // 사용자 프로필 로드
   Future<void> _loadUserProfile() async {
     setState(() => _isLoading = true);
     try {
@@ -120,7 +120,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
       if (childInfo != null && childInfo['hasChild'] == true) {
         final childData = childInfo['childData'];
-        _nameController.text = childData['name'] ?? '우리 아이';
+        _nameController.text = childData['babyName'] ?? '우리 아이';
       } else {
         _nameController.text = '우리 아이'; // 기본값
       }

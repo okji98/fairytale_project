@@ -149,7 +149,7 @@ public class StoryService {
         if (baby != null) {
             fastApiRequest.setName(baby.getBabyName());  // Baby의 이름 사용
         } else {
-            fastApiRequest.setName("친구");  // 기본값
+            fastApiRequest.setName("기본값");  // 기본값
         }
         fastApiRequest.setTheme(request.getTheme() + " 동화");
 
@@ -171,6 +171,10 @@ public class StoryService {
         story.setUser(user);
         story.setVoiceContent("");  // 🎯 초기값: 빈 문자열
         story.setImage("");  // 🎯 단일 image 컬럼 사용
+
+        if (baby != null) {
+            story.setBaby(baby);
+        }
 
         System.out.println("🔍 스토리 저장 전 - Title: " + story.getTitle());
         Story saved = storyRepository.save(story);
