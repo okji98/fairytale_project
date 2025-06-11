@@ -2,8 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:math' as math;
-
-
+import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   // 🚀 플랫폼에 따라 자동으로 서버 주소 선택
@@ -91,9 +90,9 @@ class ApiService {
           final List<dynamic> templatesJson = responseData['templates'] ?? [];
 
           final templates =
-              templatesJson
-                  .map((json) => Map<String, dynamic>.from(json))
-                  .toList();
+          templatesJson
+              .map((json) => Map<String, dynamic>.from(json))
+              .toList();
 
           print('✅ 색칠공부 템플릿 ${templates.length}개 조회 성공');
           return templates;
@@ -103,9 +102,9 @@ class ApiService {
           // 🎯 만약 응답이 배열이라면 직접 반환
           if (responseData is List) {
             final templates =
-                responseData
-                    .map((json) => Map<String, dynamic>.from(json))
-                    .toList();
+            responseData
+                .map((json) => Map<String, dynamic>.from(json))
+                .toList();
             print('✅ 직접 배열로 받은 템플릿 ${templates.length}개');
             return templates;
           }
@@ -285,9 +284,9 @@ class ApiService {
           final List<dynamic> templatesJson = responseData['templates'] ?? [];
 
           final templates =
-              templatesJson
-                  .map((json) => Map<String, dynamic>.from(json))
-                  .toList();
+          templatesJson
+              .map((json) => Map<String, dynamic>.from(json))
+              .toList();
 
           print('✅ [ApiService] 색칠공부 템플릿 검색 결과 ${templates.length}개');
           return templates;
@@ -307,8 +306,8 @@ class ApiService {
 
   // 🎯 특정 템플릿 상세 조회 - 새로 추가
   static Future<Map<String, dynamic>?> getColoringTemplateDetail(
-    int templateId,
-  ) async {
+      int templateId,
+      ) async {
     try {
       print('🎨 [ApiService] 색칠공부 템플릿 상세 조회 - ID: $templateId');
 
@@ -334,8 +333,8 @@ class ApiService {
 
   // 🎯 동화 ID로 색칠공부 템플릿 조회 - 새로 추가
   static Future<Map<String, dynamic>?> getColoringTemplateByStoryId(
-    String storyId,
-  ) async {
+      String storyId,
+      ) async {
     try {
       print('🎨 [ApiService] 동화별 색칠공부 템플릿 조회 - StoryId: $storyId');
 
@@ -410,6 +409,63 @@ class ApiService {
     }
   }
 
+  // 사용자 프로필 조회
+  static Future<Map<String, dynamic>?> getUserProfile({required int userId}) async {
+    try {
+      print('🔍 [ApiService] 사용자 프로필 조회: userId=$userId');
+
+      // JWT 토큰 가져오기
+      String? accessToken = await getStoredAccessToken();
+
+      if (accessToken == null) {
+        print('❌ [ApiService] JWT 토큰이 없습니다.');
+        return {'success': false, 'error': '로그인이 필요합니다', 'needLogin': true};
+      }
+
+      final response = await _dio.get(
+        '/api/user/profile/$userId',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+          },
+        ),
+      );
+
+      print('✅ [ApiService] 사용자 프로필 조회 응답: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+        if (responseData['success'] == true) {
+          print('✅ [ApiService] 사용자 프로필 조회 성공');
+          return responseData;
+        } else {
+          print('❌ [ApiService] 사용자 프로필 조회 실패: ${responseData['error']}');
+          return responseData;
+        }
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 사용자 프로필 조회 오류: ${e.message}');
+      if (e.response != null) {
+        print('❌ [ApiService] 서버 응답 코드: ${e.response?.statusCode}');
+
+        // 401/403 에러 처리
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          await removeAccessToken();
+          return {
+            'success': false,
+            'error': '인증이 만료되었습니다. 다시 로그인해주세요.',
+            'needLogin': true,
+          };
+        }
+      }
+
+      return {'success': false, 'error': e.message};
+    } catch (e) {
+      print('❌ [ApiService] 사용자 프로필 조회 실패: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+    return null;
+  }
   // 🔐 JWT 토큰 관련 메서드들 추가
 
   // JWT 토큰 저장
@@ -604,5 +660,342 @@ class ApiService {
       print('❌ [JWT Debug] 디버깅 실패: $e');
     }
   }
+
+  // 📷 S3 프로필 이미지 업로드 관련 메서드들
+
+  // Presigned URL 생성 요청 (JWT 토큰 포함)
+  static Future<Map<String, dynamic>?> getPresignedUrl({
+    required int userId,
+    required String fileType,
+  }) async {
+    try {
+      print('🔍 [ApiService] Presigned URL 요청 - userId: $userId, fileType: $fileType');
+
+      // JWT 토큰 가져오기
+      String? accessToken = await getStoredAccessToken();
+
+      if (accessToken == null) {
+        print('❌ [ApiService] JWT 토큰이 없습니다. 로그인이 필요합니다.');
+        return {'success': false, 'error': '로그인이 필요합니다', 'needLogin': true};
+      }
+
+      print('🔐 [ApiService] JWT 토큰으로 인증된 요청 전송');
+
+      final response = await _dio.post(
+        '/api/upload/profile-image/presigned-url',
+        data: {
+          'userId': userId,
+          'fileType': fileType,
+        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+        ),
+      );
+
+      print('✅ [ApiService] Presigned URL 응답: ${response.statusCode}');
+      print('✅ [ApiService] 응답 데이터: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+        if (responseData['success'] == true) {
+          return responseData;
+        } else {
+          print('❌ [ApiService] Presigned URL 생성 실패: ${responseData['error']}');
+          return {'success': false, 'error': responseData['error']};
+        }
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] Presigned URL 요청 오류: ${e.message}');
+      if (e.response != null) {
+        print('❌ [ApiService] 서버 응답 코드: ${e.response?.statusCode}');
+        print('❌ [ApiService] 서버 응답 데이터: ${e.response?.data}');
+
+        // 401/403 에러 처리
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          print('🔐 [ApiService] 인증 오류: 토큰이 만료되었거나 권한이 없습니다.');
+          await removeAccessToken(); // 만료된 토큰 삭제
+          return {
+            'success': false,
+            'error': '인증이 만료되었습니다. 다시 로그인해주세요.',
+            'needLogin': true,
+          };
+        }
+      }
+      return {'success': false, 'error': e.message};
+    } catch (e) {
+      print('❌ [ApiService] Presigned URL 요청 실패: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+    return null;
+  }
+
+
+  // S3에 직접 파일 업로드 (Presigned URL 사용)
+  static Future<bool> uploadFileToS3({
+    required String presignedUrl,
+    required Map<String, String> fields,
+    required File file,
+    required String contentType,
+  }) async {
+    try {
+      print('🔍 [ApiService] S3 파일 업로드 시작');
+      print('🔍 [ApiService] Presigned URL: $presignedUrl');
+      print('🔍 [ApiService] 파일 크기: ${await file.length()} bytes');
+
+      // FormData 생성
+      final formData = FormData();
+
+      // Presigned POST의 필수 필드들 추가
+      fields.forEach((key, value) {
+        formData.fields.add(MapEntry(key, value));
+      });
+
+      // 파일 추가 (반드시 마지막에 추가)
+      formData.files.add(
+        MapEntry(
+          'file',
+          await MultipartFile.fromFile(
+            file.path,
+            contentType: MediaType.parse(contentType),
+          ),
+        ),
+      );
+
+      // S3에 직접 업로드
+      final response = await _dio.post(
+        presignedUrl,
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          followRedirects: false,
+          validateStatus: (status) => status! < 400,
+        ),
+      );
+
+      print('✅ [ApiService] S3 업로드 성공: ${response.statusCode}');
+      return true;
+
+    } on DioException catch (e) {
+      print('❌ [ApiService] S3 업로드 실패: ${e.message}');
+      if (e.response != null) {
+        print('❌ [ApiService] S3 응답 코드: ${e.response?.statusCode}');
+        print('❌ [ApiService] S3 응답 데이터: ${e.response?.data}');
+      }
+      return false;
+    } catch (e) {
+      print('❌ [ApiService] S3 업로드 오류: $e');
+      return false;
+    }
+  }
+
+  // 프로필 이미지 URL 업데이트 (JWT 토큰 포함)
+  static Future<Map<String, dynamic>?> updateProfileImageUrl({
+    required int userId,
+    required String profileImageKey,
+  }) async {
+    try {
+      print('🔍 [ApiService] 프로필 이미지 URL 업데이트 - userId: $userId');
+
+      // JWT 토큰 가져오기
+      String? accessToken = await getStoredAccessToken();
+
+      if (accessToken == null) {
+        print('❌ [ApiService] JWT 토큰이 없습니다. 로그인이 필요합니다.');
+        return {'success': false, 'error': '로그인이 필요합니다', 'needLogin': true};
+      }
+
+      final response = await _dio.put(
+        '/api/user/profile-image',
+        data: {
+          'userId': userId,
+          'profileImageKey': profileImageKey,
+        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+        ),
+      );
+
+      print('✅ [ApiService] 프로필 이미지 URL 업데이트 응답: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+        if (responseData['success'] == true) {
+          print('✅ [ApiService] 프로필 이미지 URL 업데이트 성공');
+          return responseData;
+        }
+      }
+    } on DioException catch (e) {
+      print('❌ [ApiService] 프로필 이미지 URL 업데이트 오류: ${e.message}');
+
+      if (e.response != null) {
+        print('❌ [ApiService] 서버 응답 코드: ${e.response?.statusCode}');
+
+        // 401/403 에러 처리
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          await removeAccessToken();
+          return {
+            'success': false,
+            'error': '인증이 만료되었습니다. 다시 로그인해주세요.',
+            'needLogin': true,
+          };
+        }
+      }
+
+      return {'success': false, 'error': e.message};
+    } catch (e) {
+      print('❌ [ApiService] 프로필 이미지 URL 업데이트 실패: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+    return null;
+  }
+
+// ApiService.dart의 uploadProfileImage 메서드를 이것으로 교체하세요
+
+// ApiService.dart의 uploadProfileImage 메서드를 이것으로 교체하세요
+
+// 전체 프로필 이미지 업로드 프로세스 (편의 메서드) - 수정된 버전
+  static Future<Map<String, dynamic>?> uploadProfileImage({
+    required int userId,
+    required File imageFile,
+  }) async {
+    try {
+      print('🎯 [ApiService] 프로필 이미지 업로드 프로세스 시작');
+
+      // 1. 파일 타입 확인
+      String contentType = 'image/jpeg';
+      String filePath = imageFile.path.toLowerCase();
+      if (filePath.endsWith('.png')) {
+        contentType = 'image/png';
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        contentType = 'image/jpeg';
+      }
+
+      print('🎯 [ApiService] 파일 타입: $contentType');
+
+      // 2. Presigned URL 요청
+      final presignedResult = await getPresignedUrl(
+        userId: userId,
+        fileType: contentType,
+      );
+
+      if (presignedResult == null || presignedResult['success'] != true) {
+        print('❌ [ApiService] Presigned URL 생성 실패');
+        return presignedResult;
+      }
+
+      print('🎯 [ApiService] Presigned URL 응답 구조 확인:');
+      print('🎯 [ApiService] Keys: ${presignedResult.keys.toList()}');
+
+      // 🔍 서버 응답 구조 확인 (변수명 변경)
+      final presignedUrl = presignedResult['presignedUrl'] as String?;
+      final publicUrl = presignedResult['publicUrl'] as String?;
+      final serverFileName = presignedResult['fileName'] as String?; // 변수명 변경
+
+      if (presignedUrl == null) {
+        print('❌ [ApiService] Presigned URL이 응답에 없습니다');
+        return {'success': false, 'error': 'Presigned URL을 받지 못했습니다'};
+      }
+
+      print('🎯 [ApiService] Presigned URL 생성 성공');
+      print('🎯 [ApiService] Public URL: $publicUrl');
+      print('🎯 [ApiService] Server File Name: $serverFileName');
+
+      // 3. S3에 직접 PUT 요청으로 파일 업로드 (Presigned URL 방식)
+      final uploadSuccess = await uploadFileToS3Direct(
+        presignedUrl: presignedUrl,
+        file: imageFile,
+        contentType: contentType,
+      );
+
+      if (!uploadSuccess) {
+        print('❌ [ApiService] S3 파일 업로드 실패');
+        return {'success': false, 'error': 'S3 업로드 실패'};
+      }
+
+      print('🎯 [ApiService] S3 업로드 성공');
+
+      // 4. 서버에 프로필 이미지 URL 업데이트 (serverFileName 사용)
+      if (serverFileName != null) {
+        final updateResult = await updateProfileImageUrl(
+          userId: userId,
+          profileImageKey: serverFileName,
+        );
+
+        if (updateResult == null || updateResult['success'] != true) {
+          print('❌ [ApiService] 프로필 이미지 URL 업데이트 실패');
+          return updateResult;
+        }
+
+        print('✅ [ApiService] 프로필 이미지 업로드 프로세스 완료');
+
+        // publicUrl을 결과에 포함
+        return {
+          'success': true,
+          'profileImageUrl': publicUrl,
+          'fileName': serverFileName,
+          'message': '프로필 이미지가 성공적으로 업데이트되었습니다.',
+        };
+      } else {
+        print('❌ [ApiService] fileName이 응답에 없습니다');
+        return {'success': false, 'error': 'fileName을 받지 못했습니다'};
+      }
+
+    } catch (e) {
+      print('❌ [ApiService] 프로필 이미지 업로드 프로세스 오류: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+
+// S3에 직접 파일 업로드 (PUT 방식)
+  static Future<bool> uploadFileToS3Direct({
+    required String presignedUrl,
+    required File file,
+    required String contentType,
+  }) async {
+    try {
+      print('🔍 [ApiService] S3 직접 업로드 시작');
+      print('🔍 [ApiService] Presigned URL: $presignedUrl');
+      print('🔍 [ApiService] 파일 크기: ${await file.length()} bytes');
+
+      // 파일을 바이트로 읽기
+      final fileBytes = await file.readAsBytes();
+
+      // PUT 요청으로 S3에 직접 업로드
+      final response = await _dio.put(
+        presignedUrl,
+        data: fileBytes,
+        options: Options(
+          headers: {
+            'Content-Type': contentType,
+          },
+          validateStatus: (status) => status! < 400,
+        ),
+      );
+
+      print('✅ [ApiService] S3 업로드 성공: ${response.statusCode}');
+      return true;
+
+    } on DioException catch (e) {
+      print('❌ [ApiService] S3 업로드 실패: ${e.message}');
+      if (e.response != null) {
+        print('❌ [ApiService] S3 응답 코드: ${e.response?.statusCode}');
+        print('❌ [ApiService] S3 응답 데이터: ${e.response?.data}');
+      }
+      return false;
+    } catch (e) {
+      print('❌ [ApiService] S3 업로드 오류: $e');
+      return false;
+    }
+  }
+
   static Dio get dio => _dio;
 }

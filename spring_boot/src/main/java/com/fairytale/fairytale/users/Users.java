@@ -54,6 +54,10 @@ public class Users {
     @Column(unique = true, length = 100)
     private String kakaoId;
 
+    // 🆕 프로필 이미지 URL 필드 추가
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -70,4 +74,3 @@ public class Users {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Like> likes;
 }
-
