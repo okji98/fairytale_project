@@ -49,9 +49,9 @@ def generate_fairy_tale(name, thema):
     )
     try:
         completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
+            max_tokens=16384,
             temperature=0.5
         )
         return completion.choices[0].message.content
