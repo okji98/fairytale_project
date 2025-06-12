@@ -111,7 +111,6 @@ class _StoriesScreenState extends State<StoriesScreen> {
   }
 
   // 사용자 프로필 로드
-  // 사용자 프로필 로드
   Future<void> _loadUserProfile() async {
     setState(() => _isLoading = true);
     try {
@@ -205,7 +204,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // 🎯 로컬 파일 처리가 가능한 음성 생성
+  // 🎯 S3 연동 음성 생성 및 재생 (Flutter)
+
+  // 🎯 S3 기반 음성 생성
   Future<void> _generateVoice() async {
     if (_storyId == null) return;
 
@@ -227,73 +228,122 @@ class _StoriesScreenState extends State<StoriesScreen> {
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
 
-        String? voiceUrl;
+        // 🎯 S3 URL 또는 HTTP URL 처리
+        String? voiceUrl = _extractVoiceUrl(responseData);
 
-        if (responseData.containsKey('voiceContent')) {
-          voiceUrl = responseData['voiceContent'];
-        } else if (responseData.containsKey('voice_content')) {
-          voiceUrl = responseData['voice_content'];
-        } else if (responseData.containsKey('audioUrl')) {
-          voiceUrl = responseData['audioUrl'];
-        } else if (responseData.containsKey('audio_url')) {
-          voiceUrl = responseData['audio_url'];
-        }
+        print('🔍 추출된 음성 URL: $voiceUrl');
 
-        print('🔍 원본 음성 경로: $voiceUrl');
-
-        if (voiceUrl != null) {
-          // 🎯 로컬 파일 경로와 HTTP URL 모두 처리
-          await _processAudioUrl(voiceUrl);
+        if (voiceUrl != null && voiceUrl.isNotEmpty) {
+          // 🎯 S3 URL 직접 사용 (다운로드 불필요)
+          await _processS3AudioUrl(voiceUrl);
+        } else {
+          print('❌ 유효한 음성 URL을 받지 못했습니다.');
+          _showError('음성 생성에 실패했습니다.');
         }
       }
     } catch (e) {
       print('❌ 음성 생성 에러: $e');
+      _showError('음성 생성 중 오류가 발생했습니다.');
     }
   }
 
-  // 🎯 오디오 URL 처리 (로컬 파일 다운로드 + HTTP URL 지원)
-  Future<void> _processAudioUrl(String audioPath) async {
+  // 🎯 응답에서 음성 URL 추출 (여러 필드명 지원)
+  String? _extractVoiceUrl(Map<String, dynamic> responseData) {
+    // 가능한 필드명들 (API 응답 구조에 따라)
+    List<String> possibleFields = [
+      'voiceContent', // Story 엔티티의 필드명
+      'voice_content',
+      'audioUrl',
+      'audio_url',
+      'voiceUrl',
+      'voice_url',
+    ];
+
+    for (String field in possibleFields) {
+      if (responseData.containsKey(field)) {
+        String? url = responseData[field];
+        if (url != null && url.isNotEmpty && url != 'null') {
+          return url;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // 🎯 S3 오디오 URL 처리 (직접 사용)
+  Future<void> _processS3AudioUrl(String audioUrl) async {
     try {
-      // HTTP URL인 경우 바로 사용
-      if (audioPath.startsWith('http://') || audioPath.startsWith('https://')) {
-        print('✅ HTTP URL 음성 파일: $audioPath');
+      print('🔍 오디오 URL 처리 시작: $audioUrl');
+
+      // 🌐 HTTP/HTTPS URL 확인 (S3 또는 CloudFront URL)
+      if (audioUrl.startsWith('http://') || audioUrl.startsWith('https://')) {
+        print('✅ S3/CloudFront URL 감지: $audioUrl');
+
         setState(() {
-          _audioUrl = audioPath;
+          _audioUrl = audioUrl;
         });
 
+        // 🎵 오디오 플레이어에 URL 설정
         try {
           await _audioPlayer.setSourceUrl(_audioUrl!);
-          print('✅ HTTP 오디오 미리 로드 완료');
+          print('✅ S3 오디오 미리 로드 완료');
         } catch (e) {
-          print('⚠️ HTTP 오디오 미리 로드 실패: $e');
+          print('⚠️ S3 오디오 미리 로드 실패: $e');
+          // 미리 로드 실패해도 재생시 다시 시도
         }
         return;
       }
 
-      // 🎯 로컬 파일 경로인 경우 서버에서 다운로드
-      if (audioPath.startsWith('/') ||
-          audioPath.contains('/tmp/') ||
-          audioPath.contains('/var/')) {
-        print('🔍 로컬 파일 경로 감지, 다운로드 시도: $audioPath');
-        await _downloadAndSaveAudioFile(audioPath);
+      // 🔄 레거시: 로컬 파일 경로인 경우 (호환성 유지)
+      if (audioUrl.startsWith('/') ||
+          audioUrl.contains('/tmp/') ||
+          audioUrl.contains('/var/')) {
+        print('⚠️ 로컬 파일 경로 감지 (레거시): $audioUrl');
+        print('🔄 S3 마이그레이션 권장');
+
+        // 기존 다운로드 API 호출 (임시 지원)
+        await _downloadLegacyAudioFile(audioUrl);
+        return;
+      }
+
+      // 🎯 Presigned URL 처리 (보안이 필요한 경우)
+      if (_isPresignedUrl(audioUrl)) {
+        print('🔐 Presigned URL 감지: $audioUrl');
+        setState(() {
+          _audioUrl = audioUrl;
+        });
+
+        try {
+          await _audioPlayer.setSourceUrl(_audioUrl!);
+          print('✅ Presigned URL 오디오 로드 완료');
+        } catch (e) {
+          print('⚠️ Presigned URL 오디오 로드 실패: $e');
+        }
         return;
       }
 
       // 기타 경우
-      print('⚠️ 알 수 없는 오디오 경로 형식: $audioPath');
+      print('⚠️ 알 수 없는 오디오 URL 형식: $audioUrl');
       _showError('지원하지 않는 음성 파일 형식입니다.');
     } catch (e) {
-      print('❌ 오디오 URL 처리 에러: $e');
+      print('❌ S3 오디오 URL 처리 에러: $e');
       _showError('음성 파일 처리 중 오류가 발생했습니다.');
     }
   }
 
-  // 🎯 서버에서 로컬 오디오 파일 다운로드
-  Future<void> _downloadAndSaveAudioFile(String serverFilePath) async {
-    try {
-      print('🔍 서버 오디오 파일 다운로드 시작: $serverFilePath');
+  // 🔐 Presigned URL 여부 확인
+  bool _isPresignedUrl(String url) {
+    return url.contains('amazonaws.com') &&
+        (url.contains('X-Amz-Algorithm') || url.contains('Signature'));
+  }
 
-      // 1. 서버에 파일 다운로드 요청
+  // 🔄 레거시 로컬 파일 다운로드 (호환성 유지)
+  Future<void> _downloadLegacyAudioFile(String serverFilePath) async {
+    try {
+      print('🔄 [LEGACY] 로컬 파일 다운로드: $serverFilePath');
+      print('⚠️ 이 방식은 곧 지원 중단됩니다.');
+
       final headers = await _getAuthHeaders();
       final requestData = {'filePath': serverFilePath};
 
@@ -303,10 +353,21 @@ class _StoriesScreenState extends State<StoriesScreen> {
         body: json.encode(requestData),
       );
 
-      print('🔍 오디오 다운로드 API 응답 상태: ${response.statusCode}');
+      print('🔍 레거시 다운로드 API 응답: ${response.statusCode}');
+
+      // S3 리다이렉트 확인
+      if (response.statusCode == 301) {
+        // Moved Permanently
+        String? s3Url = response.headers['x-s3-url'];
+        if (s3Url != null) {
+          print('🔄 서버에서 S3 URL 리다이렉트: $s3Url');
+          await _processS3AudioUrl(s3Url);
+          return;
+        }
+      }
 
       if (response.statusCode == 200) {
-        // 2. 바이너리 데이터로 파일 받기
+        // 기존 로컬 파일 처리 로직
         final audioBytes = response.bodyBytes;
         print('🔍 받은 오디오 데이터 크기: ${audioBytes.length} bytes');
 
@@ -314,7 +375,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
           throw Exception('서버에서 빈 오디오 파일을 받았습니다.');
         }
 
-        // 3. 앱의 임시 디렉토리에 저장
+        // 앱의 임시 디렉토리에 저장
         final appDir = await getTemporaryDirectory();
         final fileName =
             'story_audio_${_storyId}_${DateTime.now().millisecondsSinceEpoch}.mp3';
@@ -323,12 +384,10 @@ class _StoriesScreenState extends State<StoriesScreen> {
         await localFile.writeAsBytes(audioBytes);
         print('✅ 로컬 파일 저장 완료: ${localFile.path}');
 
-        // 4. 로컬 파일 경로로 AudioPlayer 설정
         setState(() {
           _audioUrl = localFile.path;
         });
 
-        // 5. 오디오 미리 로드
         try {
           await _audioPlayer.setSourceDeviceFile(_audioUrl!);
           print('✅ 로컬 오디오 파일 미리 로드 완료');
@@ -336,22 +395,15 @@ class _StoriesScreenState extends State<StoriesScreen> {
           print('⚠️ 로컬 오디오 미리 로드 실패: $e');
         }
       } else {
-        throw Exception('오디오 다운로드 API 실패: ${response.statusCode}');
+        throw Exception('레거시 다운로드 실패: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ 오디오 파일 다운로드 실패: $e');
-
-      // 🎯 폴백: 테스트 오디오 사용
-      print('🔄 테스트 오디오로 대체');
-      setState(() {
-        _audioUrl = 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav';
-      });
-
-      _showError('음성 파일 다운로드에 실패했습니다. 테스트 오디오를 사용합니다.');
+      print('❌ 레거시 오디오 다운로드 실패: $e');
+      _showError('음성 파일 다운로드에 실패했습니다.');
     }
   }
 
-  // 🎯 로컬/HTTP 파일 모두 지원하는 음성 재생
+  // 🎵 S3 기반 음성 재생 (URL 타입별 처리)
   Future<void> _playPauseAudio() async {
     if (_audioUrl == null) {
       _showError('음성이 생성되지 않았습니다.');
@@ -370,10 +422,12 @@ class _StoriesScreenState extends State<StoriesScreen> {
         if (_position == Duration.zero) {
           // 처음 재생하는 경우
           if (_audioUrl!.startsWith('http')) {
-            // HTTP URL
+            // 🌐 HTTP/HTTPS URL (S3, CloudFront, Presigned URL 등)
+            print('🌐 HTTP URL로 재생: $_audioUrl');
             await _audioPlayer.play(UrlSource(_audioUrl!));
           } else {
-            // 로컬 파일
+            // 📱 로컬 파일 (레거시)
+            print('📱 로컬 파일로 재생: $_audioUrl');
             await _audioPlayer.play(DeviceFileSource(_audioUrl!));
           }
         } else {
@@ -384,7 +438,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
     } catch (e) {
       print('❌ 음성 재생 에러: $e');
 
-      // 🎯 에러 발생 시 재시도
+      // 🔄 재시도 로직
       if (e.toString().contains('setSource')) {
         print('🔄 소스 설정 에러, 재시도...');
         try {
@@ -409,7 +463,43 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // 음성 정지
+  // 🔗 Presigned URL 요청 (보안이 필요한 경우)
+  Future<String?> _requestPresignedUrl(
+    int storyId, {
+    int expirationMinutes = 60,
+  }) async {
+    try {
+      print('🔗 Presigned URL 요청: StoryId=$storyId, 만료=$expirationMinutes분');
+
+      final headers = await _getAuthHeaders();
+      final requestData = {
+        'storyId': storyId,
+        'expirationMinutes': expirationMinutes,
+      };
+
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/fairytale/audio/presigned-url'),
+        headers: headers,
+        body: json.encode(requestData),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        String? presignedUrl = responseData['presigned_url'];
+
+        print('✅ Presigned URL 받음: $presignedUrl');
+        return presignedUrl;
+      } else {
+        print('❌ Presigned URL 요청 실패: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Presigned URL 요청 에러: $e');
+      return null;
+    }
+  }
+
+  // 음성 정지 (기존과 동일)
   Future<void> _stopAudio() async {
     try {
       await _audioPlayer.stop();
@@ -422,7 +512,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // 재생 시간을 문자열로 변환
+  // 재생 시간을 문자열로 변환 (기존과 동일)
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final minutes = twoDigits(duration.inMinutes.remainder(60));
@@ -891,26 +981,6 @@ class _StoriesScreenState extends State<StoriesScreen> {
                             horizontal: 8,
                             vertical: 4,
                           ),
-                          decoration: BoxDecoration(
-                            color:
-                                _audioUrl!.startsWith('http')
-                                    ? Colors.blue.withOpacity(0.1)
-                                    : Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            _audioUrl!.startsWith('http')
-                                ? '🌐 온라인 음성'
-                                : '📱 로컬 음성',
-                            style: TextStyle(
-                              fontSize: screenWidth * 0.03,
-                              color:
-                                  _audioUrl!.startsWith('http')
-                                      ? Colors.blue[700]
-                                      : Colors.green[700],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
                         ),
 
                         SizedBox(height: 12),
@@ -989,43 +1059,6 @@ class _StoriesScreenState extends State<StoriesScreen> {
                             ],
                           ),
                         ],
-
-                        // 🎯 디버깅 정보 (개발용)
-                        SizedBox(height: 8),
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Debug 정보:',
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.025,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey[700],
-                                ),
-                              ),
-                              Text(
-                                '파일 경로: ${_audioUrl!.length > 50 ? _audioUrl!.substring(0, 50) + '...' : _audioUrl!}',
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.025,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              Text(
-                                '상태: ${_playerState.toString()}',
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.025,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),

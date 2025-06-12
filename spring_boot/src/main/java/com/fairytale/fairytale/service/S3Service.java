@@ -181,4 +181,392 @@ public class S3Service {
                 return ".jpg";
         }
     }
+
+    /**
+     * 🖼️ 외부 URL 이미지를 다운로드해서 S3에 업로드 (흑백변환용)
+     */
+    public String uploadImageFromUrl(String imageUrl, Long storyId) {
+        try {
+            log.info("🖼️ 외부 이미지 S3 업로드 시작: {}", imageUrl);
+
+            // 1. 외부 URL에서 이미지 다운로드
+            byte[] imageData = downloadImageFromUrl(imageUrl);
+            log.info("📥 이미지 다운로드 완료: {} bytes", imageData.length);
+
+            // 2. S3 키 생성
+            String s3Key = generateImageFileName(storyId, getImageExtensionFromUrl(imageUrl));
+            log.info("🔑 생성된 S3 키: {}", s3Key);
+
+            // 3. 메타데이터 설정
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(imageData.length);
+            metadata.setContentType(getImageContentTypeFromUrl(imageUrl));
+            metadata.setCacheControl("max-age=31536000"); // 1년 캐시
+
+            // 4. S3에 업로드 (ACL 없이)
+            try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(imageData)) {
+                PutObjectRequest putRequest = new PutObjectRequest(
+                        bucketName,
+                        s3Key,
+                        inputStream,
+                        metadata
+                );
+
+                // 🚫 ACL 설정 제거 (버킷 정책으로 공개 접근 제어)
+                // putRequest.setCannedAcl(CannedAccessControlList.PublicRead);
+
+                PutObjectResult result = amazonS3.putObject(putRequest);
+                log.info("✅ S3 이미지 업로드 완료. ETag: {}", result.getETag());
+            }
+
+            // 5. 공개 URL 반환
+            String publicUrl = getPublicUrl(s3Key);
+            log.info("✅ 생성된 이미지 공개 URL: {}", publicUrl);
+
+            return publicUrl;
+
+        } catch (Exception e) {
+            log.error("❌ S3 이미지 업로드 실패: {}", e.getMessage());
+            throw new RuntimeException("S3 이미지 업로드 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 📥 외부 URL에서 이미지 다운로드
+     */
+    private byte[] downloadImageFromUrl(String imageUrl) {
+        try {
+            log.info("📥 이미지 다운로드 시작: {}", imageUrl);
+
+            java.net.URL url = new java.net.URL(imageUrl);
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(10000); // 10초 타임아웃
+            connection.setReadTimeout(30000);    // 30초 읽기 타임아웃
+
+            // User-Agent 설정 (일부 서버에서 요구)
+            connection.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+
+            // 응답 코드 확인
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                throw new RuntimeException("이미지 다운로드 실패. HTTP 응답 코드: " + responseCode);
+            }
+
+            try (java.io.InputStream inputStream = connection.getInputStream();
+                 java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                byte[] imageData = outputStream.toByteArray();
+                log.info("✅ 이미지 다운로드 완료: {} bytes", imageData.length);
+                return imageData;
+            }
+
+        } catch (Exception e) {
+            log.error("❌ 이미지 다운로드 실패: {}", e.getMessage());
+            throw new RuntimeException("이미지 다운로드 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 🔑 이미지 파일명 생성 (충돌 방지)
+     */
+    private String generateImageFileName(Long storyId, String extension) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        String uuid = UUID.randomUUID().toString().substring(0, 8);
+
+        return String.format("images/%s/story-%d-%s%s", timestamp, storyId, uuid, extension);
+    }
+
+    /**
+     * 🎨 URL에서 이미지 확장자 추출
+     */
+    private String getImageExtensionFromUrl(String imageUrl) {
+        try {
+            String lowerUrl = imageUrl.toLowerCase();
+            if (lowerUrl.contains(".png")) return ".png";
+            if (lowerUrl.contains(".jpg") || lowerUrl.contains(".jpeg")) return ".jpg";
+            if (lowerUrl.contains(".gif")) return ".gif";
+            if (lowerUrl.contains(".webp")) return ".webp";
+            return ".jpg"; // 기본값
+        } catch (Exception e) {
+            return ".jpg"; // 오류 시 기본값
+        }
+    }
+
+    /**
+     * 🎨 URL에서 이미지 Content-Type 추출
+     */
+    private String getImageContentTypeFromUrl(String imageUrl) {
+        try {
+            String lowerUrl = imageUrl.toLowerCase();
+            if (lowerUrl.contains(".png")) return "image/png";
+            if (lowerUrl.contains(".jpg") || lowerUrl.contains(".jpeg")) return "image/jpeg";
+            if (lowerUrl.contains(".gif")) return "image/gif";
+            if (lowerUrl.contains(".webp")) return "image/webp";
+            return "image/jpeg"; // 기본값
+        } catch (Exception e) {
+            return "image/jpeg"; // 오류 시 기본값
+        }
+    }
+
+    // 🖼️ 로컬 이미지 파일을 S3에 업로드 (흑백 변환 이미지용)
+    public String uploadImageFromLocalFile(String localFilePath, String folder) {
+        try {
+            log.info("🖼️ 로컬 이미지 파일 S3 업로드 시작: {}", localFilePath);
+
+            // 1. 로컬 파일 존재 여부 확인
+            java.io.File localFile = new java.io.File(localFilePath);
+            if (!localFile.exists()) {
+                throw new java.io.FileNotFoundException("로컬 파일이 존재하지 않습니다: " + localFilePath);
+            }
+
+            log.info("🔍 파일 크기: {} bytes", localFile.length());
+
+            // 2. S3 키 생성 (폴더 지정 가능)
+            String s3Key = generateImageFileNameWithFolder(folder, getFileExtension(localFile.getName()));
+            log.info("🔑 생성된 S3 키: {}", s3Key);
+
+            // 3. 메타데이터 설정
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(localFile.length());
+            metadata.setContentType(getImageContentTypeFromFile(localFile.getName()));
+            metadata.setCacheControl("max-age=31536000"); // 1년 캐시
+
+            // 4. S3에 업로드 (ACL 없이)
+            try (java.io.FileInputStream fileInputStream = new java.io.FileInputStream(localFile)) {
+                PutObjectRequest putRequest = new PutObjectRequest(
+                        bucketName,
+                        s3Key,
+                        fileInputStream,
+                        metadata
+                );
+
+                // ACL 설정 제거 (버킷 정책으로 공개 접근 제어)
+                PutObjectResult result = amazonS3.putObject(putRequest);
+                log.info("✅ S3 이미지 업로드 완료. ETag: {}", result.getETag());
+            }
+
+            // 5. 공개 URL 반환
+            String publicUrl = getPublicUrl(s3Key);
+            log.info("✅ 생성된 이미지 공개 URL: {}", publicUrl);
+
+            return publicUrl;
+
+        } catch (Exception e) {
+            log.error("❌ S3 로컬 이미지 업로드 실패: {}", e.getMessage());
+            throw new RuntimeException("S3 로컬 이미지 업로드 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 🔑 폴더 지정 가능한 이미지 파일명 생성
+     */
+    private String generateImageFileNameWithFolder(String folder, String extension) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        String uuid = UUID.randomUUID().toString().substring(0, 8);
+
+        // 폴더가 지정되면 해당 폴더 사용, 없으면 기본 images 폴더
+        String baseFolder = folder != null && !folder.isEmpty() ? folder : "images";
+
+        return String.format("%s/%s/image-%s%s", baseFolder, timestamp, uuid, extension);
+    }
+
+    /**
+     * 🎨 파일명에서 이미지 Content-Type 추출
+     */
+    private String getImageContentTypeFromFile(String fileName) {
+        try {
+            String lowerName = fileName.toLowerCase();
+            if (lowerName.endsWith(".png")) return "image/png";
+            if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "image/jpeg";
+            if (lowerName.endsWith(".gif")) return "image/gif";
+            if (lowerName.endsWith(".webp")) return "image/webp";
+            return "image/png"; // 기본값 (흑백 이미지는 보통 PNG)
+        } catch (Exception e) {
+            return "image/png"; // 오류 시 기본값
+        }
+    }
+
+    // 오디오 파일 업로드
+    public String uploadAudioFileWithPresignedUrl(String localFilePath) {
+        try {
+            log.info("📤 S3 오디오 파일 업로드 시작 (Presigned URL): {}", localFilePath);
+
+            // 파일 업로드 (ACL 없이)
+            java.io.File localFile = new java.io.File(localFilePath);
+            if (!localFile.exists()) {
+                throw new java.io.FileNotFoundException("로컬 파일이 존재하지 않습니다: " + localFilePath);
+            }
+
+            String s3Key = generateAudioFileName(localFile.getName());
+            log.info("🔑 생성된 S3 키: {}", s3Key);
+
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(localFile.length());
+            metadata.setContentType(getAudioContentType(localFilePath));
+            metadata.setCacheControl("max-age=31536000");
+
+            try (java.io.FileInputStream fileInputStream = new java.io.FileInputStream(localFile)) {
+                PutObjectRequest putRequest = new PutObjectRequest(
+                        bucketName,
+                        s3Key,
+                        fileInputStream,
+                        metadata
+                );
+                // ACL 설정 없음 - 비공개 파일
+
+                amazonS3.putObject(putRequest);
+                log.info("✅ S3 업로드 완료 (비공개): {}", s3Key);
+            }
+
+            // Presigned URL 생성 (24시간 유효)
+            String presignedUrl = generateAudioPresignedUrl(s3Key, 24 * 60); // 24시간
+            log.info("✅ Presigned URL 생성: {}", presignedUrl);
+
+            return presignedUrl;
+
+        } catch (Exception e) {
+            log.error("❌ S3 오디오 업로드 실패: {}", e.getMessage());
+            throw new RuntimeException("S3 파일 업로드 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 📥 S3에서 오디오 파일을 바이트 배열로 다운로드
+     */
+    public byte[] downloadAudioFile(String s3Key) {
+        try {
+            log.info("📥 S3 파일 다운로드 시작: {}", s3Key);
+
+            // 🔍 파일 존재 여부 확인
+            if (!amazonS3.doesObjectExist(bucketName, s3Key)) {
+                throw new java.io.FileNotFoundException("S3에 파일이 존재하지 않습니다: " + s3Key);
+            }
+
+            // 📥 S3에서 객체 가져오기
+            S3Object s3Object = amazonS3.getObject(bucketName, s3Key);
+
+            // 📖 스트림을 바이트 배열로 변환
+            try (java.io.InputStream inputStream = s3Object.getObjectContent();
+                 java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream()) {
+
+                byte[] buffer = new byte[8192]; // 8KB 버퍼
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                byte[] fileData = outputStream.toByteArray();
+                log.info("✅ S3 다운로드 완료. 파일 크기: {} bytes", fileData.length);
+
+                return fileData;
+            }
+
+        } catch (Exception e) {
+            log.error("❌ S3 다운로드 실패: {}", e.getMessage());
+            throw new RuntimeException("S3 파일 다운로드 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 🔗 오디오 파일 Presigned URL 생성 (임시 접근용)
+     */
+    public String generateAudioPresignedUrl(String s3Key, int expirationMinutes) {
+        try {
+            log.info("🔗 오디오 Presigned URL 생성: {}, 만료시간: {}분", s3Key, expirationMinutes);
+
+            Date expiration = new Date();
+            long expTimeMillis = expiration.getTime();
+            expTimeMillis += 1000L * 60 * expirationMinutes;
+            expiration.setTime(expTimeMillis);
+
+            GeneratePresignedUrlRequest generatePresignedUrlRequest = new GeneratePresignedUrlRequest(
+                    bucketName, s3Key)
+                    .withMethod(HttpMethod.GET)
+                    .withExpiration(expiration);
+
+            URL url = amazonS3.generatePresignedUrl(generatePresignedUrlRequest);
+            String presignedUrl = url.toString();
+
+            log.info("✅ 오디오 Presigned URL 생성 완료: {}", presignedUrl);
+            return presignedUrl;
+
+        } catch (Exception e) {
+            log.error("❌ 오디오 Presigned URL 생성 실패: {}", e.getMessage());
+            throw new RuntimeException("Presigned URL 생성 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 🔍 S3 키를 URL에서 추출하는 유틸리티 메서드
+     */
+    public String extractS3KeyFromUrl(String url) {
+        try {
+            if (url.contains("amazonaws.com")) {
+                // S3 직접 URL에서 키 추출
+                String[] parts = url.split("/");
+                StringBuilder s3Key = new StringBuilder();
+                for (int i = 3; i < parts.length; i++) {
+                    if (s3Key.length() > 0) s3Key.append("/");
+                    s3Key.append(parts[i]);
+                }
+                return s3Key.toString();
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("❌ S3 키 추출 실패: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 📊 S3 연결 상태 확인 (헬스체크용)
+     */
+    public boolean isS3Connected() {
+        try {
+            return amazonS3.doesBucketExistV2(bucketName);
+        } catch (Exception e) {
+            log.error("❌ S3 연결 확인 실패: {}", e.getMessage());
+            return false;
+        }
+    }
+
+// === Private Methods for Audio Files ===
+
+    /**
+     * 🔑 오디오 파일명 생성 (중복 방지)
+     */
+    private String generateAudioFileName(String originalFileName) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        String uuid = UUID.randomUUID().toString().substring(0, 8);
+        String cleanFileName = originalFileName.replaceAll("[^a-zA-Z0-9._-]", "_"); // 안전한 파일명 처리
+
+        return String.format("audio/%s/%s_%s", timestamp, uuid, cleanFileName);
+    }
+
+    /**
+     * 🎵 오디오 파일 Content-Type 결정
+     */
+    private String getAudioContentType(String filePath) {
+        String lowerPath = filePath.toLowerCase();
+
+        if (lowerPath.endsWith(".mp3")) {
+            return "audio/mpeg";
+        } else if (lowerPath.endsWith(".wav")) {
+            return "audio/wav";
+        } else if (lowerPath.endsWith(".m4a")) {
+            return "audio/mp4";
+        } else if (lowerPath.endsWith(".ogg")) {
+            return "audio/ogg";
+        } else {
+            return "application/octet-stream";
+        }
+    }
 }
