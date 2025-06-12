@@ -46,63 +46,124 @@ public class StoryService {
 
     // 스토리
     // 🔄 기존 동화 생성 메서드 (수정됨)
+    // StoryService.java - baby 정보 디버깅 (findByUser 제거)
+
     public Story createStory(StoryCreateRequest request, String username) {
-        System.out.println("🔍 스토리 생성 시작 - Username: " + username);
-        System.out.println("🔍 받은 요청: theme=" + request.getTheme() + ", voice=" + request.getVoice());
+        log.info("🔍 스토리 생성 시작 - Username: {}", username);
+        log.info("🔍 받은 요청: theme={}, voice={}, babyId={}",
+                request.getTheme(), request.getVoice(), request.getBabyId());
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
                 .orElseThrow(() -> {
-                    System.out.println("❌ 사용자를 찾을 수 없음: " + username);
-                    usersRepository.findAll().forEach(u ->
-                            System.out.println("  - 존재하는 사용자: " + u.getUsername()));
+                    log.error("❌ 사용자를 찾을 수 없음: {}", username);
                     return new RuntimeException("사용자를 찾을 수 없습니다: " + username);
                 });
 
-        System.out.println("🔍 사용자 조회 성공 - ID: " + user.getId());
+        log.info("🔍 사용자 조회 성공 - ID: {}", user.getId());
 
-        // 2. Baby 조회 (babyId가 요청에 있다면)
+        // 2. 🔍 Baby 조회 강화된 디버깅
         Baby baby = null;
+        String childName = "우리 아이"; // 기본값
+
         if (request.getBabyId() != null) {
-            baby = babyRepository.findById(request.getBabyId())
-                    .orElseThrow(() -> new RuntimeException("아기 정보를 찾을 수 없습니다."));
+            log.info("🔍 babyId가 제공됨: {}", request.getBabyId());
+
+            try {
+                baby = babyRepository.findById(request.getBabyId())
+                        .orElseThrow(() -> new RuntimeException("아기 정보를 찾을 수 없습니다."));
+
+                log.info("✅ Baby 엔티티 찾음 - ID: {}", baby.getId());
+
+                // baby 객체의 모든 필드 확인
+                log.info("🔍 Baby 정보 상세:");
+                log.info("  - baby.getId(): {}", baby.getId());
+                log.info("  - baby.getBabyName(): '{}'", baby.getBabyName());
+                log.info("  - baby.getBabyName() == null: {}", baby.getBabyName() == null);
+
+                if (baby.getBabyName() != null) {
+                    log.info("  - baby.getBabyName().isEmpty(): {}", baby.getBabyName().isEmpty());
+                    log.info("  - baby.getBabyName().trim(): '{}'", baby.getBabyName().trim());
+                }
+
+                if (baby.getBabyName() != null && !baby.getBabyName().trim().isEmpty()) {
+                    childName = baby.getBabyName().trim();
+                    log.info("✅ 유효한 아기 이름 설정: '{}'", childName);
+                } else {
+                    log.warn("⚠️ baby.getBabyName()이 null이거나 비어있음!");
+                    log.warn("⚠️ 기본 이름 사용: '{}'", childName);
+                }
+
+            } catch (Exception e) {
+                log.error("❌ babyId로 Baby 조회 실패: {}", e.getMessage());
+                log.error("❌ 제공된 babyId: {}", request.getBabyId());
+
+                // 🔍 babyRepository에 있는 메서드로 간단한 확인
+                try {
+                    boolean exists = babyRepository.existsById(request.getBabyId());
+                    log.info("🔍 babyId {} 존재 여부: {}", request.getBabyId(), exists);
+
+                    if (!exists) {
+                        log.error("❌ 해당 babyId가 데이터베이스에 존재하지 않습니다!");
+                    }
+                } catch (Exception ex) {
+                    log.error("❌ baby 존재 여부 확인 실패: {}", ex.getMessage());
+                }
+            }
+        } else {
+            log.warn("⚠️ babyId가 null입니다!");
+            log.warn("⚠️ Flutter에서 babyId를 보내지 않았거나 null입니다.");
+            log.warn("⚠️ 기본 이름 사용: '{}'", childName);
+
+            // 🔍 StoryCreateRequest의 모든 필드 확인
+            log.info("🔍 StoryCreateRequest 전체 정보:");
+            log.info("  - getTheme(): '{}'", request.getTheme());
+            log.info("  - getVoice(): '{}'", request.getVoice());
+            log.info("  - getBabyId(): {}", request.getBabyId());
         }
 
         // 3. FastAPI 요청 객체 생성
         FastApiStoryRequest fastApiRequest = new FastApiStoryRequest();
-        if (baby != null) {
-            fastApiRequest.setName(baby.getBabyName());  // Baby의 이름 사용
-        } else {
-            fastApiRequest.setName("기본값");  // 기본값
-        }
+        fastApiRequest.setName(childName);
         fastApiRequest.setTheme(request.getTheme() + " 동화");
 
-        System.out.println("🔍 FastAPI 동화 생성 요청: " + fastApiRequest.getName());
+        log.info("🚀 FastAPI로 전송할 데이터:");
+        log.info("  - name: '{}'", childName);
+        log.info("  - theme: '{}'", fastApiRequest.getTheme());
 
-        // 3. FastAPI로 동화 생성 요청
+        // ❗ 여기서 "기본값" 체크
+        if ("기본값".equals(childName)) {
+            log.error("🚨 경고: '기본값'으로 FastAPI 호출 예정!");
+            log.error("🚨 이는 baby 정보를 찾지 못했음을 의미합니다.");
+        }
+
+        // 4. FastAPI 호출
         String url = fastApiBaseUrl + "/generate/story";
         String response = callFastApi(url, fastApiRequest);
 
-        // 4. 응답에서 story 추출
+        // 5. 응답에서 story 추출
         String storyContent = extractStoryFromResponse(response);
 
-        // 5. Story 엔티티 생성 및 저장
+        // 6. Story 엔티티 생성 및 저장
         Story story = new Story();
         story.setTheme(request.getTheme());
         story.setVoice(request.getVoice());
         story.setTitle(request.getTheme() + " 동화");
         story.setContent(storyContent);
         story.setUser(user);
-        story.setVoiceContent("");  // 🎯 초기값: 빈 문자열
-        story.setImage("");  // 🎯 단일 image 컬럼 사용
+        story.setVoiceContent("");
+        story.setImage("");
 
         if (baby != null) {
-            story.setBaby(baby);  // 💥 빠지면 baby_id가 null로 들어감!
+            story.setBaby(baby);
+            log.info("✅ Story에 baby 연결 완료 - baby ID: {}", baby.getId());
+        } else {
+            log.warn("⚠️ baby가 null이므로 Story에 baby 연결하지 않음");
         }
 
-        System.out.println("🔍 스토리 저장 전 - Title: " + story.getTitle());
+        log.info("🔍 스토리 저장 전 - Title: {}", story.getTitle());
         Story saved = storyRepository.save(story);
-        System.out.println("🔍 스토리 저장 완료 - ID: " + saved.getId());
+        log.info("🔍 스토리 저장 완료 - ID: {}", saved.getId());
 
         return saved;
     }

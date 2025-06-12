@@ -22,6 +22,8 @@ class _StoriesScreenState extends State<StoriesScreen> {
   double _speed = 1.0;
   String? _selectedTheme;
   String? _selectedVoice;
+  // 🆕 babyId 변수 추가
+  int? _selectedBabyId; // baby의 ID를 저장할 변수
 
   // API 응답 데이터
   String? _generatedStory;
@@ -61,6 +63,63 @@ class _StoriesScreenState extends State<StoriesScreen> {
     // AudioPlayer 초기화
     _audioPlayer = AudioPlayer();
     _initAudioPlayer();
+  }
+
+  // 사용자 프로필 로드 (babyId 포함)
+  Future<void> _loadUserProfile() async {
+    setState(() => _isLoading = true);
+    try {
+      print('🔍 사용자 프로필 로드 시작');
+
+      final childInfo = await AuthService.checkChildInfo();
+      print('🔍 받은 childInfo: $childInfo');
+
+      if (childInfo != null && childInfo['hasChild'] == true) {
+        final childData = childInfo['childData'];
+        print('🔍 childData: $childData');
+
+        // 🔍 babyId 확인 및 설정
+        if (childData.containsKey('id')) {
+          _selectedBabyId = childData['id'];
+          print('✅ babyId 설정됨: $_selectedBabyId');
+          print('🔍 babyId 타입: ${_selectedBabyId.runtimeType}');
+        } else {
+          print('❌ childData에 id 필드가 없음!');
+          print('🔍 childData의 모든 키: ${childData.keys.toList()}');
+          _selectedBabyId = null;
+        }
+
+        // 🔍 babyName 확인 및 설정
+        if (childData.containsKey('name')) {
+          // 'babyName' → 'name' 으로 변경
+          _nameController.text = childData['name'] ?? '우리 아이';
+          print('✅ babyName 설정됨: ${_nameController.text}');
+        } else if (childData.containsKey('babyName')) {
+          // 호환성을 위해 babyName도 체크
+          _nameController.text = childData['babyName'] ?? '우리 아이';
+          print('✅ babyName 설정됨 (babyName 필드): ${_nameController.text}');
+        } else {
+          print('❌ childData에 name 또는 babyName 필드가 없음!');
+          print('🔍 사용 가능한 필드들: ${childData.keys.toList()}');
+          _nameController.text = '우리 아이';
+        }
+      } else {
+        print('⚠️ 아이 정보가 없음 (hasChild: false 또는 childInfo null)');
+        _nameController.text = '우리 아이';
+        _selectedBabyId = null;
+      }
+
+      print('🔍 최종 설정된 값들:');
+      print('  - babyId: $_selectedBabyId');
+      print('  - babyName: ${_nameController.text}');
+    } catch (e) {
+      print('❌ 아이 정보 로드 오류: $e');
+      _nameController.text = '우리 아이';
+      _selectedBabyId = null;
+      _showError('사용자 정보를 불러오는데 실패했습니다.');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -110,53 +169,47 @@ class _StoriesScreenState extends State<StoriesScreen> {
     };
   }
 
-  // 사용자 프로필 로드
-  Future<void> _loadUserProfile() async {
-    setState(() => _isLoading = true);
-    try {
-      // AuthService를 통해 아이 정보 가져오기
-      final childInfo = await AuthService.checkChildInfo();
-
-      if (childInfo != null && childInfo['hasChild'] == true) {
-        final childData = childInfo['childData'];
-        _nameController.text = childData['babyName'] ?? '우리 아이';
-      } else {
-        _nameController.text = '우리 아이'; // 기본값
-      }
-    } catch (e) {
-      print('아이 정보 로드 오류: $e');
-      _nameController.text = '우리 아이'; // 오류 시 기본값
-      _showError('사용자 정보를 불러오는데 실패했습니다.');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   // 동화 생성
   Future<void> _generateStory() async {
-    if (_selectedTheme == null || _selectedVoice == null) {
-      _showError('테마와 목소리를 모두 선택해주세요.');
+    // 입력 검증
+    if (_selectedTheme == null || _selectedTheme!.isEmpty) {
+      _showError('테마를 선택해주세요.');
+      return;
+    }
+
+    if (_selectedVoice == null || _selectedVoice!.isEmpty) {
+      _showError('목소리를 선택해주세요.');
       return;
     }
 
     setState(() {
       _isGeneratingStory = true;
       _errorMessage = null;
-      _generatedStory = null;
-      _audioUrl = null;
-      _colorImageUrl = null;
-
-      // 오디오 초기화
-      _isPlaying = false;
-      _position = Duration.zero;
-      _duration = Duration.zero;
     });
 
     try {
-      final headers = await _getAuthHeaders();
-      final requestData = {'theme': _selectedTheme, 'voice': _selectedVoice};
+      // 🔍 현재 상태 확인
+      print('🔍 동화 생성 시작');
+      print('🔍 현재 선택된 babyId: $_selectedBabyId');
+      print('🔍 babyId 타입: ${_selectedBabyId.runtimeType}');
+      print('🔍 babyId == null: ${_selectedBabyId == null}');
+      print('🔍 선택된 테마: $_selectedTheme');
+      print('🔍 선택된 목소리: $_selectedVoice');
 
-      print('🔍 동화 생성 요청: ${json.encode(requestData)}');
+      final headers = await _getAuthHeaders();
+
+      // 🔍 전송할 데이터 구성
+      final requestData = {
+        'theme': _selectedTheme,
+        'voice': _selectedVoice,
+        'babyId': _selectedBabyId, // null일 수도 있음
+      };
+
+      print('🚀 서버로 전송할 데이터:');
+      requestData.forEach((key, value) {
+        print('  - $key: $value (${value.runtimeType})');
+      });
+      print('📦 전체 JSON: ${json.encode(requestData)}');
 
       final response = await http.post(
         Uri.parse('${ApiService.baseUrl}/api/fairytale/generate/story'),
@@ -164,44 +217,59 @@ class _StoriesScreenState extends State<StoriesScreen> {
         body: json.encode(requestData),
       );
 
-      print('🔍 동화 생성 응답 상태: ${response.statusCode}');
-      print('🔍 동화 생성 응답 본문: ${response.body}');
+      print('🔍 서버 응답:');
+      print('  - 상태 코드: ${response.statusCode}');
+      print('  - 응답 내용: ${response.body}');
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
+        print('✅ 동화 생성 성공!');
 
-        int? storyId;
-        String? storyContent;
-
-        if (responseData.containsKey('id')) {
-          storyId = responseData['id'];
-        }
-
-        if (responseData.containsKey('content')) {
-          storyContent = responseData['content'];
-        } else if (responseData.containsKey('storyText')) {
-          storyContent = responseData['storyText'];
-        }
-
+        // 🎯 응답 데이터 처리 (중요한 부분!)
         setState(() {
-          _storyId = storyId;
-          _generatedStory = storyContent;
+          _generatedStory =
+              responseData['content'] ??
+              responseData['story'] ??
+              '동화 내용을 불러올 수 없습니다.';
+          _storyId = responseData['id'];
         });
 
-        print('✅ 동화 생성 완료 - ID: $_storyId');
+        print('✅ 화면 업데이트 완료:');
+        print('  - storyId: $_storyId');
+        print('  - story 길이: ${_generatedStory?.length ?? 0}자');
 
+        // 🎵 음성 자동 생성 시작
         if (_storyId != null) {
+          print('🎵 음성 생성 자동 시작...');
           _generateVoice();
         }
+      } else if (response.statusCode == 401) {
+        print('❌ 인증 실패 (401)');
+        _showError('로그인이 만료되었습니다. 다시 로그인해주세요.');
+        Navigator.pushReplacementNamed(context, '/login');
       } else {
-        throw Exception('동화 생성에 실패했습니다. 상태 코드: ${response.statusCode}');
+        print('❌ API 오류: ${response.statusCode}');
+        final errorMessage =
+            response.body.isNotEmpty
+                ? json.decode(response.body)['message'] ?? '동화 생성에 실패했습니다.'
+                : '동화 생성에 실패했습니다.';
+        _showError(errorMessage);
       }
     } catch (e) {
       print('❌ 동화 생성 에러: $e');
       _showError('동화 생성 중 오류가 발생했습니다: ${e.toString()}');
     } finally {
-      setState(() => _isGeneratingStory = false);
+      setState(() {
+        _isGeneratingStory = false;
+      });
     }
+  }
+
+  // 에러 표시 메서드
+  void _showError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // 🎯 S3 연동 음성 생성 및 재생 (Flutter)
@@ -662,13 +730,6 @@ class _StoriesScreenState extends State<StoriesScreen> {
         'audioUrl': _audioUrl,
         'imageUrl': _colorImageUrl,
       },
-    );
-  }
-
-  void _showError(String message) {
-    setState(() => _errorMessage = message);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
