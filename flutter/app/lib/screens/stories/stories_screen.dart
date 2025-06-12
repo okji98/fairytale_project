@@ -714,23 +714,114 @@ class _StoriesScreenState extends State<StoriesScreen> {
   }
 
   // 공유 기능
+// lib/screens/stories/stories_screen.dart (공유 기능 업데이트)
+// 기존 파일에서 _shareStoryVideo 메서드만 업데이트
+
+  // 공유 기능 (비디오 생성 및 업로드)
   Future<void> _shareStoryVideo() async {
+    if (_storyId == null) {
+      _showError('동화를 먼저 생성해주세요.');
+      return;
+    }
+
     if (_audioUrl == null || _colorImageUrl == null) {
       _showError('음성과 이미지가 모두 생성되어야 공유할 수 있습니다.');
       return;
     }
 
-    Navigator.pushNamed(
-      context,
-      '/share',
-      arguments: {
-        'videoUrl': 'https://generated-video-url.com/video_${_storyId}.mp4',
-        'storyTitle': '${_nameController.text}의 $_selectedTheme 동화',
-        'storyContent': _generatedStory,
-        'audioUrl': _audioUrl,
-        'imageUrl': _colorImageUrl,
-      },
+    // 공유 확인 다이얼로그
+    bool? shouldShare = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('동화 공유하기'),
+        content: Text('이 동화를 기록일지에 공유하시겠습니까?\n비디오로 변환되어 업로드됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFF6B756),
+            ),
+            child: Text('공유하기'),
+          ),
+        ],
+      ),
     );
+
+    if (shouldShare != true) return;
+
+    // 로딩 다이얼로그 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFFF6B756)),
+              SizedBox(height: 16),
+              Text(
+                '동화를 비디오로 변환하는 중...',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '잠시만 기다려주세요.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final headers = await _getAuthHeaders();
+
+      print('🎬 Stories에서 공유 요청 시작 - StoryId: $_storyId');
+
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/share/story/$_storyId'),
+        headers: headers,
+      );
+
+      // 로딩 다이얼로그 닫기
+      Navigator.pop(context);
+
+      print('🎬 공유 응답 상태: ${response.statusCode}');
+      print('🎬 공유 응답 본문: ${response.body}');
+
+      if (response.statusCode == 200) {
+        // 성공 메시지
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 동화가 성공적으로 공유되었습니다!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // 공유 화면으로 이동
+        Navigator.pushNamed(context, '/share');
+
+      } else {
+        throw Exception('공유 실패: ${response.statusCode}');
+      }
+
+    } catch (e) {
+      // 로딩 다이얼로그가 열려있다면 닫기
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      print('❌ 공유 실패: $e');
+      _showError('공유 중 오류가 발생했습니다: ${e.toString()}');
+    }
   }
 
   @override

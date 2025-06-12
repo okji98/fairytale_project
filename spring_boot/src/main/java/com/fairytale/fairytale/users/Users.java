@@ -73,4 +73,14 @@ public class Users {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Like> likes;
+
+    /**
+     * 사용자 표시명 반환 (nickname 우선, 없으면 username)
+     */
+    public String getName() {
+        if (nickname != null && !nickname.trim().isEmpty()) {
+            return nickname;
+        }
+        return username;
+    }
 }

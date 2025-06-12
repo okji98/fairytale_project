@@ -120,165 +120,277 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
-  // 이미지 상세보기 모달
+  // lib/screens/gallery/gallery_screen.dart (공유 기능 추가)
+// 기존 _showImageDetail 메서드를 다음과 같이 업데이트:
+
+  // 이미지 상세보기 모달 (공유 기능 추가)
   void _showImageDetail(GalleryItem item) {
     showDialog(
       context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: Colors.transparent,
-            child: Stack(
-              children: [
-                Center(
-                  child: Container(
-                    margin: EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Center(
+              child: Container(
+                margin: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 헤더
+                    Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            item.storyTitle ?? '동화 이미지',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: Icon(Icons.close),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 헤더
-                        Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                    // 이미지들
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
                             children: [
-                              Text(
-                                item.storyTitle ?? '동화 이미지',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                              // 컬러 이미지
+                              if (item.colorImageUrl != null) ...[
+                                Text(
+                                  '컬러 이미지',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                              IconButton(
-                                onPressed: () => Navigator.pop(context),
-                                icon: Icon(Icons.close),
-                              ),
+                                SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    item.colorImageUrl!,
+                                    width: double.infinity,
+                                    fit: BoxFit.contain,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        height: 200,
+                                        child: Center(child: CircularProgressIndicator()),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        height: 200,
+                                        color: Colors.grey[300],
+                                        child: Center(child: Icon(Icons.error)),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                              ],
+
+                              // 색칠한 이미지
+                              if (item.coloringImageUrl != null) ...[
+                                Text(
+                                  '색칠한 이미지',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    item.coloringImageUrl!,
+                                    width: double.infinity,
+                                    fit: BoxFit.contain,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        height: 200,
+                                        child: Center(child: CircularProgressIndicator()),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        height: 200,
+                                        color: Colors.grey[300],
+                                        child: Center(child: Icon(Icons.error)),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                              ],
                             ],
                           ),
                         ),
+                      ),
+                    ),
 
-                        // 이미지들
-                        Flexible(
-                          child: SingleChildScrollView(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Column(
-                                children: [
-                                  // 컬러 이미지
-                                  if (item.colorImageUrl != null) ...[
-                                    Text(
-                                      '컬러 이미지',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    SizedBox(height: 8),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        item.colorImageUrl!,
-                                        width: double.infinity,
-                                        fit: BoxFit.contain,
-                                        loadingBuilder: (
-                                          context,
-                                          child,
-                                          loadingProgress,
-                                        ) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Container(
-                                            height: 200,
-                                            child: Center(
-                                              child:
-                                                  CircularProgressIndicator(),
-                                            ),
-                                          );
-                                        },
-                                        errorBuilder: (
-                                          context,
-                                          error,
-                                          stackTrace,
-                                        ) {
-                                          return Container(
-                                            height: 200,
-                                            color: Colors.grey[300],
-                                            child: Center(
-                                              child: Icon(Icons.error),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    SizedBox(height: 16),
-                                  ],
-
-                                  // 색칠한 이미지
-                                  if (item.coloringImageUrl != null) ...[
-                                    Text(
-                                      '색칠한 이미지',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    SizedBox(height: 8),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        item.coloringImageUrl!,
-                                        width: double.infinity,
-                                        fit: BoxFit.contain,
-                                        loadingBuilder: (
-                                          context,
-                                          child,
-                                          loadingProgress,
-                                        ) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Container(
-                                            height: 200,
-                                            child: Center(
-                                              child:
-                                                  CircularProgressIndicator(),
-                                            ),
-                                          );
-                                        },
-                                        errorBuilder: (
-                                          context,
-                                          error,
-                                          stackTrace,
-                                        ) {
-                                          return Container(
-                                            height: 200,
-                                            color: Colors.grey[300],
-                                            child: Center(
-                                              child: Icon(Icons.error),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    SizedBox(height: 16),
-                                  ],
-                                ],
-                              ),
+                    // 공유 버튼
+                    Padding(
+                      padding: EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context); // 다이얼로그 닫기
+                            _shareFromGallery(item);
+                          },
+                          icon: Icon(Icons.share),
+                          label: Text('기록일지에 공유하기'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFFF6B756),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
                             ),
                           ),
                         ),
-
-                        SizedBox(height: 16),
-                      ],
+                      ),
                     ),
-                  ),
+
+                    SizedBox(height: 16),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
+        ),
+      ),
     );
+  }
+
+  // 갤러리에서 공유 기능
+  Future<void> _shareFromGallery(GalleryItem item) async {
+    // 공유 가능한 이미지가 있는지 확인
+    if (item.colorImageUrl == null && item.coloringImageUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('공유할 이미지가 없습니다.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 공유 확인 다이얼로그
+    bool? shouldShare = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('갤러리에서 공유하기'),
+        content: Text('이 작품을 기록일지에 공유하시겠습니까?\n비디오로 변환되어 업로드됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFF6B756),
+            ),
+            child: Text('공유하기'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldShare != true) return;
+
+    // 로딩 다이얼로그 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFFF6B756)),
+              SizedBox(height: 16),
+              Text(
+                '작품을 비디오로 변환하는 중...',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '잠시만 기다려주세요.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final headers = await _getAuthHeaders();
+
+      print('🎬 Gallery에서 공유 요청 시작 - StoryId: ${item.storyId}');
+
+      // Gallery ID로 공유 (실제로는 storyId를 사용하지만 갤러리 엔드포인트 사용)
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/share/gallery/${item.storyId}'),
+        headers: headers,
+      );
+
+      // 로딩 다이얼로그 닫기
+      Navigator.pop(context);
+
+      print('🎬 Gallery 공유 응답 상태: ${response.statusCode}');
+      print('🎬 Gallery 공유 응답 본문: ${response.body}');
+
+      if (response.statusCode == 200) {
+        // 성공 메시지
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 작품이 성공적으로 공유되었습니다!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // 공유 화면으로 이동
+        Navigator.pushNamed(context, '/share');
+
+      } else {
+        throw Exception('공유 실패: ${response.statusCode}');
+      }
+
+    } catch (e) {
+      // 로딩 다이얼로그가 열려있다면 닫기
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      print('❌ Gallery 공유 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('공유 중 오류가 발생했습니다: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override

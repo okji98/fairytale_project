@@ -32,6 +32,7 @@ public class S3Service {
     @Value("${cloud.aws.region.static}")
     private String region;
 
+
     /**
      * 프로필 이미지 업로드
      */
@@ -180,6 +181,7 @@ public class S3Service {
             default:
                 return ".jpg";
         }
+
     }
 
     /**
@@ -567,6 +569,125 @@ public class S3Service {
             return "audio/ogg";
         } else {
             return "application/octet-stream";
+        }
+    }
+// src/main/java/com/fairytale/fairytale/service/S3Service.java (비디오 업로드 메서드 추가)
+// 기존 S3Service.java에 다음 메서드들을 추가해주세요:
+
+    /**
+     * 🎬 로컬 비디오 파일을 S3에 업로드
+     */
+    public String uploadVideoFromLocalFile(String localFilePath, String folder) {
+        try {
+            log.info("🎬 로컬 비디오 파일 S3 업로드 시작: {}", localFilePath);
+
+            // 1. 로컬 파일 존재 여부 확인
+            java.io.File localFile = new java.io.File(localFilePath);
+            if (!localFile.exists()) {
+                throw new java.io.FileNotFoundException("로컬 파일이 존재하지 않습니다: " + localFilePath);
+            }
+
+            log.info("🔍 파일 크기: {} bytes", localFile.length());
+
+            // 2. S3 키 생성 (폴더 지정 가능)
+            String s3Key = generateVideoFileName(folder, getFileExtension(localFile.getName()));
+            log.info("🔑 생성된 S3 키: {}", s3Key);
+
+            // 3. 메타데이터 설정
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(localFile.length());
+            metadata.setContentType(getVideoContentTypeFromFile(localFile.getName()));
+            metadata.setCacheControl("max-age=31536000"); // 1년 캐시
+
+            // 4. S3에 업로드
+            try (java.io.FileInputStream fileInputStream = new java.io.FileInputStream(localFile)) {
+                PutObjectRequest putRequest = new PutObjectRequest(
+                        bucketName,
+                        s3Key,
+                        fileInputStream,
+                        metadata
+                );
+
+                PutObjectResult result = amazonS3.putObject(putRequest);
+                log.info("✅ S3 비디오 업로드 완료. ETag: {}", result.getETag());
+            }
+
+            // 5. 공개 URL 반환
+            String publicUrl = getPublicUrl(s3Key);
+            log.info("✅ 생성된 비디오 공개 URL: {}", publicUrl);
+
+            // 6. 업로드 후 로컬 파일 삭제 (옵션)
+            try {
+                localFile.delete();
+                log.info("🗑️ 임시 로컬 파일 삭제 완료: {}", localFilePath);
+            } catch (Exception e) {
+                log.warn("⚠️ 임시 파일 삭제 실패: {}", e.getMessage());
+            }
+
+            return publicUrl;
+
+        } catch (Exception e) {
+            log.error("❌ S3 비디오 업로드 실패: {}", e.getMessage());
+            throw new RuntimeException("S3 비디오 업로드 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 🔑 비디오 파일명 생성 (중복 방지)
+     */
+    private String generateVideoFileName(String folder, String extension) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        String uuid = UUID.randomUUID().toString().substring(0, 8);
+
+        // 폴더가 지정되면 해당 폴더 사용, 없으면 기본 videos 폴더
+        String baseFolder = folder != null && !folder.isEmpty() ? folder : "videos";
+
+        return String.format("%s/%s/video-%s%s", baseFolder, timestamp, uuid, extension);
+    }
+
+    /**
+     * 🎬 파일명에서 비디오 Content-Type 추출
+     */
+    private String getVideoContentTypeFromFile(String fileName) {
+        try {
+            String lowerName = fileName.toLowerCase();
+            if (lowerName.endsWith(".mp4")) return "video/mp4";
+            if (lowerName.endsWith(".avi")) return "video/x-msvideo";
+            if (lowerName.endsWith(".mov")) return "video/quicktime";
+            if (lowerName.endsWith(".wmv")) return "video/x-ms-wmv";
+            if (lowerName.endsWith(".flv")) return "video/x-flv";
+            if (lowerName.endsWith(".webm")) return "video/webm";
+            return "video/mp4"; // 기본값
+        } catch (Exception e) {
+            return "video/mp4"; // 오류 시 기본값
+        }
+    }
+
+    /**
+     * 🎬 비디오 파일 존재 여부 확인
+     */
+    public boolean doesVideoExist(String videoKey) {
+        try {
+            amazonS3.getObjectMetadata(bucketName, videoKey);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 🗑️ 비디오 파일 삭제
+     */
+    public void deleteVideo(String videoUrl) {
+        try {
+            // URL에서 S3 키 추출
+            String s3Key = extractS3KeyFromUrl(videoUrl);
+            if (s3Key != null) {
+                amazonS3.deleteObject(bucketName, s3Key);
+                log.info("✅ 비디오 파일 삭제 성공: {}", s3Key);
+            }
+        } catch (Exception e) {
+            log.error("❌ 비디오 파일 삭제 실패: {}", e.getMessage());
         }
     }
 }
