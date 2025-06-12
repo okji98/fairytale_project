@@ -62,7 +62,7 @@ if st.button("동화 이미지 생성"):
 
 # 이미지 표시
 if st.session_state.image_url:
-    st.image(st.session_state.image_url, caption="동화 이미지", use_container_width=True)
+    st.image(st.session_state.image_url, caption="동화 이미지") #, use_container_width=True)
 
 # 흑백 이미지 변환 버튼
 #if st.session_state.get("image_url"):
@@ -76,4 +76,4 @@ if st.button("흑백 이미지 변환"):
 
 # 흑백 이미지 표시
 if st.session_state.get("bw_image_path"):
-    st.image(st.session_state.bw_image_path, caption="색칠용 라인 드로잉", use_container_width=True)
+    st.image(st.session_state.bw_image_path, caption="색칠용 라인 드로잉") #, use_container_width=True)

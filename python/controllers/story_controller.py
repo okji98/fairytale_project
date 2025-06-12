@@ -11,7 +11,9 @@ import requests
 import cv2
 import numpy as np
 from PIL import Image
-import base64
+import random
+import re
+from typing import Optional
 
 load_dotenv()  # .env 파일에서 환경변수 로드
 
@@ -79,58 +81,178 @@ def play_openai_voice(text, voice="alloy", speed=1):
     return tmp_path
 
 
-# 이미지 생성 함수
+# # 이미지 생성 함수 (Dall-E 3 사용)
+# def generate_image_from_fairy_tale(fairy_tale_text):
+#     # 프롬프트 영어로 생성 시 응답 내용 더 정확해짐
+#     try:
+#         base_prompt = fairy_tale_text[:300].replace('\n', ' ')
+
+#         prompt = (
+#             "Make sure there is no text in the image "
+#             "Minimul detail "
+#             f"Please create a single, simple illustration that matches the content about {base_prompt}, in a child-friendly style. "
+#         )
+
+#         response = client.images.generate(
+#             model="dall-e-3",
+#             prompt=prompt,
+#             size="1024x1024",
+#             quality="standard",
+#             n=1
+#         )
+        
+#         if hasattr(response, "data") and response.data and len(response.data) > 0:
+#             return response.data[0].url
+#         else:
+#             print("이미지 생성 실패: 응답이 비어 있거나 형식이 잘못됨.")
+#             print("전체 응답:", response)
+#             return None
+#     except Exception as e:
+#         print(f"이미지 생성 중 오류 발생:\n{e}")
+#         return None
+
+# 중복되지 않는 파일명 생성 함수
+def get_available_filename(base_name: str, extension: str = ".png", folder: str = ".") -> str:
+    """
+    중복되지 않는 파일명을 자동으로 생성
+    예: fairy_tale_image.png, fairy_tale_image_1.png, ...
+    """
+    counter = 0
+    while True:
+        filename = f"{base_name}{f'_{counter}' if counter > 0 else ''}{extension}"
+        filepath = os.path.join(folder, filename)
+        if not os.path.exists(filepath):
+            return filepath
+        counter += 1
+
+# 프롬프트 생성 함수 (staility_sdxl는 영어만 처리 가능)
+def generate_image_prompt_from_story(fairy_tale_text: str) -> Optional[str]:
+    """
+    동화 내용을 기반으로 이미지 생성용 영어 프롬프트 생성
+    """
+    try:
+        system_prompt = (
+            "You are a prompt generator for staility_sdxl. "
+            f"From the given {fairy_tale_text}, choose one vivid, heartwarming scene. "
+            "Describe it in English in a single short sentence suitable for generating a simple, child-friendly fairy tale illustration style. "
+            "Use a soft, cute, minimal detail. "
+            "No text, no words, no letters, no signs, no numbers."
+        )
+
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"다음은 동화야:\n\n{fairy_tale_text}\n\n이 동화에 어울리는 그림을 그릴 수 있도록 프롬프트를 영어로 짧게 써줘."}
+            ],
+            temperature=0.5,
+            max_tokens=150
+        )
+
+        return completion.choices[0].message.content.strip()
+
+    except Exception as e:
+        st.error(f"이미지 프롬프트 생성 오류: {e}")
+        return None
+
+
+# 이미지 생성 함수 (staility_sdxl 사용)
 def generate_image_from_fairy_tale(fairy_tale_text):
     # 프롬프트 영어로 생성 시 응답 내용 더 정확해짐
     try:
-        base_prompt = fairy_tale_text[:300].replace('\n', ' ')
+        endpoint = "https://api.stability.ai/v2beta/stable-image/generate/core"
+        
+        
+        # 동화 프롬프트 처리
+        base_prompt = generate_image_prompt_from_story(fairy_tale_text)
+        if not base_prompt:
+            st.error("이미지 프롬프트 생성에 실패했습니다.")
+            return None
 
         prompt = (
-            "Make sure there is no text in the image "
+            "no text in the image "
             "Minimul detail "
             f"Please create a single, simple illustration that matches the content about {base_prompt}, in a child-friendly style. "
         )
 
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=prompt,
-            size="1024x1024",
-            quality="standard",
-            n=1
-        )
-        
-        if hasattr(response, "data") and response.data and len(response.data) > 0:
-            # URL 가져오기
-            image_url = response.data[0].url
-            print(f"이미지 생성 성공: {image_url}")
-            return image_url
+        headers = {
+            "Authorization": f"Bearer {os.getenv('STABILITY_API_KEY')}",
+            "Accept": "image/*",
+        }
 
-            # 이미지 다운로드 및 파일로 저장
-            # image_response = requests.get(image_url, stream=True)
-            # if image_response.status_code == 200:
-            #     # PIL을 사용해 이미지 열기
-            #     image = Image.open(BytesIO(image_response.content))
-            #     image.save(save_path)  # 저장 경로에 이미지 저장
-            #     print(f"이미지가 성공적으로 저장되었습니다: {save_path}")
-            #     return save_path
-           
-            # else:
-            #     print(f"이미지 다운로드 실패: {image_response.status_code}")
-            #     return None
+        # multipart/form-data 형태로 데이터 전송
+        files = {
+            "prompt": (None, prompt),
+            "model": (None, "stable-diffusion-xl-1024-v1-0"),
+            "output_format": (None, "png"),
+            "height": (None, "1024"),
+            "width": (None, "1024"),
+            "seed": (None, "1234")
+        }
+
+        response = requests.post(endpoint, headers=headers, files=files)
+
+        if response.status_code == 200:
+            save_path = get_available_filename("fairy_tale_image", ".png", folder=".")
+            with open(save_path, "wb") as f:
+                f.write(response.content)
+            print(f"이미지 저장 완료: {save_path}")
+            return save_path
         else:
-            print("이미지 생성 실패: 응답이 비어 있거나 형식이 잘못됨.")
-            print("전체 응답:", response)
+            print("이미지 생성 실패:", response.status_code)
+            print("응답 내용:", response.text)
             return None
+
     except Exception as e:
         print(f"이미지 생성 중 오류 발생:\n{e}")
         return None
 
 
-# 흑백 이미지 변환
+# 흑백 이미지 변환 (Dalle-E 3 이미지 용)
+# def convert_bw_image(image_url, save_path="bw_image.png"):
+#     try:
+#         response = requests.get(image_url)
+#         image = Image.open(BytesIO(response.content)).convert("RGB")
+
+#         # Numpy 배열로 변환
+#         np_image = np.array(image)
+
+#         # 흑백 변환
+#         gray = cv2.cvtColor(np_image, cv2.COLOR_RGB2GRAY)
+
+#         # 가우시안 블러로 노이즈 제거
+#         blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+
+#         # 캐니 엣지 디텍션 (더 부드러운 선)
+#         edges = cv2.Canny(blurred, 50, 150)
+        
+#         # 선 두께 조절
+#         kernel = np.ones((2,2), np.uint8)
+#         dilated_edges = cv2.dilate(edges, kernel, iterations=1)
+        
+#         # 흰 배경에 검은 선
+#         line_drawing = 255 - dilated_edges
+        
+#         # 이미지 저장
+#         cv2.imwrite(save_path, line_drawing)
+#         return save_path
+    
+#     except Exception as e:
+#         print(f"변환 오류: {e}")
+#         return None
+
+# 흑백 이미지 변환 (staility_sdxl 이미지 용)
 def convert_bw_image(image_url, save_path="bw_image.png"):
     try:
-        response = requests.get(image_url)
-        image = Image.open(BytesIO(response.content)).convert("RGB")
+
+        # URL인지 로컬 파일인지 판단
+        if image_url.startswith(('http://', 'https://')):
+            # URL에서 이미지 다운로드
+            response = requests.get(image_url)
+            image = Image.open(BytesIO(response.content)).convert("RGB")
+        else:
+            # 로컬 파일에서 이미지 로드
+            image = Image.open(image_url).convert("RGB")
 
         # Numpy 배열로 변환
         np_image = np.array(image)
@@ -152,19 +274,9 @@ def convert_bw_image(image_url, save_path="bw_image.png"):
         line_drawing = 255 - dilated_edges
         
         # 이미지 저장
-        # cv2.imwrite(save_path, line_drawing)
-        bw_pil_image = Image.fromarray(line_drawing)
-        bw_pil_image.save(save_path)
+        cv2.imwrite(save_path, line_drawing)
+        st.info(f"흑백 변환 완료: {save_path}")
         return save_path
-    
-        # 이미지 저장
-        # success = cv2.imwrite(save_path, line_drawing)
-        # if not success:
-        #     print("이미지 저장에 실패했습니다.")
-        #     return None
-
-        # print(f"이미지가 성공적으로 {save_path}에 저장되었습니다.")
-        # return save_path
     
     except Exception as e:
         print(f"변환 오류: {e}")
