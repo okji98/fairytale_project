@@ -53,6 +53,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
     "onyx",
     "nova",
     "shimmer",
+    "ash",
+    "coral",
+    "sage",
   ];
 
   @override
@@ -229,8 +232,8 @@ class _StoriesScreenState extends State<StoriesScreen> {
         setState(() {
           _generatedStory =
               responseData['content'] ??
-              responseData['story'] ??
-              '동화 내용을 불러올 수 없습니다.';
+                  responseData['story'] ??
+                  '동화 내용을 불러올 수 없습니다.';
           _storyId = responseData['id'];
         });
 
@@ -250,9 +253,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
       } else {
         print('❌ API 오류: ${response.statusCode}');
         final errorMessage =
-            response.body.isNotEmpty
-                ? json.decode(response.body)['message'] ?? '동화 생성에 실패했습니다.'
-                : '동화 생성에 실패했습니다.';
+        response.body.isNotEmpty
+            ? json.decode(response.body)['message'] ?? '동화 생성에 실패했습니다.'
+            : '동화 생성에 실패했습니다.';
         _showError(errorMessage);
       }
     } catch (e) {
@@ -280,7 +283,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
     try {
       final headers = await _getAuthHeaders();
-      final requestData = {'storyId': _storyId};
+      final requestData = {'storyId': _storyId, 'voice': _selectedVoice};
 
       print('🔍 음성 생성 요청: ${json.encode(requestData)}');
 
@@ -533,9 +536,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
   // 🔗 Presigned URL 요청 (보안이 필요한 경우)
   Future<String?> _requestPresignedUrl(
-    int storyId, {
-    int expirationMinutes = 60,
-  }) async {
+      int storyId, {
+        int expirationMinutes = 60,
+      }) async {
     try {
       print('🔗 Presigned URL 요청: StoryId=$storyId, 만료=$expirationMinutes분');
 
@@ -691,9 +694,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
             '/coloring',
             arguments: {
               'imageUrl':
-                  blackWhiteImageUrl.startsWith('http')
-                      ? blackWhiteImageUrl
-                      : _colorImageUrl!,
+              blackWhiteImageUrl.startsWith('http')
+                  ? blackWhiteImageUrl
+                  : _colorImageUrl!,
               'isBlackAndWhite': false,
             },
           );
@@ -714,114 +717,23 @@ class _StoriesScreenState extends State<StoriesScreen> {
   }
 
   // 공유 기능
-// lib/screens/stories/stories_screen.dart (공유 기능 업데이트)
-// 기존 파일에서 _shareStoryVideo 메서드만 업데이트
-
-  // 공유 기능 (비디오 생성 및 업로드)
   Future<void> _shareStoryVideo() async {
-    if (_storyId == null) {
-      _showError('동화를 먼저 생성해주세요.');
-      return;
-    }
-
     if (_audioUrl == null || _colorImageUrl == null) {
       _showError('음성과 이미지가 모두 생성되어야 공유할 수 있습니다.');
       return;
     }
 
-    // 공유 확인 다이얼로그
-    bool? shouldShare = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('동화 공유하기'),
-        content: Text('이 동화를 기록일지에 공유하시겠습니까?\n비디오로 변환되어 업로드됩니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFFF6B756),
-            ),
-            child: Text('공유하기'),
-          ),
-        ],
-      ),
+    Navigator.pushNamed(
+      context,
+      '/share',
+      arguments: {
+        'videoUrl': 'https://generated-video-url.com/video_${_storyId}.mp4',
+        'storyTitle': '${_nameController.text}의 $_selectedTheme 동화',
+        'storyContent': _generatedStory,
+        'audioUrl': _audioUrl,
+        'imageUrl': _colorImageUrl,
+      },
     );
-
-    if (shouldShare != true) return;
-
-    // 로딩 다이얼로그 표시
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: Color(0xFFF6B756)),
-              SizedBox(height: 16),
-              Text(
-                '동화를 비디오로 변환하는 중...',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '잠시만 기다려주세요.',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    try {
-      final headers = await _getAuthHeaders();
-
-      print('🎬 Stories에서 공유 요청 시작 - StoryId: $_storyId');
-
-      final response = await http.post(
-        Uri.parse('${ApiService.baseUrl}/api/share/story/$_storyId'),
-        headers: headers,
-      );
-
-      // 로딩 다이얼로그 닫기
-      Navigator.pop(context);
-
-      print('🎬 공유 응답 상태: ${response.statusCode}');
-      print('🎬 공유 응답 본문: ${response.body}');
-
-      if (response.statusCode == 200) {
-        // 성공 메시지
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 동화가 성공적으로 공유되었습니다!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-
-        // 공유 화면으로 이동
-        Navigator.pushNamed(context, '/share');
-
-      } else {
-        throw Exception('공유 실패: ${response.statusCode}');
-      }
-
-    } catch (e) {
-      // 로딩 다이얼로그가 열려있다면 닫기
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-
-      print('❌ 공유 실패: $e');
-      _showError('공유 중 오류가 발생했습니다: ${e.toString()}');
-    }
   }
 
   @override
@@ -919,14 +831,14 @@ class _StoriesScreenState extends State<StoriesScreen> {
               DropdownButtonFormField<String>(
                 value: _selectedTheme,
                 items:
-                    _themes
-                        .map(
-                          (theme) => DropdownMenuItem(
-                            value: theme,
-                            child: Text(theme),
-                          ),
-                        )
-                        .toList(),
+                _themes
+                    .map(
+                      (theme) => DropdownMenuItem(
+                    value: theme,
+                    child: Text(theme),
+                  ),
+                )
+                    .toList(),
                 hint: Text('테마 선택'),
                 onChanged: (val) => setState(() => _selectedTheme = val),
                 decoration: InputDecoration(
@@ -954,14 +866,14 @@ class _StoriesScreenState extends State<StoriesScreen> {
               DropdownButtonFormField<String>(
                 value: _selectedVoice,
                 items:
-                    _voices
-                        .map(
-                          (voice) => DropdownMenuItem(
-                            value: voice,
-                            child: Text(voice),
-                          ),
-                        )
-                        .toList(),
+                _voices
+                    .map(
+                      (voice) => DropdownMenuItem(
+                    value: voice,
+                    child: Text(voice),
+                  ),
+                )
+                    .toList(),
                 hint: Text('음성 선택'),
                 onChanged: (val) => setState(() => _selectedVoice = val),
                 decoration: InputDecoration(
@@ -1027,31 +939,31 @@ class _StoriesScreenState extends State<StoriesScreen> {
                     ),
                   ),
                   child:
-                      _isGeneratingStory
-                          ? Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Text('동화 생성 중...'),
-                            ],
-                          )
-                          : Text(
-                            '동화 생성',
-                            style: TextStyle(
-                              fontSize: screenWidth * 0.04,
-                              fontWeight: FontWeight.bold,
-                            ),
+                  _isGeneratingStory
+                      ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
                           ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Text('동화 생성 중...'),
+                    ],
+                  )
+                      : Text(
+                    '동화 생성',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.04,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
 
@@ -1158,9 +1070,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
                               iconSize: screenWidth * 0.08,
                               icon: Icon(Icons.stop, color: Colors.grey[600]),
                               onPressed:
-                                  _isPlaying || _position > Duration.zero
-                                      ? _stopAudio
-                                      : null,
+                              _isPlaying || _position > Duration.zero
+                                  ? _stopAudio
+                                  : null,
                             ),
                           ],
                         ),
@@ -1254,7 +1166,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
                     height: screenHeight * 0.06,
                     child: ElevatedButton(
                       onPressed:
-                          _isGeneratingImage ? null : _generateColorImage,
+                      _isGeneratingImage ? null : _generateColorImage,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.white,
@@ -1263,31 +1175,31 @@ class _StoriesScreenState extends State<StoriesScreen> {
                         ),
                       ),
                       child:
-                          _isGeneratingImage
-                              ? Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text('이미지 생성 중...'),
-                                ],
-                              )
-                              : Text(
-                                '이미지 생성',
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.04,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                      _isGeneratingImage
+                          ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
                               ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text('이미지 생성 중...'),
+                        ],
+                      )
+                          : Text(
+                        '이미지 생성',
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.04,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ] else ...[
@@ -1366,22 +1278,22 @@ class _StoriesScreenState extends State<StoriesScreen> {
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed:
-                              _isGeneratingBlackWhite
-                                  ? null
-                                  : _getBlackWhiteImageAndNavigate,
+                          _isGeneratingBlackWhite
+                              ? null
+                              : _getBlackWhiteImageAndNavigate,
                           icon:
-                              _isGeneratingBlackWhite
-                                  ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
-                                    ),
-                                  )
-                                  : Icon(Icons.brush),
+                          _isGeneratingBlackWhite
+                              ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                              : Icon(Icons.brush),
                           label: Text(
                             _isGeneratingBlackWhite ? '변환중...' : '흑백(색칠용)',
                           ),
