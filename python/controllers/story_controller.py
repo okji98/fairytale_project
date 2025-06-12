@@ -14,6 +14,7 @@ from PIL import Image
 import random
 import re
 from typing import Optional
+import base64
 
 load_dotenv()  # .env 파일에서 환경변수 로드
 
@@ -61,24 +62,74 @@ def generate_fairy_tale(name, thema):
         return f"동화 생성 중 오류 발생: {e}"
 
 
-# 음성 재생 함수
-def play_openai_voice(text, voice="alloy", speed=1):
-    # 1. TTS 음성 생성
-    response = openai.audio.speech.create(
-        model="tts-1",
-        voice=voice,
-        input=text
-    )
-    # 2. 임시 파일에 저장
-    tmp_path = None
-    if hasattr(response, 'content') and response.content:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
-            tmp_file.write(response.content)
-            tmp_path = tmp_file.name
-    else:
-        st.error("TTS 응답이 없습니다.")
+# # 음성 재생 함수
+# def play_openai_voice(text, voice="alloy", speed=1):
+#     # 1. TTS 음성 생성
+#     try:
+#         response = openai.audio.speech.create(
+#             model="tts-1",
+#             voice=voice,
+#             input=text,
+#             speed=speed # 속도 조절 (1.0이 기본 속도, 0.5는 느리게, 2.0은 빠르게)
+#         )
+#         # # 2. 임시 파일에 저장
+#         # tmp_path = None
+#         # if hasattr(response, 'content') and response.content:
+#         #     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+#         #         tmp_file.write(response.content)
+#         #         tmp_path = tmp_file.name
+#         # else:
+#         #     st.error("TTS 응답이 없습니다.")
+#         #     return None
+#         # return tmp_path
+
+#         # 2. 영구 파일에 저장 (임시 파일 대신)
+#         audio_filename = f"tts_audio_{voice}_{hash(text) % 10000}.mp3"
+#         audio_path = os.path.join(".", audio_filename)
+        
+#         # 기존 파일이 있으면 삭제
+#         if os.path.exists(audio_path):
+#             os.remove(audio_path)
+        
+#         # 새 파일로 저장
+#         with open(audio_path, "wb") as audio_file:
+#             audio_file.write(response.content)
+        
+#         print(f"음성 파일 생성 완료: {audio_path} (voice: {voice})")
+#         return audio_path
+        
+#     except Exception as e:
+#         print(f"TTS 생성 오류: {e}")
+#         return None
+
+# OpenAI TTS를 사용하여 음성 데이터 생성 (파일 저장 없음)
+def generate_openai_voice(text, voice="alloy", speed=1.0):
+    try:
+        # TTS 음성 생성
+        response = openai.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text,
+            speed=speed
+        )
+        
+        # 바이너리 데이터 직접 반환
+        return response.content
+        
+    except Exception as e:
+        print(f"TTS 생성 오류: {e}")
         return None
-    return tmp_path
+
+def audio_to_base64(audio_data):
+    """
+    오디오 바이너리 데이터를 Base64로 인코딩
+    모바일 앱에서 사용하기 위함
+    """
+    if audio_data:
+        return base64.b64encode(audio_data).decode('utf-8')
+    return None
+
+
 
 
 # # 이미지 생성 함수 (Dall-E 3 사용)
