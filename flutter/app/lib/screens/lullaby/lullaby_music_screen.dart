@@ -616,7 +616,6 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                                           children: [
                                             CircularProgressIndicator(),
                                             SizedBox(height: 16),
-                                            Text('스프링부트 → 파이썬 → 스프링부트 → 플러터'),
                                             Text('음악을 불러오는 중...'),
                                           ],
                                         ),

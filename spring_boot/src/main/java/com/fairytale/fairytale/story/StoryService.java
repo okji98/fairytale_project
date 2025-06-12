@@ -169,7 +169,8 @@ public class StoryService {
     }
 
     // 이미지
-    // 🎯 수정된 이미지 생성 메서드 (FastAPI 요청 구조 수정 + 오류 처리 개선)
+    // 🎯 수정된 이미지 생성 메서드 (색칠공부 생성 조건 개선)
+    // 🎯 수정된 이미지 생성 메서드 (색칠공부 생성 조건 개선)
     public Story createImage(ImageRequest request) {
         log.info("🔍 이미지 생성 요청 - StoryId: {}", request.getStoryId());
 
@@ -180,45 +181,53 @@ public class StoryService {
         log.info("✅ 스토리 조회 성공 - Title: {}", story.getTitle());
         log.info("🔍 스토리 내용 길이: {}자", story.getContent().length());
 
-        // 2. FastAPI 요청 데이터
+        // 2. FastAPI 요청 데이터 (전체 스토리 내용 사용)
         Map<String, Object> fastApiRequest = new HashMap<>();
         fastApiRequest.put("text", story.getContent());
 
-        log.info("🔍 FastAPI 이미지 생성 요청 데이터: {}", fastApiRequest);
+        log.info("🔍 FastAPI 이미지 생성 요청 데이터 길이: {}자", story.getContent().length());
 
-        // 3. FastAPI로 컬러 이미지 생성
+        // 3. FastAPI로 이미지 생성
         String imageUrl = fastApiBaseUrl + "/generate/image";
+        boolean isRealImageGenerated = false; // 🆕 실제 이미지 생성 여부 플래그
 
         try {
             String fastApiResponse = callFastApi(imageUrl, fastApiRequest);
-            String colorImageUrl = extractImageUrlFromResponse(fastApiResponse);
+            String localImagePath = extractImagePathFromResponse(fastApiResponse);
 
-            log.info("🎯 컬러 이미지 생성 완료: {}", colorImageUrl);
+            log.info("🎯 로컬 이미지 생성 완료: {}", localImagePath);
 
-            if (colorImageUrl == null || colorImageUrl.trim().isEmpty() || "null".equals(colorImageUrl)) {
-                log.warn("❌ FastAPI에서 null 이미지 URL 반환");
-                colorImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
-                log.info("🔄 더미 이미지 URL 사용: {}", colorImageUrl);
+            if (localImagePath == null || localImagePath.trim().isEmpty() || "null".equals(localImagePath)) {
+                log.warn("❌ FastAPI에서 null 이미지 경로 반환");
+                throw new RuntimeException("이미지 생성 실패");
             }
 
-            // 🆕 4. 이미지를 S3에 업로드 (흑백 변환을 위해)
+            // 🆕 4. 로컬 파일을 S3에 업로드
             String s3ImageUrl;
             try {
-                s3ImageUrl = processImageWithS3(colorImageUrl, story.getId());
+                s3ImageUrl = processLocalImageWithS3(localImagePath, story.getId());
                 log.info("✅ S3 이미지 업로드 완료: {}", s3ImageUrl);
+                isRealImageGenerated = true; // 🆕 실제 이미지 생성 성공
             } catch (Exception e) {
-                log.error("❌ S3 이미지 업로드 실패, 원본 URL 사용: {}", e.getMessage());
-                s3ImageUrl = colorImageUrl; // 실패시 원본 사용
+                log.error("❌ S3 이미지 업로드 실패: {}", e.getMessage());
+                // 🔄 S3 업로드 실패시 더미 이미지 사용
+                s3ImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
+                isRealImageGenerated = false; // 🆕 더미 이미지 사용
             }
 
-            // 5. Story에 S3 URL(또는 원본 URL) 저장
+            // 5. Story에 S3 URL 저장
             story.setImage(s3ImageUrl);
             Story savedStory = storyRepository.save(story);
 
             log.info("✅ 이미지 저장 완료");
 
-            // 6. 🎨 색칠공부 템플릿 비동기 생성 (S3 URL로 안정적 처리)
-            createColoringTemplateAsync(savedStory, s3ImageUrl);
+            // 🎨 6. 색칠공부 템플릿 비동기 생성 (실제 이미지인 경우만)
+            if (isRealImageGenerated) {
+                log.info("🎨 실제 이미지로 색칠공부 템플릿 생성 시작");
+                createColoringTemplateAsync(savedStory, s3ImageUrl);
+            } else {
+                log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
+            }
 
             return savedStory;
 
@@ -231,44 +240,182 @@ public class StoryService {
             Story savedStory = storyRepository.save(story);
 
             log.info("🔄 더미 이미지로 저장 완료: {}", dummyImageUrl);
+            log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
+
+            // 🚫 더미 이미지인 경우 색칠공부 템플릿 생성하지 않음
             return savedStory;
         }
     }
 
-    // 🆕 이미지 S3 처리 메서드
-    private String processImageWithS3(String imageUrl, Long storyId) {
+    // 🆕 로컬 이미지 파일 S3 처리 메서드 (경로 해결 개선)
+    private String processLocalImageWithS3(String localImagePath, Long storyId) {
         try {
-            if (imageUrl == null || imageUrl.trim().isEmpty()) {
-                log.warn("⚠️ 이미지 URL이 null이거나 비어있음");
+            if (localImagePath == null || localImagePath.trim().isEmpty()) {
+                log.warn("⚠️ 로컬 이미지 경로가 null이거나 비어있음");
                 return "";
             }
 
-            // 이미 S3 URL인 경우 그대로 반환
-            if (imageUrl.contains("amazonaws.com") || imageUrl.contains("cloudfront.net")) {
-                log.info("✅ 이미 S3 URL: {}", imageUrl);
-                return imageUrl;
+            // 🔍 파일 경로 해결 시도
+            java.io.File imageFile = resolveImageFile(localImagePath);
+
+            if (!imageFile.exists()) {
+                log.error("❌ 해결된 경로에서도 파일을 찾을 수 없음: {}", imageFile.getAbsolutePath());
+                throw new RuntimeException("이미지 파일을 찾을 수 없습니다: " + localImagePath);
             }
 
-            // 🎯 외부 URL을 S3에 업로드 (흑백 변환을 위해 필수)
-            log.info("📤 이미지 S3 업로드 시작 (흑백변환용): {}", imageUrl);
-            String s3Url = s3Service.uploadImageFromUrl(imageUrl, storyId);
-            log.info("✅ 이미지 S3 업로드 완료: {}", s3Url);
+            log.info("✅ 이미지 파일 발견: {}", imageFile.getAbsolutePath());
+
+            // 🔒 로컬 파일 경로 보안 검사
+            if (!isValidImagePath(imageFile.getAbsolutePath())) {
+                log.error("❌ 유효하지 않은 이미지 파일 경로: {}", imageFile.getAbsolutePath());
+                throw new RuntimeException("유효하지 않은 이미지 파일 경로");
+            }
+
+            // 🎯 로컬 파일을 S3에 업로드
+            log.info("📤 로컬 이미지 S3 업로드 시작: {}", imageFile.getAbsolutePath());
+            String s3Url = s3Service.uploadImageFromLocalFile(imageFile.getAbsolutePath(), "story-images");
+            log.info("✅ 로컬 이미지 S3 업로드 완료: {}", s3Url);
 
             return s3Url;
 
         } catch (Exception e) {
-            log.error("❌ S3 이미지 처리 실패: {}", e.getMessage());
-            // 🎯 실패해도 원본 URL 반환 (색칠공부는 안되지만 이미지 표시는 됨)
-            log.info("🔄 S3 업로드 실패, 원본 URL 사용 (색칠공부 기능 제한됨): {}", imageUrl);
-            return imageUrl;
+            log.error("❌ S3 로컬 이미지 처리 실패: {}", e.getMessage());
+            throw new RuntimeException("S3 이미지 처리 실패", e);
         }
     }
 
-    // 🆕 색칠공부 템플릿 비동기 생성 (PIL+OpenCV 변환)
+    // 🆕 이미지 파일 경로 해결 메서드
+    private java.io.File resolveImageFile(String imagePath) {
+        log.info("🔍 이미지 파일 경로 해결 시작: {}", imagePath);
+
+        // 1. 절대경로인 경우 그대로 사용
+        java.io.File file = new java.io.File(imagePath);
+        if (file.isAbsolute() && file.exists()) {
+            log.info("✅ 절대경로로 파일 발견: {}", file.getAbsolutePath());
+            return file;
+        }
+
+        // 2. 상대경로인 경우 여러 위치에서 시도
+        String[] searchPaths = {
+                "./",                           // 현재 작업 디렉토리
+                "../python/",                   // Python 디렉토리 (상대경로)
+                System.getProperty("user.dir"), // Java 실행 디렉토리
+                "/tmp/",                        // 임시 디렉토리
+        };
+
+        for (String searchPath : searchPaths) {
+            java.io.File searchFile = new java.io.File(searchPath, imagePath.startsWith("./") ? imagePath.substring(2) : imagePath);
+            log.info("🔍 검색 시도: {}", searchFile.getAbsolutePath());
+
+            if (searchFile.exists()) {
+                log.info("✅ 파일 발견: {}", searchFile.getAbsolutePath());
+                return searchFile;
+            }
+        }
+
+        // 3. 파일명만 추출해서 검색
+        String fileName = new java.io.File(imagePath).getName();
+        for (String searchPath : searchPaths) {
+            java.io.File searchFile = new java.io.File(searchPath, fileName);
+            log.info("🔍 파일명으로 검색 시도: {}", searchFile.getAbsolutePath());
+
+            if (searchFile.exists()) {
+                log.info("✅ 파일명으로 파일 발견: {}", searchFile.getAbsolutePath());
+                return searchFile;
+            }
+        }
+
+        log.warn("❌ 모든 경로에서 파일을 찾을 수 없음");
+        return file; // 원본 반환 (에러 처리는 호출자에서)
+    }
+
+    // 🔒 이미지 파일 경로 보안 검사
+    private boolean isValidImagePath(String filePath) {
+        try {
+            log.info("🔍 이미지 경로 보안 검사: {}", filePath);
+
+            // 1. 절대경로로 정규화 (.. 경로 해결)
+            java.io.File file = new java.io.File(filePath);
+            String canonicalPath = file.getCanonicalPath();
+            log.info("🔍 정규화된 경로: {}", canonicalPath);
+
+            // 2. 허용된 디렉토리 패턴들
+            String[] allowedPatterns = {
+                    "/tmp/",           // 임시 파일
+                    "/var/folders/",   // macOS 임시 폴더
+                    "/temp/",          // Windows 임시 폴더
+                    "temp",            // 상대 경로 temp
+                    ".png",            // png 확장자
+                    ".jpg",            // jpg 확장자
+                    ".jpeg",           // jpeg 확장자
+                    "fairytale",       // 🆕 프로젝트 디렉토리 허용
+                    "python",          // 🆕 Python 디렉토리 허용
+                    "spring_boot"      // 🆕 Spring Boot 디렉토리 허용
+            };
+
+            // 3. 허용된 패턴 확인
+            boolean patternMatched = false;
+            for (String pattern : allowedPatterns) {
+                if (canonicalPath.contains(pattern)) {
+                    patternMatched = true;
+                    break;
+                }
+            }
+
+            if (!patternMatched) {
+                log.error("❌ 허용되지 않은 디렉토리: {}", canonicalPath);
+                return false;
+            }
+
+            // 4. 위험한 경로 차단 (시스템 디렉토리)
+            String[] dangerousPaths = {
+                    "/etc/",
+                    "/bin/",
+                    "/usr/bin/",
+                    "/System/",
+                    "C:\\Windows\\",
+                    "C:\\Program Files\\",
+                    "/root/",
+                    "/home/",  // 🎯 다른 사용자 홈 디렉토리 차단
+            };
+
+            String lowerCanonicalPath = canonicalPath.toLowerCase();
+            for (String dangerousPath : dangerousPaths) {
+                if (lowerCanonicalPath.startsWith(dangerousPath.toLowerCase())) {
+                    log.error("❌ 위험한 시스템 경로 접근 차단: {}", canonicalPath);
+                    return false;
+                }
+            }
+
+            // 5. 파일 확장자 검사
+            String lowerPath = canonicalPath.toLowerCase();
+            if (!lowerPath.endsWith(".png") && !lowerPath.endsWith(".jpg") &&
+                    !lowerPath.endsWith(".jpeg") && !lowerPath.endsWith(".webp")) {
+                log.error("❌ 허용되지 않은 파일 확장자: {}", canonicalPath);
+                return false;
+            }
+
+            log.info("✅ 이미지 경로 보안 검사 통과: {}", canonicalPath);
+            return true;
+
+        } catch (Exception e) {
+            log.error("❌ 이미지 경로 검사 중 오류: {}", e.getMessage());
+            return false;
+        }
+    }
+
+
+    // 🆕 색칠공부 템플릿 비동기 생성 (안전성 강화)
     @Async
     public CompletableFuture<Void> createColoringTemplateAsync(Story story, String colorImageUrl) {
         try {
-            System.out.println("🎨 색칠공부 템플릿 비동기 생성 시작 - StoryId: " + story.getId());
+            log.info("🎨 색칠공부 템플릿 비동기 생성 시작 - StoryId: {}", story.getId());
+
+            // 🔍 URL 유효성 검사 (더미 이미지 제외)
+            if (!isValidImageUrlForColoring(colorImageUrl)) {
+                log.warn("⚠️ 색칠공부에 적합하지 않은 이미지 URL: {}", colorImageUrl);
+                return CompletableFuture.completedFuture(null);
+            }
 
             // ColoringTemplateService를 통해 PIL+OpenCV 변환 및 템플릿 생성
             coloringTemplateService.createColoringTemplate(
@@ -278,12 +425,175 @@ public class StoryService {
                     null  // 흑백 이미지는 자동 변환
             );
 
-            System.out.println("✅ 색칠공부 템플릿 비동기 생성 완료");
+            log.info("✅ 색칠공부 템플릿 비동기 생성 완료");
         } catch (Exception e) {
-            System.err.println("❌ 색칠공부 템플릿 생성 실패: " + e.getMessage());
+            log.error("❌ 색칠공부 템플릿 생성 실패: {}", e.getMessage());
             // 색칠공부 템플릿 생성 실패해도 Story는 정상 처리
         }
         return CompletableFuture.completedFuture(null);
+    }
+
+    // 🔍 색칠공부에 적합한 이미지 URL 검사
+    private boolean isValidImageUrlForColoring(String imageUrl) {
+        if (imageUrl == null || imageUrl.trim().isEmpty()) {
+            return false;
+        }
+
+        // 🚫 더미 이미지 URL 제외
+        if (imageUrl.contains("picsum.photos")) {
+            log.info("🚫 Picsum 더미 이미지는 색칠공부에서 제외: {}", imageUrl);
+            return false;
+        }
+
+        // 🚫 다른 더미/테스트 이미지 서비스들 제외
+        String lowerUrl = imageUrl.toLowerCase();
+        String[] dummyServices = {
+                "placeholder.com",
+                "via.placeholder.com",
+                "dummyimage.com",
+                "fakeimg.pl",
+                "lorempixel.com"
+        };
+
+        for (String dummyService : dummyServices) {
+            if (lowerUrl.contains(dummyService)) {
+                log.info("🚫 더미 이미지 서비스 감지, 색칠공부에서 제외: {}", imageUrl);
+                return false;
+            }
+        }
+
+        // ✅ S3 URL이거나 유효한 외부 이미지 URL
+        if (lowerUrl.contains("amazonaws.com") ||
+                lowerUrl.contains("cloudfront.net") ||
+                (lowerUrl.startsWith("http") &&
+                        (lowerUrl.contains(".jpg") || lowerUrl.contains(".png") ||
+                                lowerUrl.contains(".jpeg") || lowerUrl.contains(".webp")))) {
+            return true;
+        }
+
+        log.warn("⚠️ 알 수 없는 이미지 URL 형식: {}", imageUrl);
+        return false;
+    }
+
+    /**
+     * 🖤 흑백 변환 및 S3 업로드 처리 (컨트롤러에서 이동)
+     */
+    public String convertToBlackWhiteAndUpload(String colorImageUrl) {
+        try {
+            log.info("🎨 흑백 변환 및 S3 업로드 시작: {}", colorImageUrl);
+
+            if (colorImageUrl == null || colorImageUrl.isEmpty()) {
+                log.warn("❌ 컬러 이미지 URL이 비어있음");
+                return null;
+            }
+
+            // 1. FastAPI 흑백 변환 요청
+            Map<String, String> fastApiRequest = new HashMap<>();
+            fastApiRequest.put("text", colorImageUrl);
+
+            log.info("🔍 FastAPI 흑백 변환 요청: {}", fastApiRequest);
+
+            @SuppressWarnings("unchecked")
+            Map<String, String> response = restTemplate.postForObject(
+                    fastApiBaseUrl + "/convert/bwimage",
+                    fastApiRequest,
+                    Map.class
+            );
+
+            log.info("🔍 FastAPI 응답: {}", response);
+
+            if (response != null && response.containsKey("image_url")) {
+                String convertedUrl = response.get("image_url");
+
+                // 2. 변환 결과 처리
+                String finalImageUrl = processConvertedImageUrlForService(convertedUrl, colorImageUrl);
+
+                log.info("✅ 흑백 변환 최종 결과: {}", finalImageUrl);
+                return finalImageUrl;
+            } else {
+                throw new RuntimeException("FastAPI에서 유효한 응답을 받지 못했습니다.");
+            }
+
+        } catch (Exception e) {
+            log.error("❌ 흑백 변환 처리 실패: {}", e.getMessage());
+            return colorImageUrl; // 실패시 원본 반환
+        }
+    }
+
+    /**
+     * 🔧 Python 변환 결과 URL 처리 메서드 (서비스용)
+     */
+    private String processConvertedImageUrlForService(String convertedUrl, String originalUrl) {
+        log.info("🔍 URL 처리 - 변환됨: {}, 원본: {}", convertedUrl, originalUrl);
+
+        // 1. 완전한 URL인 경우 (S3 URL, HTTP URL, Base64 등)
+        if (convertedUrl.startsWith("http://") ||
+                convertedUrl.startsWith("https://") ||
+                convertedUrl.startsWith("data:image/")) {
+            log.info("✅ 완전한 URL 확인");
+            return convertedUrl;
+        }
+
+        // 2. 로컬 파일명인 경우 - FastAPI에서 다운로드 시도
+        if (convertedUrl.equals("bw_image.png") ||
+                convertedUrl.endsWith(".png") ||
+                convertedUrl.endsWith(".jpg")) {
+            log.info("🔍 로컬 파일명 감지, FastAPI에서 다운로드 시도: {}", convertedUrl);
+
+            // FastAPI에서 흑백 파일 다운로드 후 S3 업로드 시도
+            String s3BwUrl = downloadAndUploadBwImageForService(convertedUrl, originalUrl);
+            if (s3BwUrl != null) {
+                log.info("✅ 흑백 이미지 S3 업로드 성공: {}", s3BwUrl);
+                return s3BwUrl;
+            }
+
+            log.warn("⚠️ 흑백 이미지 처리 실패, 원본 이미지 사용");
+            return originalUrl;
+        }
+
+        log.info("⚠️ 알 수 없는 형식, 원본 이미지 사용");
+        return originalUrl;
+    }
+
+    /**
+     * 📥 FastAPI에서 흑백 파일 다운로드 후 S3 업로드 (서비스용)
+     */
+    private String downloadAndUploadBwImageForService(String fileName, String originalUrl) {
+        try {
+            log.info("📥 FastAPI에서 흑백 파일 다운로드 시도: {}", fileName);
+
+            // 1. FastAPI에서 흑백 파일 다운로드 요청
+            String fastApiDownloadUrl = fastApiBaseUrl + "/download/bwimage/" + fileName;
+
+            ResponseEntity<byte[]> response = restTemplate.getForEntity(fastApiDownloadUrl, byte[].class);
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                byte[] imageData = response.getBody();
+                log.info("✅ FastAPI에서 흑백 파일 다운로드 완료: {} bytes", imageData.length);
+
+                // 2. 임시 파일에 저장
+                java.io.File tempFile = java.io.File.createTempFile("bw_temp_", ".png");
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile)) {
+                    fos.write(imageData);
+                }
+
+                // 3. S3에 업로드
+                String s3Url = s3Service.uploadImageFromLocalFile(tempFile.getAbsolutePath(), "bw-images");
+
+                // 4. 임시 파일 삭제
+                tempFile.delete();
+
+                log.info("✅ 흑백 이미지 S3 업로드 완료: {}", s3Url);
+                return s3Url;
+            }
+
+            log.warn("⚠️ FastAPI 흑백 파일 다운로드 실패");
+            return null;
+
+        } catch (Exception e) {
+            log.error("❌ 흑백 파일 처리 실패: {}", e.getMessage());
+            return null;
+        }
     }
 
     // 🎯 s3 변경 보이스
@@ -296,67 +606,76 @@ public class StoryService {
 
         log.info("🔍 스토리 조회 성공 - Content 길이: {}", story.getContent().length());
 
-        // 2. FastAPI 요청 객체 생성
+        // 2. FastAPI 요청 객체 생성 (voice, speed 추가)
         FastApiVoiceRequest fastApiRequest = new FastApiVoiceRequest();
         fastApiRequest.setText(story.getContent());
+        fastApiRequest.setVoice(request.getVoice() != null ? request.getVoice() : "alloy"); // 기본값
+        fastApiRequest.setSpeed(1.0); // 기본 속도
 
-        log.info("🔍 FastAPI 음성 요청: text 길이 = {}", fastApiRequest.getText().length());
+        log.info("🔍 FastAPI 음성 요청: text 길이 = {}, voice = {}",
+                fastApiRequest.getText().length(), fastApiRequest.getVoice());
 
         // 3. FastAPI 호출
         String url = fastApiBaseUrl + "/generate/voice";
         String fastApiResponse = callFastApi(url, fastApiRequest);
 
-        // 4. 응답 파싱 (로컬 파일 경로 받기)
-        String localFilePath = extractVoiceUrlFromResponse(fastApiResponse);
-        log.info("🔍 FastAPI에서 받은 로컬 파일 경로: {}", localFilePath);
-
-        // 🎯 5. S3에 파일 업로드 및 URL 처리
-        String voiceUrl = processVoiceWithS3(localFilePath);
+        // 🆕 4. Base64 응답 파싱 및 S3 업로드
+        String voiceUrl = processBase64VoiceWithS3(fastApiResponse, story.getId());
         log.info("🔍 S3 처리된 음성 URL: {}", voiceUrl);
 
-        // 6. 저장
+        // 5. 저장
         story.setVoiceContent(voiceUrl);
         return storyRepository.save(story);
     }
 
-    // S3를 활용한 음성 파일 처리 메서드 추가
-    private String processVoiceWithS3(String localFilePath) {
+    // 🆕 Base64 음성 데이터를 S3에 업로드하는 메서드
+    private String processBase64VoiceWithS3(String fastApiResponse, Long storyId) {
         try {
-            if (localFilePath == null || localFilePath.trim().isEmpty()) {
-                log.warn("⚠️ 음성 파일 경로가 null이거나 비어있음");
-                return "";
+            log.info("🔍 Base64 음성 처리 시작");
+
+            // FastAPI 응답 파싱
+            JsonNode jsonNode = objectMapper.readTree(fastApiResponse);
+
+            if (!jsonNode.has("audio_base64")) {
+                throw new RuntimeException("응답에 audio_base64 필드가 없습니다.");
             }
 
-            // HTTP URL인 경우 그대로 반환 (이미 외부에서 접근 가능)
-            if (localFilePath.startsWith("http://") || localFilePath.startsWith("https://")) {
-                log.info("✅ HTTP URL 음성 파일: {}", localFilePath);
-                return localFilePath;
+            String audioBase64 = jsonNode.get("audio_base64").asText();
+            String voice = jsonNode.has("voice") ? jsonNode.get("voice").asText() : "alloy";
+
+            log.info("🔍 Base64 데이터 길이: {} 문자", audioBase64.length());
+            log.info("🔍 음성 타입: {}", voice);
+
+            // Base64 디코딩
+            byte[] audioBytes = java.util.Base64.getDecoder().decode(audioBase64);
+            log.info("🔍 디코딩된 오디오 크기: {} bytes", audioBytes.length);
+
+            // 🎯 임시 파일에 저장 후 S3 업로드
+            String tempFileName = "temp_voice_" + storyId + "_" + System.currentTimeMillis() + ".mp3";
+            java.io.File tempFile = new java.io.File(tempFileName);
+
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile)) {
+                fos.write(audioBytes);
             }
 
-            // 🔒 로컬 파일 경로 보안 검사
-            if (!isValidAudioPath(localFilePath)) {
-                log.error("❌ 유효하지 않은 오디오 파일 경로: {}", localFilePath);
-                return "";
-            }
+            log.info("📝 임시 파일 저장 완료: {}", tempFile.getAbsolutePath());
 
-            // 🎯 S3에 업로드
-            log.info("📤 S3 업로드 시작: {}", localFilePath);
-            String s3Url = s3Service.uploadAudioFileWithPresignedUrl(localFilePath);
+            // S3에 업로드
+            String s3Url = s3Service.uploadAudioFileWithPresignedUrl(tempFile.getAbsolutePath());
             log.info("✅ S3 업로드 완료: {}", s3Url);
 
-            // 🧹 선택적: 로컬 파일 삭제 (디스크 공간 절약)
-            // cleanupLocalFile(localFilePath);
+            // 임시 파일 삭제
+            tempFile.delete();
+            log.info("🧹 임시 파일 삭제 완료");
 
             return s3Url;
 
         } catch (Exception e) {
-            log.error("❌ S3 음성 파일 처리 실패: {}", e.getMessage());
-
-            // 🎯 폴백: 로컬 파일 경로 그대로 반환 (기존 다운로드 API 사용)
-            log.info("🔄 S3 업로드 실패, 로컬 파일 경로 사용: {}", localFilePath);
-            return localFilePath;
+            log.error("❌ Base64 음성 처리 실패: {}", e.getMessage());
+            throw new RuntimeException("Base64 음성 처리 실패: " + e.getMessage(), e);
         }
     }
+
 
     //S3 기반 유틸리티 메서드들 추가
     /**
@@ -514,43 +833,44 @@ public class StoryService {
         }
     }
 
-    // 🎯 개선된 응답 파싱 메서드 (더 상세한 로깅)
-    private String extractImageUrlFromResponse(String response) {
+    // 🎯 수정된 이미지 경로 파싱 메서드 (로컬 파일 경로 처리)
+    private String extractImagePathFromResponse(String response) {
         try {
-            System.out.println("🔍 이미지 URL 파싱 시작");
-            System.out.println("🔍 FastAPI 응답 원문: " + response);
+            log.info("🔍 이미지 경로 파싱 시작");
+            log.info("🔍 FastAPI 응답 원문: {}", response);
 
             JsonNode jsonNode = objectMapper.readTree(response);
-            System.out.println("🔍 JSON 파싱 성공");
+            log.info("🔍 JSON 파싱 성공");
 
-            // image_url 필드 확인
-            if (jsonNode.has("image_url")) {
-                String imageUrl = jsonNode.get("image_url").asText();
-                System.out.println("🔍 추출된 image_url: " + imageUrl);
+            // 🎯 여러 가능한 필드명 확인 (경로 관련)
+            String[] possibleFields = {"image_path", "image_url", "file_path", "path", "save_path"};
 
-                if ("null".equals(imageUrl) || imageUrl == null || imageUrl.trim().isEmpty()) {
-                    System.out.println("❌ image_url이 null이거나 비어있음");
+            for (String field : possibleFields) {
+                if (jsonNode.has(field)) {
+                    String imagePath = jsonNode.get(field).asText();
+                    log.info("🔍 {} 필드에서 추출: {}", field, imagePath);
 
-                    // 오류 메시지 확인
-                    if (jsonNode.has("error")) {
-                        String error = jsonNode.get("error").asText();
-                        System.out.println("❌ FastAPI 오류: " + error);
-                        throw new RuntimeException("FastAPI 이미지 생성 오류: " + error);
+                    if (imagePath != null && !imagePath.trim().isEmpty() && !"null".equals(imagePath)) {
+                        // 🎯 URL과 로컬 경로 모두 처리
+                        if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+                            log.info("✅ HTTP URL 이미지: {}", imagePath);
+                            return imagePath;
+                        } else {
+                            log.info("✅ 로컬 파일 경로: {}", imagePath);
+                            return imagePath;
+                        }
                     }
-
-                    throw new RuntimeException("FastAPI에서 유효한 이미지 URL을 반환하지 않았습니다.");
                 }
-
-                return imageUrl;
-            } else {
-                System.out.println("❌ 응답에 image_url 필드가 없음");
-                System.out.println("🔍 사용 가능한 필드들: " + jsonNode.fieldNames());
-                throw new RuntimeException("응답에 image_url 필드가 없습니다.");
             }
+
+            log.error("❌ 유효한 이미지 경로를 찾을 수 없음");
+            log.info("🔍 사용 가능한 필드들: {}", jsonNode.fieldNames());
+            throw new RuntimeException("응답에서 유효한 이미지 경로를 찾을 수 없습니다.");
+
         } catch (Exception e) {
-            System.err.println("❌ 이미지 URL 파싱 실패: " + e.getMessage());
-            System.err.println("❌ 응답 내용: " + response);
-            throw new RuntimeException("이미지 URL 파싱 실패: " + e.getMessage(), e);
+            log.error("❌ 이미지 경로 파싱 실패: {}", e.getMessage());
+            log.error("❌ 응답 내용: {}", response);
+            throw new RuntimeException("이미지 경로 파싱 실패: " + e.getMessage(), e);
         }
     }
 

@@ -273,11 +273,11 @@ public class StoryController {
     }
 
     /**
-     * 🖤 PIL+OpenCV 흑백 변환 API (변경 없음)
+     * 🖤 PIL+OpenCV 흑백 변환 API (간소화됨)
      */
     @PostMapping("/convert/bwimage")
     public ResponseEntity<Map<String, Object>> convertToBlackWhite(@RequestBody Map<String, String> request) {
-        log.info("🔍 [StoryController] PIL+OpenCV 흑백 변환 요청: {}", request);
+        log.info("🔍 흑백 변환 요청: {}", request);
 
         try {
             String colorImageUrl = request.get("text");
@@ -288,120 +288,28 @@ public class StoryController {
                 return ResponseEntity.badRequest().body(errorResponse);
             }
 
-            Map<String, String> fastApiRequest = new HashMap<>();
-            fastApiRequest.put("text", colorImageUrl);
+            // 🎯 서비스에 위임
+            String finalImageUrl = storyService.convertToBlackWhiteAndUpload(colorImageUrl);
 
-            log.info("🔍 [StoryController] FastAPI PIL+OpenCV 변환 요청: {}", fastApiRequest);
+            // 응답 구성
+            Map<String, Object> result = new HashMap<>();
+            result.put("image_url", finalImageUrl);
+            result.put("original_url", colorImageUrl);
+            result.put("conversion_method", "PIL+OpenCV+S3");
 
-            @SuppressWarnings("unchecked")
-            Map<String, String> response = restTemplate.postForObject(
-                    "http://localhost:8000/convert/bwimage",
-                    fastApiRequest,
-                    Map.class
-            );
-
-            log.info("🔍 [StoryController] FastAPI 응답: {}", response);
-
-            if (response != null && response.containsKey("image_url")) {
-                String imageUrl = response.get("image_url");
-                String finalImageUrl = processConvertedImageUrl(imageUrl, colorImageUrl);
-
-                Map<String, Object> result = new HashMap<>();
-                result.put("image_url", finalImageUrl);
-                result.put("original_url", colorImageUrl);
-                result.put("conversion_method", "PIL+OpenCV");
-                result.put("python_response", imageUrl);
-
-                log.info("✅ [StoryController] PIL+OpenCV 흑백 변환 성공: {}", finalImageUrl);
-                return ResponseEntity.ok(result);
-            } else {
-                throw new RuntimeException("FastAPI에서 유효한 응답을 받지 못했습니다.");
-            }
+            log.info("✅ 흑백 변환 완료: {}", finalImageUrl);
+            return ResponseEntity.ok(result);
 
         } catch (Exception e) {
-            log.error("❌ [StoryController] PIL+OpenCV 변환 실패: {}", e.getMessage());
+            log.error("❌ 흑백 변환 실패: {}", e.getMessage());
 
             Map<String, Object> fallbackResponse = new HashMap<>();
             fallbackResponse.put("image_url", request.get("text"));
             fallbackResponse.put("original_url", request.get("text"));
+            fallbackResponse.put("conversion_method", "Flutter_Filter");
+            fallbackResponse.put("error", e.getMessage());
 
             return ResponseEntity.ok(fallbackResponse);
-        }
-    }
-
-    /**
-     * 🔧 Python 변환 결과 URL 처리 메서드 (개선됨)
-     */
-    private String processConvertedImageUrl(String convertedUrl, String originalUrl) {
-        log.info("🔍 [StoryController] URL 처리 - 변환됨: {}, 원본: {}", convertedUrl, originalUrl);
-
-        // 1. 완전한 URL인 경우 (S3 URL, HTTP URL, Base64 등)
-        if (convertedUrl.startsWith("http://") ||
-                convertedUrl.startsWith("https://") ||
-                convertedUrl.startsWith("data:image/")) {
-            log.info("✅ [StoryController] 완전한 URL 확인");
-            return convertedUrl;
-        }
-
-        // 2. 🆕 로컬 파일명인 경우 - FastAPI에서 다운로드 시도
-        if (convertedUrl.equals("bw_image.png") ||
-                convertedUrl.endsWith(".png") ||
-                convertedUrl.endsWith(".jpg")) {
-            log.info("🔍 [StoryController] 로컬 파일명 감지, FastAPI에서 다운로드 시도: {}", convertedUrl);
-
-            // 🎯 FastAPI에서 흑백 파일 다운로드 후 S3 업로드 시도
-            String s3BwUrl = downloadAndUploadBwImage(convertedUrl, originalUrl);
-            if (s3BwUrl != null) {
-                log.info("✅ [StoryController] 흑백 이미지 S3 업로드 성공: {}", s3BwUrl);
-                return s3BwUrl;
-            }
-
-            log.warn("⚠️ [StoryController] 흑백 이미지 처리 실패, 원본 이미지 사용");
-            return originalUrl;
-        }
-
-        log.info("⚠️ [StoryController] 알 수 없는 형식, 원본 이미지 사용");
-        return originalUrl;
-    }
-
-    /**
-     * 🆕 FastAPI에서 흑백 파일 다운로드 후 S3 업로드
-     */
-    private String downloadAndUploadBwImage(String fileName, String originalUrl) {
-        try {
-            log.info("📥 FastAPI에서 흑백 파일 다운로드 시도: {}", fileName);
-
-            // 1. FastAPI에서 흑백 파일 다운로드 요청
-            String fastApiDownloadUrl = "http://localhost:8000/download/bwimage/" + fileName;
-
-            ResponseEntity<byte[]> response = restTemplate.getForEntity(fastApiDownloadUrl, byte[].class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                byte[] imageData = response.getBody();
-                log.info("✅ FastAPI에서 흑백 파일 다운로드 완료: {} bytes", imageData.length);
-
-                // 2. 임시 파일에 저장
-                java.io.File tempFile = java.io.File.createTempFile("bw_temp_", ".png");
-                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile)) {
-                    fos.write(imageData);
-                }
-
-                // 3. S3에 업로드
-                String s3Url = s3Service.uploadImageFromLocalFile(tempFile.getAbsolutePath(), "bw-images");
-
-                // 4. 임시 파일 삭제
-                tempFile.delete();
-
-                log.info("✅ 흑백 이미지 S3 업로드 완료: {}", s3Url);
-                return s3Url;
-            }
-
-            log.warn("⚠️ FastAPI 흑백 파일 다운로드 실패");
-            return null;
-
-        } catch (Exception e) {
-            log.error("❌ 흑백 파일 처리 실패: {}", e.getMessage());
-            return null;
         }
     }
 
