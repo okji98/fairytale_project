@@ -44,4 +44,7 @@ public class Gallery {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "child_name")
+    private String childName;
 }

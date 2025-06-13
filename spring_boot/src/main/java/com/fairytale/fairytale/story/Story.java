@@ -62,5 +62,8 @@ public class Story {
     @JoinColumn(name = "baby_id")  // baby_name이 아니라 baby_id로
     @JsonIgnore
     private Baby baby;  // String이 아니라 Baby 엔티티로
+
+    @Column(name = "child_name")
+    private String childName;
 }
 

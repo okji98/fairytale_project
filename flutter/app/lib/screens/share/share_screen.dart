@@ -72,6 +72,90 @@ class _ShareScreenState extends State<ShareScreen> {
     }
   }
 
+  // 좋아요 토글
+  Future<void> _toggleLike(SharePost post) async {
+    try {
+      final headers = await _getAuthHeaders();
+
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/share/posts/${post.id}/like'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final updatedPost = SharePost.fromJson(json.decode(response.body));
+
+        setState(() {
+          final index = _posts.indexWhere((p) => p.id == post.id);
+          if (index != -1) {
+            _posts[index] = updatedPost;
+          }
+        });
+      }
+    } catch (e) {
+      print('❌ 좋아요 토글 실패: $e');
+    }
+  }
+
+  // 게시물 삭제
+  Future<void> _deletePost(SharePost post) async {
+    // 삭제 확인 다이얼로그
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('게시물 삭제'),
+        content: Text('이 게시물을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    try {
+      final headers = await _getAuthHeaders();
+
+      final response = await http.delete(
+        Uri.parse('${ApiService.baseUrl}/api/share/posts/${post.id}'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _posts.removeWhere((p) => p.id == post.id);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('게시물이 삭제되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('삭제 실패');
+      }
+    } catch (e) {
+      print('❌ 게시물 삭제 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('게시물 삭제에 실패했습니다.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   // + 버튼 클릭 시 선택 다이얼로그
   void _showCreateOptions() {
     showModalBottomSheet(
@@ -142,6 +226,48 @@ class _ShareScreenState extends State<ShareScreen> {
 
   Future<void> _onRefresh() async {
     await _loadPosts();
+  }
+
+  void _playVideo(SharePost post) {
+    if (post.videoUrl != null && post.videoUrl!.isNotEmpty) {
+      // 비디오가 있는 경우 비디오 플레이어
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerScreen(
+            videoUrl: post.videoUrl!,
+            title: post.storyTitle,
+          ),
+        ),
+      );
+    } else if (post.imageUrl != null || post.thumbnailUrl != null) {
+      // 이미지만 있는 경우 전체화면 이미지 뷰어
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ImageViewerScreen(
+            imageUrl: post.imageUrl ?? post.thumbnailUrl ?? '',
+            title: post.storyTitle,
+          ),
+        ),
+      );
+    }
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}일 전';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}시간 전';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}분 전';
+    } else {
+      return '방금 전';
+    }
   }
 
   @override
@@ -376,6 +502,28 @@ class _ShareScreenState extends State<ShareScreen> {
                     ],
                   ),
                 ),
+                // 삭제 버튼 (작성자만)
+                if (post.isOwner)
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: Colors.grey),
+                    onSelected: (value) {
+                      if (value == 'delete') {
+                        _deletePost(post);
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, color: Colors.red, size: 20),
+                            SizedBox(width: 8),
+                            Text('삭제', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -402,147 +550,155 @@ class _ShareScreenState extends State<ShareScreen> {
 
           SizedBox(height: 12),
 
-          // 비디오 썸네일
-          Container(
-            height: screenHeight * 0.3,
-            margin: EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.grey[300],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Stack(
-                children: [
-                  // 썸네일 이미지
-                  if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
-                    Image.network(
-                      post.thumbnailUrl!,
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(child: CircularProgressIndicator());
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[200],
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.video_library,
-                                  size: screenWidth * 0.15,
-                                  color: Colors.grey[600],
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  '동화 비디오',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: screenWidth * 0.035,
-                                  ),
-                                ),
-                              ],
-                            ),
+          // 컨텐츠 (비디오 또는 이미지)
+          GestureDetector(
+            onTap: () => _playVideo(post),
+            child: Container(
+              height: screenHeight * 0.3,
+              margin: EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.grey[300],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  children: [
+                    // 썸네일 이미지
+                    if (post.thumbnailUrl != null && post.thumbnailUrl!.isNotEmpty)
+                      Image.network(
+                        post.thumbnailUrl!,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(child: CircularProgressIndicator());
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return _buildContentPlaceholder(post, screenWidth);
+                        },
+                      )
+                    else
+                      _buildContentPlaceholder(post, screenWidth),
+
+                    // 재생 버튼 오버레이 (비디오인 경우만)
+                    if (post.videoUrl != null && post.videoUrl!.isNotEmpty)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
                           ),
-                        );
-                      },
-                    )
-                  else
-                    Container(
-                      color: Colors.grey[200],
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.video_library,
-                              size: screenWidth * 0.15,
-                              color: Colors.grey[600],
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              '동화 비디오',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: screenWidth * 0.035,
+                          child: Center(
+                            child: Container(
+                              width: screenWidth * 0.15,
+                              height: screenWidth * 0.15,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.play_arrow,
+                                color: Color(0xFFFF9F8D),
+                                size: screenWidth * 0.08,
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
 
-                  // 재생 버튼 오버레이
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                      ),
-                      child: Center(
-                        child: GestureDetector(
-                          onTap: () {
-                            _playVideo(post);
-                          },
-                          child: Container(
-                            width: screenWidth * 0.15,
-                            height: screenWidth * 0.15,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.9),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.play_arrow,
-                              color: Color(0xFFFF9F8D),
-                              size: screenWidth * 0.08,
+                    // 갤러리 표시 (이미지만 있는 경우)
+                    if (post.sourceType == 'GALLERY')
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.purple,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Gallery',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
 
-          SizedBox(height: 16),
+          // 좋아요 및 액션 버튼
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // 좋아요 버튼
+                GestureDetector(
+                  onTap: () => _toggleLike(post),
+                  child: Row(
+                    children: [
+                      Icon(
+                        post.isLiked ? Icons.favorite : Icons.favorite_border,
+                        color: post.isLiked ? Colors.red : Colors.grey,
+                        size: 24,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        '${post.likeCount}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 16),
+                // 댓글 버튼 (추후 구현)
+                Icon(Icons.chat_bubble_outline, color: Colors.grey, size: 24),
+                SizedBox(width: 4),
+                Text('0', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  void _playVideo(SharePost post) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VideoPlayerScreen(
-          videoUrl: post.videoUrl,
-          title: post.storyTitle,
+  Widget _buildContentPlaceholder(SharePost post, double screenWidth) {
+    return Container(
+      color: Colors.grey[200],
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              post.sourceType == 'GALLERY' ? Icons.photo : Icons.video_library,
+              size: screenWidth * 0.15,
+              color: Colors.grey[600],
+            ),
+            SizedBox(height: 8),
+            Text(
+              post.sourceType == 'GALLERY' ? '갤러리 이미지' : '동화 비디오',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: screenWidth * 0.035,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-
-  String _formatDate(DateTime? date) {
-    if (date == null) return '';
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays}일 전';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}시간 전';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}분 전';
-    } else {
-      return '방금 전';
-    }
-  }
-
 }
 
 // 공유 게시물 데이터 모델
@@ -550,18 +706,26 @@ class SharePost {
   final int id;
   final String userName;
   final String storyTitle;
-  final String videoUrl;
+  final String? videoUrl;
+  final String? imageUrl;
   final String? thumbnailUrl;
   final String sourceType;
+  final int likeCount;
+  final bool isLiked;
+  final bool isOwner;
   final DateTime? createdAt;
 
   SharePost({
     required this.id,
     required this.userName,
     required this.storyTitle,
-    required this.videoUrl,
+    this.videoUrl,
+    this.imageUrl,
     this.thumbnailUrl,
     required this.sourceType,
+    required this.likeCount,
+    required this.isLiked,
+    required this.isOwner,
     required this.createdAt,
   });
 
@@ -572,8 +736,12 @@ class SharePost {
       userName: json['userName'],
       storyTitle: json['storyTitle'],
       videoUrl: json['videoUrl'],
+      imageUrl: json['imageUrl'],
       thumbnailUrl: json['thumbnailUrl'],
       sourceType: json['sourceType'] ?? 'STORY',
+      likeCount: json['likeCount'] ?? 0,
+      isLiked: json['isLiked'] ?? false,
+      isOwner: json['isOwner'] ?? false,
       createdAt: (createdAtStr != null && createdAtStr.isNotEmpty)
           ? DateTime.tryParse(createdAtStr)
           : null,
@@ -581,6 +749,61 @@ class SharePost {
   }
 }
 
+// 이미지 뷰어 화면 (갤러리 이미지용)
+class ImageViewerScreen extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+
+  const ImageViewerScreen({
+    required this.imageUrl,
+    required this.title,
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black.withOpacity(0.5),
+        title: Text(
+          title,
+          style: TextStyle(color: Colors.white),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        elevation: 0,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return CircularProgressIndicator(color: Color(0xFFFF9F8D));
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 80, color: Colors.white70),
+                  SizedBox(height: 16),
+                  Text(
+                    '이미지를 불러올 수 없습니다',
+                    style: TextStyle(color: Colors.white, fontSize: 18),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 // 비디오 플레이어 화면
 class VideoPlayerScreen extends StatefulWidget {

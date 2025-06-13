@@ -77,18 +77,19 @@ public class ShareService {
         sharePost.setThumbnailUrl(thumbnailUrl);
         sharePost.setSourceType("STORY");
         sharePost.setSourceId(storyId);
+        sharePost.setChildName(story.getChildName()); // 아이 이름 설정
 
         SharePost savedPost = sharePostRepository.save(sharePost);
         log.info("✅ Stories 공유 완료 - SharePostId: {}", savedPost.getId());
 
-        return convertToDTO(savedPost);
+        return convertToDTO(savedPost, user);
     }
 
     /**
-     * Gallery에서 공유
+     * Gallery에서 공유 (이미지만 업로드)
      */
     public SharePostDTO shareFromGallery(Long galleryId, String username) {
-        log.info("🎬 Gallery에서 공유 시작 - GalleryId: {}, 사용자: {}", galleryId, username);
+        log.info("🖼️ Gallery에서 공유 시작 - GalleryId: {}, 사용자: {}", galleryId, username);
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
@@ -102,11 +103,7 @@ public class ShareService {
             throw new RuntimeException("갤러리 항목에 대한 권한이 없습니다.");
         }
 
-        // 3. 원본 스토리 조회 (음성 파일 필요)
-        Story story = storyRepository.findById(gallery.getStoryId())
-                .orElseThrow(() -> new RuntimeException("원본 스토리를 찾을 수 없습니다: " + gallery.getStoryId()));
-
-        // 4. 사용할 이미지 결정 (색칠한 이미지 우선, 없으면 컬러 이미지)
+        // 3. 사용할 이미지 결정 (색칠한 이미지 우선, 없으면 컬러 이미지)
         String imageUrl = gallery.getColoringImageUrl() != null ?
                 gallery.getColoringImageUrl() : gallery.getColorImageUrl();
 
@@ -114,52 +111,33 @@ public class ShareService {
             throw new RuntimeException("공유할 이미지가 없습니다.");
         }
 
-        if (story.getVoiceContent() == null || story.getVoiceContent().isEmpty()) {
-            throw new RuntimeException("음성이 없는 갤러리 항목은 공유할 수 없습니다.");
-        }
-
-        // 5. 비디오 생성
-        String videoUrl = videoService.createVideoFromImageAndAudio(
-                imageUrl,
-                story.getVoiceContent(),
-                gallery.getStoryTitle()
-        );
-
-        // 6. 썸네일 생성
-        String thumbnailUrl = imageUrl; // 기본적으로 갤러리 이미지 사용
-        try {
-            String generatedThumbnail = videoService.createThumbnail(videoUrl);
-            if (generatedThumbnail != null) {
-                thumbnailUrl = generatedThumbnail;
-            }
-        } catch (Exception e) {
-            log.warn("⚠️ 썸네일 생성 실패, 원본 이미지 사용: {}", e.getMessage());
-        }
-
-        // 7. SharePost 생성 및 저장
+        // 4. SharePost 생성 및 저장 (비디오 없이 이미지만)
         SharePost sharePost = new SharePost();
         sharePost.setUser(user);
         sharePost.setStoryTitle(gallery.getStoryTitle());
-        sharePost.setVideoUrl(videoUrl);
-        sharePost.setThumbnailUrl(thumbnailUrl);
+        sharePost.setImageUrl(imageUrl); // 이미지 URL 설정
+        sharePost.setThumbnailUrl(imageUrl); // 썸네일도 같은 이미지 사용
         sharePost.setSourceType("GALLERY");
         sharePost.setSourceId(galleryId);
+        sharePost.setChildName(gallery.getChildName()); // 아이 이름 설정
 
         SharePost savedPost = sharePostRepository.save(sharePost);
         log.info("✅ Gallery 공유 완료 - SharePostId: {}", savedPost.getId());
 
-        return convertToDTO(savedPost);
+        return convertToDTO(savedPost, user);
     }
 
     /**
-     * 모든 공유 게시물 조회
+     * 모든 공유 게시물 조회 (모든 사용자의 게시물)
      */
-    public List<SharePostDTO> getAllSharePosts() {
+    public List<SharePostDTO> getAllSharePosts(String currentUsername) {
         log.info("🔍 모든 공유 게시물 조회");
+
+        Users currentUser = usersRepository.findByUsername(currentUsername).orElse(null);
 
         List<SharePost> posts = sharePostRepository.findAllByOrderByCreatedAtDesc();
         return posts.stream()
-                .map(this::convertToDTO)
+                .map(post -> convertToDTO(post, currentUser))
                 .collect(Collectors.toList());
     }
 
@@ -174,12 +152,12 @@ public class ShareService {
 
         List<SharePost> posts = sharePostRepository.findByUserOrderByCreatedAtDesc(user);
         return posts.stream()
-                .map(this::convertToDTO)
+                .map(post -> convertToDTO(post, user))
                 .collect(Collectors.toList());
     }
 
     /**
-     * 공유 게시물 삭제
+     * 공유 게시물 삭제 (작성자만 가능)
      */
     public boolean deleteSharePost(Long postId, String username) {
         log.info("🗑️ 공유 게시물 삭제 - PostId: {}, 사용자: {}", postId, username);
@@ -187,40 +165,67 @@ public class ShareService {
         Users user = usersRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
 
-        SharePost post = sharePostRepository.findById(postId).orElse(null);
+        SharePost post = sharePostRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("게시물을 찾을 수 없습니다: " + postId));
 
-        if (post != null && post.getUser().getId().equals(user.getId())) {
-            sharePostRepository.delete(post);
-            log.info("✅ 공유 게시물 삭제 완료");
-            return true;
-        } else {
-            log.warn("⚠️ 삭제할 게시물이 없거나 권한이 없음");
-            return false;
+        // 작성자 확인
+        if (!post.getUser().getId().equals(user.getId())) {
+            log.warn("⚠️ 삭제 권한 없음 - 작성자가 아님");
+            throw new RuntimeException("게시물을 삭제할 권한이 없습니다.");
         }
+
+        sharePostRepository.delete(post);
+        log.info("✅ 공유 게시물 삭제 완료");
+        return true;
+    }
+
+    /**
+     * 좋아요 토글
+     */
+    public SharePostDTO toggleLike(Long postId, String username) {
+        log.info("❤️ 좋아요 토글 - PostId: {}, 사용자: {}", postId, username);
+
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+        SharePost post = sharePostRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("게시물을 찾을 수 없습니다: " + postId));
+
+        if (post.isLikedBy(user)) {
+            post.removeLike(user);
+            log.info("💔 좋아요 취소");
+        } else {
+            post.addLike(user);
+            log.info("❤️ 좋아요 추가");
+        }
+
+        SharePost savedPost = sharePostRepository.save(post);
+        return convertToDTO(savedPost, user);
     }
 
     /**
      * SharePost를 DTO로 변환
      */
-    private SharePostDTO convertToDTO(SharePost post) {
-        // Users 엔티티에서 사용자명 가져오기 (getName() 메서드가 없을 수 있으므로 안전하게 처리)
-        String userName;
-        try {
-            userName = post.getUser().getName();
-            if (userName == null || userName.isEmpty()) {
-                userName = post.getUser().getUsername();
-            }
-        } catch (Exception e) {
-            userName = post.getUser().getUsername();
-        }
+    private SharePostDTO convertToDTO(SharePost post, Users currentUser) {
+        // 작성자 이름 포맷팅: "아이이름의 부모"
+        String displayName = post.getChildName() != null && !post.getChildName().isEmpty()
+                ? post.getChildName() + "의 부모"
+                : post.getUser().getName();
+
+        boolean isLiked = currentUser != null && post.isLikedBy(currentUser);
+        boolean isOwner = currentUser != null && post.getUser().getId().equals(currentUser.getId());
 
         return SharePostDTO.builder()
                 .id(post.getId())
-                .userName(userName)
+                .userName(displayName)
                 .storyTitle(post.getStoryTitle())
                 .videoUrl(post.getVideoUrl())
+                .imageUrl(post.getImageUrl())
                 .thumbnailUrl(post.getThumbnailUrl())
                 .sourceType(post.getSourceType())
+                .likeCount(post.getLikeCount())
+                .isLiked(isLiked)
+                .isOwner(isOwner)
                 .createdAt(post.getCreatedAt())
                 .build();
     }
