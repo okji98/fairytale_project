@@ -1,35 +1,29 @@
 package com.fairytale.fairytale.coloring;
 
+import com.fairytale.fairytale.service.S3Service;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.juli.logging.Log;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.multipart.MultipartFile;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// S3 사용 시 주석 해제할 import들
-/*
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectResponse;
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
-*/
-
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/coloring")
 public class ColoringController {
     private final ColoringTemplateService coloringTemplateService;
     private final ColoringWorkRepository coloringWorkRepository;
+    private final S3Service s3Service;  // 추가
 
     // 🎯 색칠공부 템플릿 목록 조회
     @GetMapping("/templates")
@@ -278,48 +272,55 @@ public class ColoringController {
         }
     }
 
-    // ☁️ S3 저장소에 저장 (나중에 사용)
-    /*
-    private String saveToS3Storage(byte[] imageBytes, String fileName) {
+    // ColoringTemplateController.java에 추가할 API
+    @PostMapping("/save-coloring-work")
+    public ResponseEntity<?> saveColoringWork(
+            @RequestParam("storyId") String storyId,
+            @RequestParam("coloredImage") MultipartFile coloredImage,
+            Authentication authentication) {
+
         try {
-            // 🎯 S3 설정 (application.yml에서 설정값 읽어오기)
-            String bucketName = "your-fairytale-bucket"; // 실제 버킷명으로 변경
-            String s3Region = "ap-northeast-2"; // 서울 리전
-            String folderPath = "coloring/" + fileName; // S3 내 경로
+            String username = authentication.getName();
+            log.info("🎨 색칠 완성작 저장 요청 - StoryId: {}, User: {}", storyId, username);
 
-            // 🔧 AWS S3 클라이언트 생성
-            S3Client s3Client = S3Client.builder()
-                    .region(Region.of(s3Region))
-                    .credentialsProvider(DefaultCredentialsProvider.create()) // AWS 자격증명
+            // 1. 템플릿 조회
+            ColoringTemplate template = coloringTemplateService.getTemplateByStoryId(storyId)
+                    .orElseThrow(() -> new RuntimeException("색칠공부 템플릿을 찾을 수 없습니다."));
+
+            // 2. 색칠 완성작 S3 업로드
+            String coloredImageUrl = s3Service.uploadColoringWork(coloredImage, username, storyId);
+
+            // 3. ColoringWork 엔티티 생성 및 저장 (기존 엔티티 구조에 맞춤)
+            ColoringWork coloringWork = ColoringWork.builder()
+                    .username(username)
+                    .storyTitle(template.getTitle())
+                    .originalImageUrl(template.getOriginalImageUrl()) // 원본 컬러 이미지
+                    .completedImageUrl(coloredImageUrl) // 색칠 완성작
+                    .templateId(template.getId()) // 템플릿 ID
                     .build();
 
-            // 🔧 S3 업로드 요청 생성
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(folderPath)
-                    .contentType("image/png")
-                    .contentLength((long) imageBytes.length)
-                    .build();
+            ColoringWork savedWork = coloringWorkRepository.save(coloringWork);
 
-            // 🔧 파일 업로드
-            PutObjectResponse response = s3Client.putObject(
-                    putObjectRequest,
-                    RequestBody.fromBytes(imageBytes)
-            );
+            // 4. 응답 데이터 구성
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("coloringWorkId", savedWork.getId());
+            response.put("coloredImageUrl", coloredImageUrl);
+            response.put("message", "색칠 완성작이 갤러리에 저장되었습니다!");
 
-            System.out.println("✅ [ColoringController] S3 업로드 완료: " + fileName);
-            System.out.println("✅ [ColoringController] S3 ETag: " + response.eTag());
-
-            // 🎯 S3 공개 URL 반환
-            return String.format("https://%s.s3.%s.amazonaws.com/%s",
-                    bucketName, s3Region, folderPath);
+            log.info("✅ 색칠 완성작 저장 완료 - ID: {}", savedWork.getId());
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            System.err.println("❌ [ColoringController] S3 업로드 실패: " + e.getMessage());
-            throw new RuntimeException("S3 이미지 업로드에 실패했습니다", e);
+            log.error("❌ 색칠 완성작 저장 실패: {}", e.getMessage());
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "색칠 완성작 저장 실패: " + e.getMessage());
+
+            return ResponseEntity.status(500).body(errorResponse);
         }
     }
-    */
 
     // 🔧 ColoringTemplate을 DTO로 변환
     private Map<String, Object> convertToDTO(ColoringTemplate template) {

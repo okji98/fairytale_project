@@ -281,15 +281,15 @@ public class GalleryService {
     }
 
     /**
-     * 🎯 ColoringWork를 GalleryImageDTO로 변환
+     * 🎯 ColoringWork를 GalleryImageDTO로 변환 (수정됨)
      */
     private GalleryImageDTO convertColoringWorkToGalleryImageDTO(ColoringWork coloringWork) {
         return GalleryImageDTO.builder()
                 .storyId(coloringWork.getId()) // ColoringWork의 ID를 storyId로 사용
                 .storyTitle(coloringWork.getStoryTitle())
-                .colorImageUrl(coloringWork.getOriginalImageUrl()) // 원본 이미지
+                .colorImageUrl(coloringWork.getOriginalImageUrl()) // 원본 컬러 이미지
                 .coloringImageUrl(coloringWork.getCompletedImageUrl()) // 색칠 완성작
-                .createdAt(coloringWork.getCreatedAt())
+                .createdAt(coloringWork.getCreatedAt()) // @CreationTimestamp 필드
                 .build();
     }
 

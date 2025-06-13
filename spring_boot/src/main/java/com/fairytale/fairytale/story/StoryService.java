@@ -3,6 +3,9 @@ package com.fairytale.fairytale.story;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
+import com.fairytale.fairytale.coloring.ColoringTemplate;
+import com.fairytale.fairytale.coloring.ColoringTemplateRepository;
 import com.fairytale.fairytale.service.S3Service;
 import lombok.extern.slf4j.Slf4j;
 import com.fairytale.fairytale.baby.Baby;
@@ -16,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +28,7 @@ import org.springframework.scheduling.annotation.Async;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
@@ -36,6 +41,8 @@ public class StoryService {
     private final UsersRepository usersRepository;
     private final BabyRepository babyRepository;
 
+    // ✅ @Lazy로 순환 의존성 해결!
+    @Lazy
     @Autowired
     private ColoringTemplateService coloringTemplateService;
 
@@ -44,6 +51,7 @@ public class StoryService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private ColoringTemplateRepository coloringTemplateRepository;
 
     // ====== 스토리 생성 ======
     public Story createStory(StoryCreateRequest request, String username) {
@@ -210,11 +218,11 @@ public class StoryService {
             try {
                 s3ImageUrl = processLocalImageWithS3(localImagePath, story.getId());
                 log.info("✅ S3 이미지 업로드 완료: {}", s3ImageUrl);
-                isRealImageGenerated = true;
+//                isRealImageGenerated = true;
             } catch (Exception e) {
                 log.error("❌ S3 이미지 업로드 실패: {}", e.getMessage());
                 s3ImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
-                isRealImageGenerated = false;
+//                isRealImageGenerated = false;
             }
 
             story.setImage(s3ImageUrl);
@@ -222,12 +230,12 @@ public class StoryService {
 
             log.info("✅ 이미지 저장 완료");
 
-            if (isRealImageGenerated) {
-                log.info("🎨 실제 이미지로 색칠공부 템플릿 생성 시작");
-                createColoringTemplateAsync(savedStory, s3ImageUrl);
-            } else {
-                log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
-            }
+//            if (isRealImageGenerated) {
+//                log.info("🎨 실제 이미지로 색칠공부 템플릿 생성 시작");
+//                createColoringTemplateAsync(savedStory, s3ImageUrl);
+//            } else {
+//                log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
+//            }
 
             return savedStory;
 
@@ -272,68 +280,228 @@ public class StoryService {
         return storyRepository.save(story);
     }
 
-    // ====== 흑백 변환 ======
-    public ResponseEntity<String> convertToBlackWhite(Map<String, String> request) {
+    // ====== ColoringTemplateService용 공개 메서드 ======
+
+    // ====== 색칠공부 템플릿 비동기 생성 (흑백 변환 완전 제거) ======
+    @Async
+    public void createColoringTemplateAsync(String storyId, String title, String imageUrl) {
         try {
-            String imageUrl = request.get("text");
-            log.info("🔍 PIL+OpenCV 흑백 변환 요청: {}", imageUrl);
+            log.info("🎨 [StoryService] 색칠공부 템플릿 생성 요청 - StoryId: {}", storyId);
 
-            if (imageUrl == null || imageUrl.trim().isEmpty() || "null".equals(imageUrl)) {
-                log.warn("❌ 이미지 URL이 null이거나 비어있음: {}", imageUrl);
+            // 🔥 흑백 변환 없이 ColoringTemplateService에만 위임
+            coloringTemplateService.createColoringTemplate(storyId, title, imageUrl, null);
 
-                Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("image_url", null);
-                errorResponse.put("error", "이미지 URL이 null입니다.");
-                errorResponse.put("conversion_method", "Flutter_Filter");
+            log.info("✅ 색칠공부 템플릿 생성 완료 (흑백 변환은 필요시 수행)");
 
-                String errorJson = objectMapper.writeValueAsString(errorResponse);
-                return ResponseEntity.ok(errorJson);
+        } catch (Exception e) {
+            log.error("❌ 색칠공부 템플릿 비동기 생성 실패: {}", e.getMessage());
+        }
+    }
+
+    // ====== 흑백변환 버튼 전용 메서드 ======
+    public String processImageToBlackWhite(String originalImageUrl) {
+        try {
+            log.info("🔍 흑백변환 버튼 요청: {}", originalImageUrl);
+
+            // 1. 기존 흑백 이미지 먼저 찾기
+            String existingBwUrl = findExistingBlackWhiteImageInS3(originalImageUrl);
+            if (existingBwUrl != null) {
+                log.info("✅ 기존 흑백 이미지 발견, 즉시 반환: {}", existingBwUrl);
+                return existingBwUrl;
             }
 
-            String url = fastApiBaseUrl + "/convert/bwimage";
-            String response = callFastApi(url, request);
+            // 2. 없으면 새로 변환
+            log.info("📝 기존 흑백 이미지 없음, 새로 변환 시작");
+            return performActualBlackWhiteConversion(originalImageUrl);
 
-            log.info("🔍 FastAPI PIL+OpenCV 변환 응답: {}", response);
-            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("❌ PIL+OpenCV 변환 실패: {}", e.getMessage());
+            log.error("❌ 흑백 변환 처리 실패: {}", e.getMessage());
+            return originalImageUrl;
+        }
+    }
 
-            Map<String, Object> fallbackResponse = new HashMap<>();
-            fallbackResponse.put("image_url", request.get("text"));
-            fallbackResponse.put("conversion_method", "Flutter_Filter");
-            fallbackResponse.put("message", "PIL+OpenCV 변환 실패로 Flutter에서 필터링 처리됩니다.");
+    // ====== 실제 흑백 변환 수행 ======
+    private String performActualBlackWhiteConversion(String originalImageUrl) {
+        String downloadedImagePath = null;
 
-            try {
-                String fallbackJson = objectMapper.writeValueAsString(fallbackResponse);
-                return ResponseEntity.ok(fallbackJson);
-            } catch (Exception jsonError) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("{\"error\": \"" + e.getMessage() + "\"}");
+        try {
+            log.info("📤 흑백 변환 시작: {}", originalImageUrl);
+
+            // S3 URL인 경우만 처리
+            if (!isS3Url(originalImageUrl)) {
+                log.warn("⚠️ S3 URL이 아님, 원본 반환: {}", originalImageUrl);
+                return originalImageUrl;
+            }
+
+            // S3 연결 상태 확인
+            if (!s3Service.isS3Available()) {
+                log.warn("⚠️ S3 연결 불가, 원본 URL 반환");
+                return originalImageUrl;
+            }
+
+            // S3 이미지를 로컬로 다운로드
+            downloadedImagePath = downloadS3ImageToLocal(originalImageUrl);
+            if (downloadedImagePath == null) {
+                log.error("❌ S3 이미지 다운로드 실패");
+                return originalImageUrl;
+            }
+
+            log.info("✅ S3 이미지 로컬 다운로드 완료: {}", downloadedImagePath);
+
+            // FastAPI로 흑백 변환
+            Map<String, String> fastApiRequest = new HashMap<>();
+            fastApiRequest.put("text", downloadedImagePath);
+
+            log.info("🔍 FastAPI 흑백 변환 요청: {}", fastApiRequest);
+
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    fastApiBaseUrl + "/convert/bwimage",
+                    HttpMethod.POST,
+                    new HttpEntity<>(fastApiRequest, createJsonHeaders()),
+                    Map.class
+            );
+
+            log.info("🔍 FastAPI 응답: {}", response.getBody());
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> responseBody = response.getBody();
+
+                // 🔥 다양한 응답 형식 처리
+                String bwImageResult = null;
+
+                // 1. image_url 필드 확인 (기존 방식)
+                if (responseBody.containsKey("image_url")) {
+                    bwImageResult = (String) responseBody.get("image_url");
+                    log.info("✅ image_url 필드에서 추출: {}", bwImageResult);
+                }
+                // 2. image 필드 확인 (Base64 데이터)
+                else if (responseBody.containsKey("image")) {
+                    String base64Image = (String) responseBody.get("image");
+                    log.info("✅ Base64 이미지 데이터 수신: {}...", base64Image.substring(0, Math.min(50, base64Image.length())));
+
+                    // Base64를 파일로 저장
+                    bwImageResult = saveBase64ToFile(base64Image, "bw_image.png");
+                }
+
+                if (bwImageResult != null && !bwImageResult.isEmpty()) {
+                    log.info("✅ FastAPI 흑백 변환 완료: {}", bwImageResult);
+
+                    // 변환된 흑백 이미지를 S3에 업로드
+                    String bwS3Url = uploadBlackWhiteImageToS3(bwImageResult, originalImageUrl);
+                    if (bwS3Url != null) {
+                        log.info("✅ 흑백 이미지 S3 업로드 완료: {}", bwS3Url);
+                        return bwS3Url;
+                    }
+                }
+            }
+
+            log.warn("⚠️ 흑백 변환 실패, 원본 반환");
+            return originalImageUrl;
+
+        } catch (Exception e) {
+            log.error("❌ 흑백 변환 실패: {}", e.getMessage());
+            return originalImageUrl;
+
+        } finally {
+            // 임시 다운로드 파일 정리
+            if (downloadedImagePath != null) {
+                deleteLocalFile(downloadedImagePath);
             }
         }
     }
 
-    public String convertToBlackWhiteAndUpload(String colorImageUrl) {
+    // Base64 이미지를 파일로 저장하는 메서드
+    private String saveBase64ToFile(String base64Image, String fileName) {
         try {
-            log.info("🎨 흑백 변환 및 S3 업로드 시작: {}", colorImageUrl);
+            log.info("📄 Base64 이미지를 파일로 저장: {}", fileName);
 
-            if (colorImageUrl == null || colorImageUrl.isEmpty()) {
-                log.warn("❌ 컬러 이미지 URL이 비어있음");
+            // Base64 디코딩
+            byte[] imageBytes = java.util.Base64.getDecoder().decode(base64Image);
+
+            // 임시 파일 경로 생성
+            String tempDir = System.getProperty("java.io.tmpdir");
+            String filePath = tempDir + java.io.File.separator + fileName;
+
+            // 파일로 저장
+            java.nio.file.Files.write(java.nio.file.Paths.get(filePath), imageBytes);
+
+            log.info("✅ Base64 이미지 파일 저장 완료: {}", filePath);
+            return filePath;
+
+        } catch (Exception e) {
+            log.error("❌ Base64 이미지 저장 실패: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    // ====== 흑백 이미지 S3 업로드 ======
+    private String uploadBlackWhiteImageToS3(String bwImagePath, String originalS3Url) {
+        try {
+            log.info("📤 흑백 이미지 S3 처리 시작: {}", bwImagePath);
+
+            // 로컬 파일 존재 확인
+            java.io.File bwFile = resolveImageFile(bwImagePath);
+            if (!bwFile.exists()) {
+                log.error("❌ 흑백 이미지 파일을 찾을 수 없음: {}", bwFile.getAbsolutePath());
                 return null;
             }
 
-            if (isS3Url(colorImageUrl)) {
-                log.info("🎯 S3 URL 감지, 직접 처리");
-                return processS3ImageForBlackWhite(colorImageUrl);
-            } else {
-                log.info("🎯 일반 URL, FastAPI 흑백 변환 사용");
-                return processImageWithFastAPI(colorImageUrl);
+            log.info("✅ 흑백 이미지 파일 확인: {} ({} bytes)", bwFile.getAbsolutePath(), bwFile.length());
+
+            // 원본 기반 S3 키 생성
+            String targetS3Key = generateBlackWhiteS3KeyFromOriginal(originalS3Url);
+            if (targetS3Key == null) {
+                log.warn("⚠️ 원본 기반 S3 키 생성 실패, 기본 방식 사용");
+                return s3Service.uploadImageFromLocalFile(bwFile.getAbsolutePath(), "bw-images");
             }
 
+            // 커스텀 키로 S3 업로드
+            String bwS3Url = s3Service.uploadImageWithCustomKey(bwFile.getAbsolutePath(), targetS3Key);
+            log.info("✅ 원본 기반 흑백 이미지 S3 업로드 성공: {}", bwS3Url);
+
+            // S3 업로드 성공 시 로컬 파일 삭제
+            try {
+                boolean deleted = bwFile.delete();
+                if (deleted) {
+                    log.info("🧹 S3 업로드 성공으로 흑백 로컬 파일 삭제: {}", bwFile.getName());
+                } else {
+                    log.warn("⚠️ 흑백 로컬 파일 삭제 실패 (업로드는 성공): {}", bwFile.getName());
+                }
+            } catch (Exception deleteError) {
+                log.warn("⚠️ 흑백 파일 삭제 중 오류 (업로드는 성공): {}", deleteError.getMessage());
+            }
+
+            return bwS3Url;
+
         } catch (Exception e) {
-            log.error("❌ 흑백 변환 처리 실패: {}", e.getMessage());
-            return colorImageUrl;
+            log.error("❌ 흑백 이미지 S3 처리 실패: {}", e.getMessage());
+            return null;
         }
+    }
+
+    // ====== 원본 기반 흑백 S3 키 생성 ======
+    private String generateBlackWhiteS3KeyFromOriginal(String originalS3Url) {
+        try {
+            // S3 키 추출: story-images/2025/06/13/image-6cb8f206.png
+            String s3Key = s3Service.extractS3KeyFromUrl(originalS3Url);
+            if (s3Key == null || !s3Key.contains("story-images/")) {
+                return null;
+            }
+
+            // 변환: bw-images/2025/06/13/image-6cb8f206.png (bw- 접두사 제거!)
+            String bwS3Key = s3Key.replace("story-images/", "bw-images/");
+
+            log.info("🔑 원본 기반 흑백 S3 키 생성: {} → {}", s3Key, bwS3Key);
+            return bwS3Key;
+
+        } catch (Exception e) {
+            log.error("❌ 원본 기반 S3 키 생성 실패: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean isS3Url(String url) {
+        return url != null && (url.contains("amazonaws.com") || url.contains("cloudfront.net"));
     }
 
     // ====== FastAPI 호출 및 응답 파싱 ======
@@ -423,7 +591,6 @@ public class StoryService {
         }
     }
 
-    // ====== Private 메서드들 ======
     // 🌐 S3 이미지를 로컬로 다운로드
     private String downloadS3ImageToLocal(String s3Url) {
         try {
@@ -474,6 +641,41 @@ public class StoryService {
         }
     }
 
+    // 📤 지정된 S3 키로 이미지 업로드
+    private String uploadImageWithSpecificKey(String localFilePath, String s3Key) {
+        try {
+            log.info("📤 지정된 키로 S3 업로드: {} → {}", localFilePath, s3Key);
+
+            java.io.File localFile = new java.io.File(localFilePath);
+            if (!localFile.exists()) {
+                throw new java.io.FileNotFoundException("로컬 파일이 존재하지 않습니다: " + localFilePath);
+            }
+
+            // S3Service에 특정 키로 업로드하는 메서드 호출 필요
+            // 임시로 기존 방식 사용 (S3Service 수정 필요)
+            String s3Url = s3Service.uploadImageFromLocalFile(localFilePath, "bw-images");
+
+            // 🔧 TODO: S3Service에 uploadImageWithSpecificKey 메서드 추가 필요
+            // String s3Url = s3Service.uploadImageWithSpecificKey(localFilePath, s3Key);
+
+            return s3Url;
+
+        } catch (Exception e) {
+            log.error("❌ 지정된 키로 S3 업로드 실패: {}", e.getMessage());
+            throw new RuntimeException("S3 업로드 실패", e);
+        }
+    }
+
+    // 📤 기본 방식으로 업로드 (폴백)
+    private String uploadWithDefaultNaming(java.io.File bwFile) {
+        try {
+            return s3Service.uploadImageFromLocalFile(bwFile.getAbsolutePath(), "bw-images");
+        } catch (Exception e) {
+            log.error("❌ 기본 방식 업로드 실패: {}", e.getMessage());
+            return bwFile.getAbsolutePath();
+        }
+    }
+
     // 🔍 URL에서 파일 확장자 추출
     private String extractFileExtensionFromUrl(String url) {
         try {
@@ -520,6 +722,7 @@ public class StoryService {
         return headers;
     }
 
+    // 🎯 개선된 processLocalImageWithS3 - 업로드 후 로컬 파일 관리
     private String processLocalImageWithS3(String localImagePath, Long storyId) {
         try {
             if (localImagePath == null || localImagePath.trim().isEmpty()) {
@@ -534,183 +737,48 @@ public class StoryService {
                 throw new RuntimeException("이미지 파일을 찾을 수 없습니다: " + localImagePath);
             }
 
-            log.info("✅ 이미지 파일 발견: {}", imageFile.getAbsolutePath());
+            log.info("✅ 이미지 파일 발견: {} ({} bytes)", imageFile.getAbsolutePath(), imageFile.length());
 
             if (!isValidImagePath(imageFile.getAbsolutePath())) {
                 log.error("❌ 유효하지 않은 이미지 파일 경로: {}", imageFile.getAbsolutePath());
                 throw new RuntimeException("유효하지 않은 이미지 파일 경로");
             }
 
+            // S3 연결 상태 확인
+            if (!s3Service.isS3Available()) {
+                log.warn("⚠️ S3 연결 불가, 로컬 파일 경로 반환: {}", imageFile.getAbsolutePath());
+                return imageFile.getAbsolutePath();
+            }
+
             log.info("📤 로컬 이미지 S3 업로드 시작: {}", imageFile.getAbsolutePath());
-            String s3Url = s3Service.uploadImageFromLocalFile(imageFile.getAbsolutePath(), "story-images");
-            log.info("✅ 로컬 이미지 S3 업로드 완료: {}", s3Url);
-
-            return s3Url;
-
-        } catch (Exception e) {
-            log.error("❌ S3 로컬 이미지 처리 실패: {}", e.getMessage());
-            throw new RuntimeException("S3 이미지 처리 실패", e);
-        }
-    }
-
-    private String processS3ImageForBlackWhite(String s3Url) {
-        String downloadedImagePath = null;
-
-        try {
-            log.info("📤 S3 URL 흑백 변환 시작: {}", s3Url);
-
-            // 1. S3 이미지를 로컬로 다운로드
-            downloadedImagePath = downloadS3ImageToLocal(s3Url);
-            if (downloadedImagePath == null) {
-                log.error("❌ S3 이미지 다운로드 실패");
-                return s3Url; // 실패 시 원본 반환
-            }
-
-            log.info("✅ S3 이미지 로컬 다운로드 완료: {}", downloadedImagePath);
-
-            // 2. 로컬 파일 경로를 Python에 전달
-            Map<String, String> fastApiRequest = new HashMap<>();
-            fastApiRequest.put("text", downloadedImagePath);
-
-            log.info("🔍 FastAPI 흑백 변환 요청 (로컬 파일): {}", fastApiRequest);
-
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    fastApiBaseUrl + "/convert/bwimage",
-                    HttpMethod.POST,
-                    new HttpEntity<>(fastApiRequest, createJsonHeaders()),
-                    Map.class
-            );
-
-            log.info("🔍 FastAPI 응답: {}", response.getBody());
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                Map<String, Object> responseBody = response.getBody();
-
-                if (responseBody.containsKey("image_url")) {
-                    String bwImagePath = (String) responseBody.get("image_url");
-                    log.info("✅ FastAPI 흑백 변환 완료: {}", bwImagePath);
-
-                    // 3. 흑백 이미지를 S3에 업로드
-                    if (bwImagePath != null && !bwImagePath.startsWith("http")) {
-                        String bwS3Url = uploadBlackWhiteImageToS3(bwImagePath);
-                        if (bwS3Url != null) {
-                            log.info("✅ 흑백 이미지 S3 업로드 완료: {}", bwS3Url);
-                            return bwS3Url;
-                        }
-                    } else if (bwImagePath != null && bwImagePath.startsWith("http")) {
-                        log.info("✅ 흑백 이미지 URL 반환: {}", bwImagePath);
-                        return bwImagePath;
-                    }
-                }
-            }
-
-            log.warn("⚠️ FastAPI 흑백 변환 실패, 원본 반환");
-            return s3Url;
-
-        } catch (Exception e) {
-            log.error("❌ S3 이미지 흑백 변환 실패: {}", e.getMessage());
-            return s3Url;
-
-        } finally {
-            // 4. 임시 다운로드 파일 정리
-            if (downloadedImagePath != null) {
-                deleteLocalFile(downloadedImagePath);
-            }
-        }
-    }
-
-    private String processImageWithFastAPI(String imageUrl) {
-        try {
-            Map<String, String> fastApiRequest = new HashMap<>();
-            fastApiRequest.put("text", imageUrl);
-
-            log.info("🔍 FastAPI 흑백 변환 요청: {}", fastApiRequest);
-
-            @SuppressWarnings("unchecked")
-            Map<String, String> response = restTemplate.postForObject(
-                    fastApiBaseUrl + "/convert/bwimage",
-                    fastApiRequest,
-                    Map.class
-            );
-
-            log.info("🔍 FastAPI 응답: {}", response);
-
-            if (response != null && response.containsKey("image_url")) {
-                String convertedUrl = response.get("image_url");
-                return processConvertedImageUrl(convertedUrl, imageUrl);
-            } else {
-                throw new RuntimeException("FastAPI에서 유효한 응답을 받지 못했습니다.");
-            }
-
-        } catch (Exception e) {
-            log.error("❌ FastAPI 흑백 변환 실패: {}", e.getMessage());
-            throw new RuntimeException("FastAPI 흑백 변환 실패", e);
-        }
-    }
-
-    private String processConvertedImageUrl(String convertedUrl, String originalUrl) {
-        log.info("🔍 변환 결과 URL 처리 - 변환됨: {}, 원본: {}", convertedUrl, originalUrl);
-
-        if (convertedUrl.startsWith("http://") ||
-                convertedUrl.startsWith("https://") ||
-                convertedUrl.startsWith("data:image/")) {
-            log.info("✅ 완전한 URL 확인");
-            return convertedUrl;
-        }
-
-        if (convertedUrl.equals("bw_image.png") ||
-                convertedUrl.endsWith(".png") ||
-                convertedUrl.endsWith(".jpg")) {
-            log.info("🔍 로컬 파일명 감지, S3 업로드 시도: {}", convertedUrl);
-
-            String s3BwUrl = uploadBlackWhiteImageToS3(convertedUrl);
-            if (s3BwUrl != null) {
-                log.info("✅ 흑백 이미지 S3 업로드 성공: {}", s3BwUrl);
-                return s3BwUrl;
-            }
-
-            log.warn("⚠️ 흑백 이미지 처리 실패, 원본 이미지 사용");
-            return originalUrl;
-        }
-
-        log.info("⚠️ 알 수 없는 형식, 원본 이미지 사용");
-        return originalUrl;
-    }
-
-    private String uploadBlackWhiteImageToS3(String localBwPath) {
-        try {
-            log.info("📤 흑백 이미지 S3 업로드 시작: {}", localBwPath);
-
-            java.io.File bwFile = resolveImageFile(localBwPath);
-            if (!bwFile.exists()) {
-                log.error("❌ 흑백 이미지 파일을 찾을 수 없음: {}", bwFile.getAbsolutePath());
-                return null;
-            }
-
-            if (!isValidImagePath(bwFile.getAbsolutePath())) {
-                log.error("❌ 유효하지 않은 흑백 이미지 경로: {}", bwFile.getAbsolutePath());
-                return null;
-            }
-
-            String s3Url = s3Service.uploadImageFromLocalFile(bwFile.getAbsolutePath(), "bw-images");
-            log.info("✅ 흑백 이미지 S3 업로드 완료: {}", s3Url);
 
             try {
-                boolean deleted = bwFile.delete();
-                if (deleted) {
-                    log.info("🧹 임시 흑백 파일 삭제 완료: {}", bwFile.getName());
-                } else {
-                    log.warn("⚠️ 임시 흑백 파일 삭제 실패: {}", bwFile.getName());
+                String s3Url = s3Service.uploadImageFromLocalFile(imageFile.getAbsolutePath(), "story-images");
+                log.info("✅ 로컬 이미지 S3 업로드 완료: {}", s3Url);
+
+                // S3 업로드 성공 시 로컬 파일 삭제
+                try {
+                    boolean deleted = imageFile.delete();
+                    if (deleted) {
+                        log.info("🧹 S3 업로드 성공으로 컬러 로컬 파일 삭제: {}", imageFile.getName());
+                    } else {
+                        log.warn("⚠️ 컬러 로컬 파일 삭제 실패 (업로드는 성공): {}", imageFile.getName());
+                    }
+                } catch (Exception deleteError) {
+                    log.warn("⚠️ 컬러 파일 삭제 중 오류 (업로드는 성공): {}", deleteError.getMessage());
                 }
-            } catch (Exception deleteError) {
-                log.warn("⚠️ 파일 삭제 중 오류: {}", deleteError.getMessage());
+
+                return s3Url;
+
+            } catch (Exception uploadError) {
+                log.error("❌ S3 업로드 실패, 로컬 파일 유지: {}", uploadError.getMessage());
+                log.info("🔄 로컬 파일 경로 반환: {}", imageFile.getAbsolutePath());
+                return imageFile.getAbsolutePath();
             }
 
-            return s3Url;
-
         } catch (Exception e) {
-            log.error("❌ 흑백 이미지 S3 업로드 실패: {}", e.getMessage());
-            return null;
+            log.error("❌ 이미지 처리 실패: {}", e.getMessage());
+            throw new RuntimeException("이미지 처리 실패", e);
         }
     }
 
@@ -851,10 +919,6 @@ public class StoryService {
         }
     }
 
-    private boolean isS3Url(String url) {
-        return url != null && (url.contains("amazonaws.com") || url.contains("cloudfront.net"));
-    }
-
     private boolean isValidImageUrlForColoring(String imageUrl) {
         if (imageUrl == null || imageUrl.trim().isEmpty()) {
             return false;
@@ -889,29 +953,25 @@ public class StoryService {
         return false;
     }
 
-    @Async
-    public CompletableFuture<Void> createColoringTemplateAsync(Story story, String colorImageUrl) {
+    // 🔍 기존 흑백 이미지 검색 (단순화)
+    private String findExistingBlackWhiteImageInS3(String originalS3Url) {
         try {
-            log.info("🎨 색칠공부 템플릿 비동기 생성 시작 - StoryId: {}", story.getId());
+            String predictedBwUrl = originalS3Url.replace("story-images/", "bw-images/");
 
-            if (!isValidImageUrlForColoring(colorImageUrl)) {
-                log.warn("⚠️ 색칠공부에 적합하지 않은 이미지 URL: {}", colorImageUrl);
-                return CompletableFuture.completedFuture(null);
+            // HEAD 요청으로 존재 여부 확인
+            ResponseEntity<String> response = restTemplate.exchange(
+                    predictedBwUrl, HttpMethod.HEAD, null, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("✅ 기존 흑백 이미지 확인: {}", predictedBwUrl);
+                return predictedBwUrl;
             }
-
-            coloringTemplateService.createColoringTemplate(
-                    story.getId().toString(),
-                    story.getTitle() + " 색칠하기",
-                    colorImageUrl,
-                    null
-            );
-
-            log.info("✅ 색칠공부 템플릿 비동기 생성 완료");
         } catch (Exception e) {
-            log.error("❌ 색칠공부 템플릿 생성 실패: {}", e.getMessage());
+            log.debug("📝 기존 흑백 이미지 없음: {}", e.getMessage());
         }
-        return CompletableFuture.completedFuture(null);
+        return null;
     }
+
 
     // ====== Utility 메서드들 ======
     public byte[] downloadVoiceFromS3(String s3Url) {

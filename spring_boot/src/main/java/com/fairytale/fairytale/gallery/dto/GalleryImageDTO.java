@@ -17,4 +17,6 @@ public class GalleryImageDTO {
     private String colorImageUrl;      // 컬러 이미지 URL (Story 테이블에서)
     private String coloringImageUrl;   // 색칠한 이미지 URL (Gallery 테이블에서)
     private LocalDateTime createdAt;
+    @Builder.Default
+    private boolean isColoringWork = false; // 색칠 완성작 여부
 }

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.time.LocalDateTime;
@@ -396,6 +397,61 @@ public class S3Service {
         }
     }
 
+    // s3업로드
+    public boolean isS3Available() {
+        try {
+            return amazonS3.doesBucketExistV2(bucketName);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // S3Service.java에 추가할 메서드 (기존 uploadImageWithCustomKey 수정)
+
+    public String uploadImageWithCustomKey(String localFilePath, String customKey) {
+        try {
+            File file = new File(localFilePath);
+            if (!file.exists()) {
+                log.error("❌ 파일이 존재하지 않음: {}", localFilePath);
+                return null;
+            }
+
+            log.info("🖼️ 커스텀 키로 S3 업로드 시작: {} → {}", localFilePath, customKey);
+            log.info("🔍 파일 크기: {} bytes", file.length());
+
+            // 메타데이터 설정
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentLength(file.length());
+            metadata.setContentType(getImageContentTypeFromFile(file.getName()));
+            metadata.setCacheControl("max-age=31536000"); // 1년 캐시
+
+            // 커스텀 키로 업로드 (UUID 생성하지 않음)
+            try (java.io.FileInputStream fileInputStream = new java.io.FileInputStream(file)) {
+                PutObjectRequest putRequest = new PutObjectRequest(
+                        bucketName,
+                        customKey,  // 🔥 전달받은 키 그대로 사용!
+                        fileInputStream,
+                        metadata
+                );
+
+                // ACL 설정 (기존 패턴과 동일)
+                // putRequest.setCannedAcl(CannedAccessControlList.PublicRead); // 필요시 주석 해제
+
+                PutObjectResult result = amazonS3.putObject(putRequest);
+                log.info("✅ S3 커스텀 키 업로드 완료. ETag: {}", result.getETag());
+            }
+
+            // 공개 URL 반환
+            String s3Url = getPublicUrl(customKey);
+            log.info("✅ 커스텀 키로 S3 업로드 완료: {}", s3Url);
+            return s3Url;
+
+        } catch (Exception e) {
+            log.error("❌ 커스텀 키 S3 업로드 실패: {}", e.getMessage());
+            return null;
+        }
+    }
+
     // 오디오 파일 업로드
     public String uploadAudioFileWithPresignedUrl(String localFilePath) {
         try {
@@ -689,5 +745,81 @@ public class S3Service {
         } catch (Exception e) {
             log.error("❌ 비디오 파일 삭제 실패: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 🎨 색칠 완성작 업로드 (MultipartFile → S3)
+     */
+    public String uploadColoringWork(MultipartFile file, String username, String storyId) {
+        try {
+            log.info("🎨 색칠 완성작 S3 업로드 시작 - User: {}, StoryId: {}", username, storyId);
+            log.info("🔍 파일 정보 - Name: {}, ContentType: {}, Size: {}",
+                    file.getOriginalFilename(), file.getContentType(), file.getSize());
+
+            // 파일 검증 (더 관대하게)
+            String contentType = file.getContentType();
+            if (contentType == null) {
+                // Content-Type이 없으면 파일명 확장자로 판단
+                String fileName = file.getOriginalFilename();
+                if (fileName != null && (fileName.endsWith(".png") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg"))) {
+                    contentType = fileName.endsWith(".png") ? "image/png" : "image/jpeg";
+                    log.info("📝 Content-Type을 파일명에서 추정: {}", contentType);
+                } else {
+                    contentType = "image/png"; // 기본값
+                    log.info("📝 기본 Content-Type 사용: {}", contentType);
+                }
+            }
+
+            if (!isImageFile(contentType) && !file.getOriginalFilename().matches(".*\\.(png|jpg|jpeg|gif|webp)$")) {
+                log.warn("⚠️ 이미지 파일 검증 실패 - ContentType: {}, FileName: {}", contentType, file.getOriginalFilename());
+                throw new IllegalArgumentException("이미지 파일만 업로드 가능합니다.");
+            }
+
+            // 파일 크기 검증 (10MB 제한)
+            if (file.getSize() > 10 * 1024 * 1024) {
+                throw new IllegalArgumentException("파일 크기는 10MB를 초과할 수 없습니다.");
+            }
+
+            // 색칠 완성작 전용 파일명 생성
+            String fileName = generateColoringWorkFileName(username, storyId, getFileExtension(file.getOriginalFilename()));
+            log.info("🔑 생성된 S3 키: {}", fileName);
+
+            // 메타데이터 설정
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentType(contentType); // 추정된 Content-Type 사용
+            metadata.setContentLength(file.getSize());
+            metadata.setCacheControl("max-age=31536000");
+
+            // S3 업로드
+            PutObjectRequest putRequest = new PutObjectRequest(
+                    bucketName,
+                    fileName,
+                    file.getInputStream(),
+                    metadata
+            );
+
+            amazonS3.putObject(putRequest);
+
+            String publicUrl = getPublicUrl(fileName);
+            log.info("✅ 색칠 완성작 S3 업로드 완료: {}", publicUrl);
+
+            return publicUrl;
+
+        } catch (IOException e) {
+            log.error("❌ 색칠 완성작 업로드 실패: {}", e.getMessage());
+            throw new RuntimeException("색칠 완성작 업로드 실패", e);
+        }
+    }
+
+    /**
+     * 🔑 색칠 완성작 파일명 생성 (기존 generateProfileImageFileName 패턴 활용)
+     */
+    private String generateColoringWorkFileName(String username, String storyId, String extension) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        String uuid = UUID.randomUUID().toString().substring(0, 8);
+
+        // coloring-works/날짜/사용자명/스토리ID-UUID.확장자
+        return String.format("coloring-works/%s/%s/story-%s-%s%s",
+                timestamp, username, storyId, uuid, extension);
     }
 }

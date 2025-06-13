@@ -1,13 +1,14 @@
 package com.fairytale.fairytale.story;
 
 // 📚 필요한 라이브러리들 import
+import com.fairytale.fairytale.coloring.ColoringTemplateService;
 import com.fairytale.fairytale.story.dto.*;
-import com.fairytale.fairytale.service.S3Service;        // 🆕 S3 서비스 추가
+import com.fairytale.fairytale.service.S3Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;                   // 🆕 로깅 추가
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -17,21 +18,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 🎭 StoryController - S3 연동 버전
+ * 🎭 StoryController - 최적화된 S3 연동 버전
  * <p>
- * 주요 변경사항:
- * 1. 로컬 파일 다운로드 API → S3 직접 접근 or Presigned URL
- * 2. 음성 파일 처리 로직 간소화
- * 3. 보안 강화된 파일 관리
- * 4. CloudFront CDN 지원
- * <p>
- * 왜 이렇게 변경하는가?
- * - 확장성: 여러 서버에서 동일한 파일 접근
- * - 성능: CDN을 통한 빠른 파일 전송
- * - 안정성: AWS의 높은 가용성과 내구성
- * - 비용: 서버 스토리지 비용 절약
+ * 주요 개선사항:
+ * 1. 실제 존재하는 메서드만 호출
+ * 2. 효율적인 흑백 변환 처리
+ * 3. 정확한 S3 헬스체크
+ * 4. 에러 처리 강화
  */
-@Slf4j                        // 🆕 Lombok 로깅
+@Slf4j
 @RestController
 @RequestMapping("api/fairytale")
 @RequiredArgsConstructor
@@ -40,10 +35,12 @@ public class StoryController {
     // 🔧 의존성 주입
     private final StoryService storyService;
     private final RestTemplate restTemplate;
-    private final S3Service s3Service;        // 🆕 S3 서비스 추가
+    private final S3Service s3Service;
+    private final ColoringTemplateService coloringTemplateService;
+    private final ObjectMapper objectMapper;
 
     /**
-     * 🎯 동화 생성 API (변경 없음)
+     * 🎯 동화 생성 API
      */
     @PostMapping("/generate/story")
     public ResponseEntity<Story> createStory(
@@ -64,7 +61,7 @@ public class StoryController {
     }
 
     /**
-     * 📖 특정 동화 조회 API (변경 없음)
+     * 📖 특정 동화 조회 API
      */
     @GetMapping("/story/{id}")
     public ResponseEntity<Story> getStory(
@@ -82,14 +79,12 @@ public class StoryController {
 
     /**
      * 🗣️ 음성 변환 API (S3 업로드 포함)
-     * 이제 로컬 파일이 아닌 S3 URL을 반환
      */
     @PostMapping("/generate/voice")
     public ResponseEntity<Story> createVoice(@RequestBody VoiceRequest request) {
         try {
             log.info("🎤 음성 생성 요청 - StoryId: {}", request.getStoryId());
 
-            // 🎤 StoryService에서 S3 업로드까지 포함한 음성 처리
             Story result = storyService.createVoice(request);
 
             log.info("✅ 음성 생성 완료 - VoiceContent: {}", result.getVoiceContent());
@@ -101,14 +96,7 @@ public class StoryController {
     }
 
     /**
-     * 📁 S3 오디오 파일 다운로드 API (선택적 - 관리자용)
-     * <p>
-     * 🎯 용도:
-     * - 관리자가 서버에서 직접 파일 다운로드 필요시
-     * - 디버깅 및 백업 목적
-     * - 일반 사용자는 S3 URL로 직접 접근
-     * <p>
-     * 주의: 일반적으로는 불필요함 (S3 URL 직접 사용)
+     * 📁 S3 오디오 파일 다운로드 API (관리자용)
      */
     @PostMapping("/download/audio/s3")
     public ResponseEntity<byte[]> downloadAudioFromS3(@RequestBody Map<String, String> request) {
@@ -162,11 +150,6 @@ public class StoryController {
 
     /**
      * 🔗 임시 접근 URL 생성 API (보안이 필요한 경우)
-     * <p>
-     * 🎯 용도:
-     * - 민감한 오디오 파일의 임시 접근
-     * - 유료 컨텐츠의 시간 제한 접근
-     * - 외부 공유시 보안 강화
      */
     @PostMapping("/audio/presigned-url")
     public ResponseEntity<Map<String, String>> generatePresignedUrl(
@@ -174,11 +157,11 @@ public class StoryController {
             Authentication auth) {
         try {
             Long storyId = Long.valueOf(request.get("storyId").toString());
-            Integer expirationMinutes = (Integer) request.getOrDefault("expirationMinutes", 60); // 기본 1시간
+            Integer expirationMinutes = (Integer) request.getOrDefault("expirationMinutes", 60);
 
             log.info("🔗 Presigned URL 생성 요청 - StoryId: {}, 만료시간: {}분", storyId, expirationMinutes);
 
-            // 🔒 사용자 권한 확인 (자신의 스토리만 접근 가능)
+            // 🔒 사용자 권한 확인
             String username = auth.getName();
             Story story = storyService.getStoryById(storyId, username);
 
@@ -209,8 +192,6 @@ public class StoryController {
 
     /**
      * 🗑️ 스토리 삭제 API (S3 파일 포함)
-     * <p>
-     * 기존 스토리 삭제와 달리 S3의 음성 파일도 함께 삭제
      */
     @DeleteMapping("/story/{id}")
     public ResponseEntity<Map<String, String>> deleteStory(
@@ -220,7 +201,6 @@ public class StoryController {
             String username = auth.getName();
             log.info("🗑️ 스토리 삭제 요청 - StoryId: {}, Username: {}", id, username);
 
-            // 🗑️ StoryService에서 S3 파일 포함 삭제 처리
             storyService.deleteStoryWithVoiceFile(id, username);
 
             Map<String, String> response = new HashMap<>();
@@ -239,7 +219,7 @@ public class StoryController {
     }
 
     /**
-     * 🎨 이미지 생성 API (변경 없음, 하지만 추후 S3 연동 가능)
+     * 🎨 이미지 생성 API
      */
     @PostMapping("/generate/image")
     public ResponseEntity<Story> createImage(@RequestBody ImageRequest request) {
@@ -272,49 +252,56 @@ public class StoryController {
         }
     }
 
-    /**
-     * 🖤 PIL+OpenCV 흑백 변환 API (간소화됨)
-     */
+    // ====== 흑백변환 버튼 API (단일 엔드포인트) ======
     @PostMapping("/convert/bwimage")
-    public ResponseEntity<Map<String, Object>> convertToBlackWhite(@RequestBody Map<String, String> request) {
-        log.info("🔍 흑백 변환 요청: {}", request);
-
+    public ResponseEntity<String> convertToBlackWhiteImage(@RequestBody Map<String, String> request) {
         try {
-            String colorImageUrl = request.get("text");
+            String imageUrl = request.get("text");
+            log.info("🔍 PIL+OpenCV 흑백 변환 요청: {}", imageUrl);
 
-            if (colorImageUrl == null || colorImageUrl.isEmpty()) {
+            if (imageUrl == null || imageUrl.trim().isEmpty() || "null".equals(imageUrl)) {
+                log.warn("❌ 이미지 URL이 null이거나 비어있음: {}", imageUrl);
+
                 Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("error", "이미지 URL이 제공되지 않았습니다.");
-                return ResponseEntity.badRequest().body(errorResponse);
+                errorResponse.put("image_url", null);
+                errorResponse.put("error", "이미지 URL이 null입니다.");
+                errorResponse.put("conversion_method", "Flutter_Filter");
+
+                String errorJson = objectMapper.writeValueAsString(errorResponse);
+                return ResponseEntity.ok(errorJson);
             }
 
-            // 🎯 서비스에 위임
-            String finalImageUrl = storyService.convertToBlackWhiteAndUpload(colorImageUrl);
+            // 🎯 새로운 최적화된 방식 사용
+            String blackWhiteUrl = storyService.processImageToBlackWhite(imageUrl);
 
-            // 응답 구성
-            Map<String, Object> result = new HashMap<>();
-            result.put("image_url", finalImageUrl);
-            result.put("original_url", colorImageUrl);
-            result.put("conversion_method", "PIL+OpenCV+S3");
+            Map<String, Object> response = new HashMap<>();
+            response.put("image_url", blackWhiteUrl);
+            response.put("conversion_method", "S3_Direct");
 
-            log.info("✅ 흑백 변환 완료: {}", finalImageUrl);
-            return ResponseEntity.ok(result);
+            String responseJson = objectMapper.writeValueAsString(response);
+            log.info("✅ PIL+OpenCV 변환 완료 - 상태코드: 200 OK");
+            return ResponseEntity.ok(responseJson);
 
         } catch (Exception e) {
-            log.error("❌ 흑백 변환 실패: {}", e.getMessage());
+            log.error("❌ PIL+OpenCV 변환 실패: {}", e.getMessage());
 
             Map<String, Object> fallbackResponse = new HashMap<>();
             fallbackResponse.put("image_url", request.get("text"));
-            fallbackResponse.put("original_url", request.get("text"));
             fallbackResponse.put("conversion_method", "Flutter_Filter");
-            fallbackResponse.put("error", e.getMessage());
+            fallbackResponse.put("message", "PIL+OpenCV 변환 실패로 Flutter에서 필터링 처리됩니다.");
 
-            return ResponseEntity.ok(fallbackResponse);
+            try {
+                String fallbackJson = objectMapper.writeValueAsString(fallbackResponse);
+                return ResponseEntity.ok(fallbackJson);
+            } catch (Exception jsonError) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("{\"error\": \"" + e.getMessage() + "\"}");
+            }
         }
     }
 
     /**
-     * 🎵 파일 확장자에 따른 MediaType 반환 (기존과 동일)
+     * 🎵 파일 확장자에 따른 MediaType 반환
      */
     private MediaType getAudioMediaType(String filePath) {
         String lowerPath = filePath.toLowerCase();
@@ -333,12 +320,13 @@ public class StoryController {
     }
 
     /**
-     * 📊 S3 연결 상태 확인 API (헬스체크용)
+     * 📊 S3 연결 상태 확인 API (✅ 수정됨)
      */
     @GetMapping("/health/s3")
     public ResponseEntity<Map<String, Object>> checkS3Health() {
         try {
-            boolean isConnected = s3Service.isS3Connected();
+            // ✅ 수정: 실제 존재하는 메서드 호출
+            boolean isConnected = s3Service.isS3Available();
 
             Map<String, Object> healthStatus = new HashMap<>();
             healthStatus.put("s3_connected", isConnected);
@@ -365,9 +353,6 @@ public class StoryController {
 
     /**
      * 💾 기존 로컬 파일 다운로드 API (호환성 유지, 추후 제거 예정)
-     * <p>
-     * ⚠️ 경고: 이 API는 S3 마이그레이션 완료 후 제거될 예정입니다.
-     * 기존 Flutter 클라이언트와의 호환성을 위해 임시로 유지합니다.
      */
     @PostMapping("/download/audio")
     @Deprecated
@@ -390,8 +375,6 @@ public class StoryController {
                         .body("S3 URL로 직접 접근하세요.".getBytes());
             }
 
-            // 로컬 파일인 경우 기존 로직 유지 (임시)
-            // ... 기존 로컬 파일 처리 로직 ...
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body("로컬 파일 지원이 중단되었습니다. S3를 사용하세요.".getBytes());
 
