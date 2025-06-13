@@ -48,7 +48,11 @@ public class SharePost {
     @Column(name = "child_name", length = 100)
     private String childName; // 아이 이름
 
-    @Column(name = "like_count")
+    @Column(name = "user_name", length = 100)
+    private String userName; // "아이이름의 부모" 저장
+
+
+    @Column(name = "like_count", nullable = false)
     private Integer likeCount = 0; // 좋아요 수
 
     // 좋아요한 사용자 목록
@@ -81,5 +85,9 @@ public class SharePost {
     // 사용자가 좋아요했는지 확인
     public boolean isLikedBy(Users user) {
         return likedUsers.contains(user);
+    }
+
+    public Integer getLikeCount() {
+        return likeCount == null ? 0 : likeCount;
     }
 }

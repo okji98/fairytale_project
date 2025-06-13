@@ -95,6 +95,9 @@ public class GalleryController {
     /**
      * 갤러리 이미지 삭제
      */
+
+
+
     @DeleteMapping("/images/{storyId}")
     public ResponseEntity<Void> deleteGalleryImage(@PathVariable Long storyId, Authentication auth) {
         try {

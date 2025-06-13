@@ -88,22 +88,15 @@ public class ShareService {
     /**
      * Gallery에서 공유 (이미지만 업로드)
      */
-    public SharePostDTO shareFromGallery(Long galleryId, String username) {
-        log.info("🖼️ Gallery에서 공유 시작 - GalleryId: {}, 사용자: {}", galleryId, username);
+    public SharePostDTO shareFromGallery(Long storyId, String username) {
+        log.info("🖼️ Gallery에서 공유 시작 - StoryId: {}, 사용자: {}", storyId, username);
 
-        // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
 
-        // 2. Gallery 조회
-        Gallery gallery = galleryRepository.findById(galleryId)
-                .orElseThrow(() -> new RuntimeException("갤러리 항목을 찾을 수 없습니다: " + galleryId));
+        Gallery gallery = galleryRepository.findByStoryId(storyId)
+                .orElseThrow(() -> new RuntimeException("갤러리 항목을 찾을 수 없습니다: " + storyId));
 
-        if (!gallery.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("갤러리 항목에 대한 권한이 없습니다.");
-        }
-
-        // 3. 사용할 이미지 결정 (색칠한 이미지 우선, 없으면 컬러 이미지)
         String imageUrl = gallery.getColoringImageUrl() != null ?
                 gallery.getColoringImageUrl() : gallery.getColorImageUrl();
 
@@ -111,21 +104,23 @@ public class ShareService {
             throw new RuntimeException("공유할 이미지가 없습니다.");
         }
 
-        // 4. SharePost 생성 및 저장 (비디오 없이 이미지만)
         SharePost sharePost = new SharePost();
         sharePost.setUser(user);
         sharePost.setStoryTitle(gallery.getStoryTitle());
         sharePost.setImageUrl(imageUrl); // 이미지 URL 설정
         sharePost.setThumbnailUrl(imageUrl); // 썸네일도 같은 이미지 사용
         sharePost.setSourceType("GALLERY");
-        sharePost.setSourceId(galleryId);
+        sharePost.setSourceId(gallery.getId());         // ← 실제 갤러리 PK!
         sharePost.setChildName(gallery.getChildName()); // 아이 이름 설정
+        sharePost.setUserName(gallery.getChildName() + "의 부모"); // 부모 정보
+        sharePost.setVideoUrl("");
 
         SharePost savedPost = sharePostRepository.save(sharePost);
         log.info("✅ Gallery 공유 완료 - SharePostId: {}", savedPost.getId());
 
         return convertToDTO(savedPost, user);
     }
+
 
     /**
      * 모든 공유 게시물 조회 (모든 사용자의 게시물)

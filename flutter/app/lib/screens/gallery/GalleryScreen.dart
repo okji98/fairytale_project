@@ -268,6 +268,31 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       ),
                     ),
 
+                    // 👇 아래에 삭제 버튼 추가 (isOwner 체크 있으면 같이)
+                    if (true) // <-- 본인 소유만 보이게 하려면 조건 추가, 예: if (item.isOwner == true)
+                      Padding(
+                        padding: EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              Navigator.pop(context); // 상세보기 닫기
+                              await _deleteGalleryItem(item); // 삭제
+                            },
+                            icon: Icon(Icons.delete),
+                            label: Text('삭제하기'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
                     SizedBox(height: 16),
                   ],
                 ),
@@ -277,6 +302,70 @@ class _GalleryScreenState extends State<GalleryScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _deleteGalleryItem(GalleryItem item) async {
+    final headers = await _getAuthHeaders();
+
+    // 실제 API 경로 확인해서 맞게 수정!
+    final url = Uri.parse('${ApiService.baseUrl}/api/gallery/${item.storyId}');
+
+    // 삭제 확인 다이얼로그
+    bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('이미지 삭제'),
+        content: Text('정말로 이 이미지를 삭제하시겠습니까?\n삭제된 이미지는 복구할 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final response = await http.delete(url, headers: headers);
+      Navigator.pop(context); // 로딩 다이얼로그 닫기
+
+      if (response.statusCode == 200) {
+        // 삭제 성공!
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('이미지가 삭제되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // 갤러리 다시 불러오기
+        _loadGalleryData();
+      } else {
+        throw Exception('삭제 실패: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (Navigator.canPop(context)) Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('삭제 중 오류 발생: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // 갤러리에서 공유 기능
@@ -297,7 +386,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('갤러리에서 공유하기'),
-        content: Text('이 작품을 기록일지에 공유하시겠습니까?\n비디오로 변환되어 업로드됩니다.'),
+        content: Text('이 작품을 기록일지에 공유하시겠습니까?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface GalleryRepository extends JpaRepository<Gallery, Long> {
@@ -15,6 +16,8 @@ public interface GalleryRepository extends JpaRepository<Gallery, Long> {
      * 사용자의 모든 갤러리 이미지 조회 (최신순)
      */
     List<Gallery> findByUserOrderByCreatedAtDesc(Users user);
+
+    Optional<Gallery> findByStoryId(Long storyId);
 
     /**
      * 특정 스토리의 갤러리 이미지 조회

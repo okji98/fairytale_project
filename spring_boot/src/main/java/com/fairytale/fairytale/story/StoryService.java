@@ -6,6 +6,8 @@ import java.nio.file.Paths;
 
 import com.fairytale.fairytale.coloring.ColoringTemplate;
 import com.fairytale.fairytale.coloring.ColoringTemplateRepository;
+import com.fairytale.fairytale.gallery.Gallery;
+import com.fairytale.fairytale.gallery.GalleryRepository;
 import com.fairytale.fairytale.service.S3Service;
 import lombok.extern.slf4j.Slf4j;
 import com.fairytale.fairytale.baby.Baby;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.scheduling.annotation.Async;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +43,8 @@ public class StoryService {
     private final StoryRepository storyRepository;
     private final UsersRepository usersRepository;
     private final BabyRepository babyRepository;
+    private final GalleryRepository galleryRepository;
+
 
     // ✅ @Lazy로 순환 의존성 해결!
     @Lazy
@@ -236,6 +241,29 @@ public class StoryService {
 //            } else {
 //                log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
 //            }
+
+            // StoryService.java - createImage 메소드 내 try 블록의 마지막 부분에 아래 추가!
+            String childName = "우리 아이";
+            if (story.getBaby() != null && story.getBaby().getBabyName() != null) {
+                childName = story.getBaby().getBabyName();
+            }
+
+            Gallery gallery = galleryRepository.findByStoryIdAndUser(story.getId(), story.getUser());
+            if (gallery == null) {
+                gallery = new Gallery();
+                gallery.setStoryId(story.getId());
+                gallery.setUser(story.getUser());
+                gallery.setStoryTitle(story.getTitle());
+                gallery.setColorImageUrl(s3ImageUrl);
+                gallery.setChildName(childName); // ← 여기!
+                gallery.setCreatedAt(LocalDateTime.now());
+                galleryRepository.save(gallery);
+            } else {
+                gallery.setColorImageUrl(s3ImageUrl);
+                gallery.setUpdatedAt(LocalDateTime.now());
+                galleryRepository.save(gallery);
+            }
+
 
             return savedStory;
 

@@ -165,6 +165,7 @@ public class GalleryService {
             gallery.setStoryTitle(story.getTitle());
             gallery.setColorImageUrl(story.getImage());
             gallery.setCreatedAt(LocalDateTime.now());
+            galleryRepository.save(gallery);
         }
 
         // 4. 색칠한 이미지 URL 업데이트
@@ -291,6 +292,17 @@ public class GalleryService {
                 .coloringImageUrl(coloringWork.getCompletedImageUrl()) // 색칠 완성작
                 .createdAt(coloringWork.getCreatedAt()) // @CreationTimestamp 필드
                 .build();
+    }
+
+
+    // GalleryService.java
+    public void deleteGallery(Long galleryId, String username) {
+        Gallery gallery = galleryRepository.findById(galleryId)
+                .orElseThrow(() -> new RuntimeException("갤러리 항목을 찾을 수 없습니다: " + galleryId));
+        if (!gallery.getUser().getUsername().equals(username)) {
+            throw new RuntimeException("삭제 권한이 없습니다.");
+        }
+        galleryRepository.delete(gallery);
     }
 
     /**
