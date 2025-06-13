@@ -236,8 +236,8 @@ def generate_image_from_fairy_tale(fairy_tale_text):
             "prompt": (None, prompt),
             "model": (None, "stable-diffusion-xl-1024-v1-0"),
             "output_format": (None, "png"),
-            "height": (None, "1024"),
-            "width": (None, "1024"),
+            "height": (None, "514"),
+            "width": (None, "514"),
             "seed": (None, "1234")
         }
 
