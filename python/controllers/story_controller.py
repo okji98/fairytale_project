@@ -292,21 +292,36 @@ def generate_image_from_fairy_tale(fairy_tale_text):
 #         print(f"변환 오류: {e}")
 #         return None
 
-# 흑백 이미지 변환 (staility_sdxl 이미지 용)
-def convert_bw_image(image_url, save_path="bw_image.png"):
+# 흑백 이미지 변환 (URL과 로컬 파일 모두 지원)
+def convert_bw_image(image_input, save_path=None):
     try:
+        print(f"🎨 [convert_bw_image] 변환 시작: {image_input}")
+        
+        # 저장 경로가 지정되지 않은 경우 자동 생성
+        if save_path is None:
+            save_path = get_available_filename("bw_fairy_tale_image", ".png", folder=".")
+            print(f"🔍 [convert_bw_image] 자동 생성된 저장 경로: {save_path}")
 
         # URL인지 로컬 파일인지 판단
-        if image_url.startswith(('http://', 'https://')):
+        if image_input.startswith(('http://', 'https://')):
+            print(f"🌐 [convert_bw_image] URL에서 이미지 다운로드 중...")
             # URL에서 이미지 다운로드
-            response = requests.get(image_url)
+            response = requests.get(image_input, timeout=30)
+            if response.status_code != 200:
+                raise Exception(f"이미지 다운로드 실패: HTTP {response.status_code}")
             image = Image.open(BytesIO(response.content)).convert("RGB")
+            print(f"✅ [convert_bw_image] URL 이미지 로드 완료")
         else:
+            print(f"📁 [convert_bw_image] 로컬 파일에서 이미지 로드 중...")
             # 로컬 파일에서 이미지 로드
-            image = Image.open(image_url).convert("RGB")
+            if not os.path.exists(image_input):
+                raise Exception(f"로컬 파일을 찾을 수 없습니다: {image_input}")
+            image = Image.open(image_input).convert("RGB")
+            print(f"✅ [convert_bw_image] 로컬 이미지 로드 완료")
 
         # Numpy 배열로 변환
         np_image = np.array(image)
+        print(f"🔍 [convert_bw_image] 이미지 크기: {np_image.shape}")
 
         # 흑백 변환
         gray = cv2.cvtColor(np_image, cv2.COLOR_RGB2GRAY)
@@ -326,9 +341,10 @@ def convert_bw_image(image_url, save_path="bw_image.png"):
         
         # 이미지 저장
         cv2.imwrite(save_path, line_drawing)
-        st.info(f"흑백 변환 완료: {save_path}")
+        print(f"✅ [convert_bw_image] 흑백 변환 완료: {save_path}")
+        
         return save_path
     
     except Exception as e:
-        print(f"변환 오류: {e}")
+        print(f"❌ [convert_bw_image] 변환 오류: {e}")
         return None

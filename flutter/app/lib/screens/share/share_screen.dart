@@ -527,7 +527,8 @@ class _ShareScreenState extends State<ShareScreen> {
     );
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
     final now = DateTime.now();
     final difference = now.difference(date);
 
@@ -541,6 +542,7 @@ class _ShareScreenState extends State<ShareScreen> {
       return '방금 전';
     }
   }
+
 }
 
 // 공유 게시물 데이터 모델
@@ -551,7 +553,7 @@ class SharePost {
   final String videoUrl;
   final String? thumbnailUrl;
   final String sourceType;
-  final DateTime createdAt;
+  final DateTime? createdAt;
 
   SharePost({
     required this.id,
@@ -564,6 +566,7 @@ class SharePost {
   });
 
   factory SharePost.fromJson(Map<String, dynamic> json) {
+    String? createdAtStr = json['createdAt']?.toString();
     return SharePost(
       id: json['id'],
       userName: json['userName'],
@@ -571,10 +574,13 @@ class SharePost {
       videoUrl: json['videoUrl'],
       thumbnailUrl: json['thumbnailUrl'],
       sourceType: json['sourceType'] ?? 'STORY',
-      createdAt: DateTime.parse(json['createdAt']),
+      createdAt: (createdAtStr != null && createdAtStr.isNotEmpty)
+          ? DateTime.tryParse(createdAtStr)
+          : null,
     );
   }
 }
+
 
 // 비디오 플레이어 화면
 class VideoPlayerScreen extends StatefulWidget {

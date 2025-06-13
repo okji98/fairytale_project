@@ -716,24 +716,261 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // 공유 기능
+// 공유 기능 - 확인 다이얼로그 추가 및 에러 처리 개선
   Future<void> _shareStoryVideo() async {
+    if (_storyId == null) {
+      _showError('동화를 먼저 생성해주세요.');
+      return;
+    }
+
     if (_audioUrl == null || _colorImageUrl == null) {
       _showError('음성과 이미지가 모두 생성되어야 공유할 수 있습니다.');
       return;
     }
 
-    Navigator.pushNamed(
-      context,
-      '/share',
-      arguments: {
-        'videoUrl': 'https://generated-video-url.com/video_${_storyId}.mp4',
-        'storyTitle': '${_nameController.text}의 $_selectedTheme 동화',
-        'storyContent': _generatedStory,
-        'audioUrl': _audioUrl,
-        'imageUrl': _colorImageUrl,
+    // 확인 다이얼로그 표시
+    final bool? shouldShare = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.share, color: Color(0xFFF6B756)),
+              SizedBox(width: 8),
+              Text('동화 공유하기'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '이 동화를 "우리의 기록일지"에 업로드하시겠습니까?',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 12),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '📖 ${_nameController.text}의 $_selectedTheme 동화',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFF6B756),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '동영상이 생성되어 다른 사용자들과 공유됩니다.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('취소', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFFF6B756),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text('업로드'),
+            ),
+          ],
+        );
       },
     );
+
+    // 사용자가 취소한 경우
+    if (shouldShare != true) {
+      return;
+    }
+
+    // 로딩 다이얼로그 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return WillPopScope(
+          onWillPop: () async => false,
+          child: Center(
+            child: Container(
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFFF6B756)),
+                  SizedBox(height: 16),
+                  Text(
+                    '동영상을 생성하고 있습니다...',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '잠시만 기다려주세요',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    try {
+      print('🎬 Stories 공유 요청 시작 - StoryId: $_storyId');
+
+      // 1. 서버에 공유 요청 (비디오 생성 포함)
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/share/story/$_storyId'),
+        headers: headers,
+      );
+
+      // 로딩 다이얼로그 닫기
+      Navigator.of(context).pop();
+
+      print('🔍 공유 API 응답 상태: ${response.statusCode}');
+      print('🔍 공유 API 응답 본문: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final shareData = json.decode(response.body);
+
+        print('✅ 공유 생성 완료: ${shareData}');
+
+        // 성공 메시지 표시
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('동화가 성공적으로 공유되었습니다!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+
+        // 2. Share 화면으로 이동
+        await Future.delayed(Duration(milliseconds: 500));
+        Navigator.pushNamed(context, '/share');
+
+      } else if (response.statusCode == 401) {
+        print('❌ 인증 실패 (401)');
+        _showError('로그인이 만료되었습니다. 다시 로그인해주세요.');
+        Navigator.pushReplacementNamed(context, '/login');
+      } else if (response.statusCode == 500) {
+        // 서버 내부 오류 - 더 자세한 안내
+        print('❌ 서버 내부 오류 (500)');
+
+        // Python 서버 연결 문제일 가능성이 높음
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text('동영상 생성 실패'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('동영상 생성 서버에 연결할 수 없습니다.'),
+                  SizedBox(height: 8),
+                  Text(
+                    '잠시 후 다시 시도해주세요.',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                  SizedBox(height: 12),
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 16,
+                            color: Colors.orange[800]
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '동영상 생성 기능이 일시적으로 제한될 수 있습니다.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange[800],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text('확인'),
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        print('❌ 공유 생성 실패: ${response.statusCode}');
+        final errorMessage = response.body.isNotEmpty
+            ? json.decode(response.body)['message'] ?? '동영상 생성에 실패했습니다.'
+            : '동영상 생성에 실패했습니다.';
+        _showError(errorMessage);
+      }
+    } catch (e) {
+      // 로딩 다이얼로그 닫기 (에러 발생시)
+      Navigator.of(context).pop();
+
+      print('❌ 공유 에러: $e');
+      _showError('공유 중 오류가 발생했습니다: ${e.toString()}');
+    }
   }
 
   @override

@@ -23,3 +23,6 @@ pydub==0.25.1
 
 # 이미지 처리
 opencv-python==4.8.1.78
+
+# ✅ HTTP 요청을 위한 라이브러리 추가
+requests==2.31.0
