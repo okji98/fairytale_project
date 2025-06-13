@@ -23,12 +23,12 @@ google_api_key = os.getenv('GOOGLE_API_KEY')
 
 # 테마 목록과 키워드 매칭
 THEME_KEYWORDS = {
-    "잔잔한 피아노": "piano",
-    "기타 멜로디": "guitar",
-    "자연의 소리": "nature",
-    "달빛": "moon",
-    "하늘": "sky",
-    "클래식": "classical",
+    "piano": "piano",
+    "guitar": "guitar",
+    "nature": "nature sounds",
+    "moon": "moonlight", 
+    "sky": "sky",
+    "classical": "classical",
 }
 
 def search_videos(theme):
