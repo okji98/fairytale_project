@@ -9,6 +9,7 @@ import com.fairytale.fairytale.story.StoryRepository;
 import com.fairytale.fairytale.users.Users;
 import com.fairytale.fairytale.users.UsersRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -25,13 +27,13 @@ public class GalleryService {
     private final StoryRepository storyRepository;
     private final UsersRepository usersRepository;
     private final GalleryRepository galleryRepository;
-    private final ColoringWorkRepository coloringWorkRepository; // 🎯 추가
+    private final ColoringWorkRepository coloringWorkRepository;
 
     /**
-     * 사용자의 모든 갤러리 이미지 조회 (동화 + 색칠 완성작)
+     * 사용자의 모든 갤러리 이미지 조회 (동화 + 색칠 완성작) - 수정됨
      */
     public List<GalleryImageDTO> getUserGalleryImages(String username) {
-        System.out.println("🔍 사용자 갤러리 이미지 조회 시작 - 사용자: " + username);
+        log.info("🔍 사용자 갤러리 이미지 조회 시작 - 사용자: {}", username);
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
@@ -41,7 +43,7 @@ public class GalleryService {
 
         // 2. 기존 동화 이미지들 조회
         List<Story> storiesWithImages = storyRepository.findByUserAndImageIsNotNullOrderByCreatedAtDesc(user);
-        System.out.println("🔍 이미지가 있는 스토리 개수: " + storiesWithImages.size());
+        log.info("🔍 이미지가 있는 스토리 개수: {}", storiesWithImages.size());
 
         // 3. Story를 GalleryImageDTO로 변환
         List<GalleryImageDTO> storyImages = storiesWithImages.stream()
@@ -56,7 +58,7 @@ public class GalleryService {
 
         // 🎯 5. 색칠 완성작들 조회 및 추가
         List<ColoringWork> coloringWorks = coloringWorkRepository.findByUsernameOrderByCreatedAtDesc(username);
-        System.out.println("🔍 색칠 완성작 개수: " + coloringWorks.size());
+        log.info("🔍 색칠 완성작 개수: {}", coloringWorks.size());
 
         List<GalleryImageDTO> coloringImages = coloringWorks.stream()
                 .map(this::convertColoringWorkToGalleryImageDTO)
@@ -67,9 +69,9 @@ public class GalleryService {
         // 6. 생성일시 기준으로 다시 정렬
         allGalleryImages.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
 
-        System.out.println("✅ 갤러리 이미지 변환 완료 - 최종 개수: " + allGalleryImages.size());
-        System.out.println("   - 동화 이미지: " + storyImages.size() + "개");
-        System.out.println("   - 색칠 완성작: " + coloringImages.size() + "개");
+        log.info("✅ 갤러리 이미지 변환 완료 - 최종 개수: {}", allGalleryImages.size());
+        log.info("   - 동화 이미지: {}개", storyImages.size());
+        log.info("   - 색칠 완성작: {}개", coloringImages.size());
 
         return allGalleryImages;
     }
@@ -78,7 +80,7 @@ public class GalleryService {
      * 🎯 색칠 완성작만 조회하는 메서드 (색칠 탭용)
      */
     public List<GalleryImageDTO> getUserColoringWorks(String username) {
-        System.out.println("🔍 사용자 색칠 완성작 조회 시작 - 사용자: " + username);
+        log.info("🔍 사용자 색칠 완성작 조회 시작 - 사용자: {}", username);
 
         List<ColoringWork> coloringWorks = coloringWorkRepository.findByUsernameOrderByCreatedAtDesc(username);
 
@@ -86,7 +88,7 @@ public class GalleryService {
                 .map(this::convertColoringWorkToGalleryImageDTO)
                 .collect(Collectors.toList());
 
-        System.out.println("✅ 색칠 완성작 조회 완료 - 개수: " + coloringImages.size());
+        log.info("✅ 색칠 완성작 조회 완료 - 개수: {}", coloringImages.size());
         return coloringImages;
     }
 
@@ -94,7 +96,7 @@ public class GalleryService {
      * 🎯 동화 이미지만 조회하는 메서드 (동화 탭용)
      */
     public List<GalleryImageDTO> getUserStoryImages(String username) {
-        System.out.println("🔍 사용자 동화 이미지 조회 시작 - 사용자: " + username);
+        log.info("🔍 사용자 동화 이미지 조회 시작 - 사용자: {}", username);
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
@@ -112,7 +114,7 @@ public class GalleryService {
         List<Gallery> galleries = galleryRepository.findByUserOrderByCreatedAtDesc(user);
         mergeColoringImages(storyImages, galleries);
 
-        System.out.println("✅ 동화 이미지 조회 완료 - 개수: " + storyImages.size());
+        log.info("✅ 동화 이미지 조회 완료 - 개수: {}", storyImages.size());
         return storyImages;
     }
 
@@ -120,7 +122,7 @@ public class GalleryService {
      * 특정 스토리의 갤러리 이미지 조회
      */
     public GalleryImageDTO getStoryGalleryImage(Long storyId, String username) {
-        System.out.println("🔍 특정 스토리 갤러리 이미지 조회 - StoryId: " + storyId);
+        log.info("🔍 특정 스토리 갤러리 이미지 조회 - StoryId: {}", storyId);
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
@@ -146,7 +148,7 @@ public class GalleryService {
      * 색칠한 이미지 업데이트
      */
     public GalleryImageDTO updateColoringImage(Long storyId, String coloringImageUrl, String username) {
-        System.out.println("🔍 색칠한 이미지 업데이트 시작 - StoryId: " + storyId);
+        log.info("🔍 색칠한 이미지 업데이트 시작 - StoryId: {}", storyId);
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
@@ -175,50 +177,66 @@ public class GalleryService {
         // 5. 저장
         Gallery savedGallery = galleryRepository.save(gallery);
 
-        System.out.println("✅ 색칠한 이미지 업데이트 완료");
+        log.info("✅ 색칠한 이미지 업데이트 완료");
 
         // 6. DTO로 변환하여 반환
         return convertToGalleryImageDTO(story, savedGallery);
     }
 
     /**
-     * 갤러리 이미지 삭제
+     * 🎯 갤러리 이미지 삭제 (수정됨) - Story 기반 삭제를 Story 엔티티 삭제로 변경
      */
     public boolean deleteGalleryImage(Long storyId, String username) {
-        System.out.println("🔍 갤러리 이미지 삭제 시작 - StoryId: " + storyId);
+        log.info("🔍 갤러리 이미지 삭제 시작 - StoryId: {}", storyId);
 
-        // 1. 사용자 조회
-        Users user = usersRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+        try {
+            // 1. 사용자 조회
+            Users user = usersRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
 
-        // 2. 갤러리 엔티티 조회
-        Gallery gallery = galleryRepository.findByStoryIdAndUser(storyId, user);
+            // 2. 스토리 조회 (권한 확인 포함)
+            Story story = storyRepository.findByIdAndUser(storyId, user)
+                    .orElse(null);
 
-        if (gallery != null) {
-            galleryRepository.delete(gallery);
-            System.out.println("✅ 갤러리 이미지 삭제 완료");
+            if (story == null) {
+                log.warn("⚠️ 삭제할 스토리 없음 또는 권한 없음 - StoryId: {}", storyId);
+                return false;
+            }
+
+            // 3. 관련 Gallery 엔티티도 함께 삭제
+            Gallery gallery = galleryRepository.findByStoryIdAndUser(storyId, user);
+            if (gallery != null) {
+                galleryRepository.delete(gallery);
+                log.info("✅ 관련 갤러리 엔티티 삭제 완료");
+            }
+
+            // 4. Story 엔티티 삭제
+            storyRepository.delete(story);
+            log.info("✅ 스토리 삭제 완료 - StoryId: {}", storyId);
+
             return true;
-        } else {
-            System.out.println("⚠️ 삭제할 갤러리 이미지 없음");
+
+        } catch (Exception e) {
+            log.error("❌ 갤러리 이미지 삭제 실패: {}", e.getMessage());
             return false;
         }
     }
 
     /**
-     * 🎯 색칠 완성작 삭제
+     * 🎯 색칠 완성작 삭제 (수정됨)
      */
     public boolean deleteColoringWork(Long coloringWorkId, String username) {
-        System.out.println("🔍 색칠 완성작 삭제 시작 - ColoringWorkId: " + coloringWorkId);
+        log.info("🔍 색칠 완성작 삭제 시작 - ColoringWorkId: {}", coloringWorkId);
 
         ColoringWork coloringWork = coloringWorkRepository.findById(coloringWorkId)
                 .orElse(null);
 
         if (coloringWork != null && coloringWork.getUsername().equals(username)) {
             coloringWorkRepository.delete(coloringWork);
-            System.out.println("✅ 색칠 완성작 삭제 완료");
+            log.info("✅ 색칠 완성작 삭제 완료");
             return true;
         } else {
-            System.out.println("⚠️ 삭제할 색칠 완성작 없음 또는 권한 없음");
+            log.info("⚠️ 삭제할 색칠 완성작 없음 또는 권한 없음");
             return false;
         }
     }
@@ -227,7 +245,7 @@ public class GalleryService {
      * 갤러리 통계 조회 (색칠 완성작 포함)
      */
     public GalleryStatsDTO getGalleryStats(String username) {
-        System.out.println("🔍 갤러리 통계 조회 시작");
+        log.info("🔍 갤러리 통계 조회 시작");
 
         // 1. 사용자 조회
         Users user = usersRepository.findByUsername(username)
@@ -242,21 +260,21 @@ public class GalleryService {
         long coloringWorks = coloringWorkRepository.countByUsername(username);
         long totalImages = totalStoryImages + coloringWorks;
 
-        System.out.println("✅ 갤러리 통계 조회 완료");
-        System.out.println("   - 동화 이미지: " + totalStoryImages + "개");
-        System.out.println("   - 색칠 완성작: " + coloringWorks + "개");
-        System.out.println("   - 총 이미지: " + totalImages + "개");
+        log.info("✅ 갤러리 통계 조회 완료");
+        log.info("   - 동화 이미지: {}개", totalStoryImages);
+        log.info("   - 색칠 완성작: {}개", coloringWorks);
+        log.info("   - 총 이미지: {}개", totalImages);
 
         return GalleryStatsDTO.builder()
                 .totalImages(totalImages)
-                .coloringImages(coloringImages + coloringWorks) // 기존 + 새로운 색칠 완성작
+                .coloringImages(coloringImages + coloringWorks)
                 .totalStories(totalStories)
                 .completionRate(totalImages > 0 ? (double) (coloringImages + coloringWorks) / totalImages * 100 : 0.0)
                 .build();
     }
 
     /**
-     * Story를 GalleryImageDTO로 변환
+     * Story를 GalleryImageDTO로 변환 (기존 구조 유지)
      */
     private GalleryImageDTO convertToGalleryImageDTO(Story story) {
         return GalleryImageDTO.builder()
@@ -265,11 +283,14 @@ public class GalleryService {
                 .colorImageUrl(story.getImage())
                 .coloringImageUrl(null) // 기본값, 나중에 갤러리 테이블에서 추가
                 .createdAt(story.getCreatedAt())
+                .isColoringWork(false) // 🎯 기존 필드 사용
+                .type("story") // 🎯 새 필드 추가
+                .isOwner(true) // 🎯 본인 소유 (필요시 실제 검증 로직 추가)
                 .build();
     }
 
     /**
-     * Story와 Gallery를 GalleryImageDTO로 변환
+     * Story와 Gallery를 GalleryImageDTO로 변환 (기존 구조 유지)
      */
     private GalleryImageDTO convertToGalleryImageDTO(Story story, Gallery gallery) {
         return GalleryImageDTO.builder()
@@ -278,11 +299,14 @@ public class GalleryService {
                 .colorImageUrl(story.getImage())
                 .coloringImageUrl(gallery != null ? gallery.getColoringImageUrl() : null)
                 .createdAt(story.getCreatedAt())
+                .isColoringWork(false) // 🎯 기존 필드 사용
+                .type("story") // 🎯 새 필드 추가
+                .isOwner(true) // 🎯 본인 소유
                 .build();
     }
 
     /**
-     * 🎯 ColoringWork를 GalleryImageDTO로 변환 (수정됨)
+     * 🎯 ColoringWork를 GalleryImageDTO로 변환 (기존 구조에 맞춤)
      */
     private GalleryImageDTO convertColoringWorkToGalleryImageDTO(ColoringWork coloringWork) {
         return GalleryImageDTO.builder()
@@ -291,11 +315,16 @@ public class GalleryService {
                 .colorImageUrl(coloringWork.getOriginalImageUrl()) // 원본 컬러 이미지
                 .coloringImageUrl(coloringWork.getCompletedImageUrl()) // 색칠 완성작
                 .createdAt(coloringWork.getCreatedAt()) // @CreationTimestamp 필드
+                .isColoringWork(true) // 🎯 기존 필드 사용 - 색칠 완성작임을 표시
+                .type("coloring") // 🎯 새 필드 추가
+                .coloringWorkId(coloringWork.getId()) // 🎯 실제 ColoringWork ID 추가
+                .isOwner(true) // 🎯 본인 소유
                 .build();
     }
 
-
-    // GalleryService.java
+    /**
+     * 갤러리 삭제 (ID 기반)
+     */
     public void deleteGallery(Long galleryId, String username) {
         Gallery gallery = galleryRepository.findById(galleryId)
                 .orElseThrow(() -> new RuntimeException("갤러리 항목을 찾을 수 없습니다: " + galleryId));

@@ -24,7 +24,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
     // 🎯 전달받은 arguments에서 선택할 탭과 성공 메시지 확인
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args =
-          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
       if (args != null) {
         // 탭 설정
@@ -104,24 +104,29 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
-  // 필터링된 갤러리 아이템 가져오기
+  // 필터링된 갤러리 아이템 가져오기 (수정됨)
   List<GalleryItem> get _filteredItems {
     switch (_selectedTab) {
       case 'color':
+      // 🎯 순수 컬러 이미지만 (색칠 완성작 제외)
         return _galleryItems
-            .where((item) => item.colorImageUrl != null)
+            .where((item) =>
+        item.colorImageUrl != null &&
+            !(item.isColoringWork ?? false) &&
+            item.type != 'coloring')
             .toList();
       case 'coloring':
+      // 🎯 색칠 완성작만
         return _galleryItems
-            .where((item) => item.coloringImageUrl != null)
+            .where((item) =>
+        (item.isColoringWork ?? false) ||
+            item.type == 'coloring' ||
+            item.coloringImageUrl != null)
             .toList();
       default:
         return _galleryItems;
     }
   }
-
-  // lib/screens/gallery/gallery_screen.dart (공유 기능 추가)
-// 기존 _showImageDetail 메서드를 다음과 같이 업데이트:
 
   // 이미지 상세보기 모달 (공유 기능 추가)
   void _showImageDetail(GalleryItem item) {
@@ -268,30 +273,29 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       ),
                     ),
 
-                    // 👇 아래에 삭제 버튼 추가 (isOwner 체크 있으면 같이)
-                    if (true) // <-- 본인 소유만 보이게 하려면 조건 추가, 예: if (item.isOwner == true)
-                      Padding(
-                        padding: EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              Navigator.pop(context); // 상세보기 닫기
-                              await _deleteGalleryItem(item); // 삭제
-                            },
-                            icon: Icon(Icons.delete),
-                            label: Text('삭제하기'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
-                              ),
+                    // 🎯 삭제 버튼 (수정됨)
+                    Padding(
+                      padding: EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(context); // 상세보기 닫기
+                            await _deleteGalleryItem(item); // 삭제
+                          },
+                          icon: Icon(Icons.delete),
+                          label: Text('삭제하기'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
                             ),
                           ),
                         ),
                       ),
+                    ),
 
                     SizedBox(height: 16),
                   ],
@@ -304,11 +308,25 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
   }
 
+  // 🎯 수정된 삭제 함수 - 로직 개선
   Future<void> _deleteGalleryItem(GalleryItem item) async {
     final headers = await _getAuthHeaders();
 
-    // 실제 API 경로 확인해서 맞게 수정!
-    final url = Uri.parse('${ApiService.baseUrl}/api/gallery/${item.storyId}');
+    // 🎯 type 필드를 우선으로 하여 타입 결정
+    final isColoringWork = item.type == 'coloring' || (item.isColoringWork ?? false);
+    final itemType = item.type == 'coloring' ? 'coloring' : 'story';
+    final itemId = isColoringWork ? (item.coloringWorkId ?? item.storyId) : item.storyId;
+
+    print('🔍 삭제 요청 상세 정보:');
+    print('   - storyId: ${item.storyId}');
+    print('   - isColoringWork: ${item.isColoringWork}');
+    print('   - type: ${item.type}');
+    print('   - coloringWorkId: ${item.coloringWorkId}');
+    print('   - 계산된 itemId: $itemId');
+    print('   - 계산된 itemType: $itemType');
+
+    // API 경로 수정 - 새로운 엔드포인트 사용
+    final url = Uri.parse('${ApiService.baseUrl}/api/gallery/$itemId?type=$itemType');
 
     // 삭제 확인 다이얼로그
     bool? shouldDelete = await showDialog<bool>(
@@ -334,6 +352,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
     if (shouldDelete != true) return;
 
+    // 로딩 다이얼로그
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -341,8 +360,11 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
 
     try {
+      print('🔍 삭제 API 호출: $url');
       final response = await http.delete(url, headers: headers);
       Navigator.pop(context); // 로딩 다이얼로그 닫기
+
+      print('🔍 삭제 응답: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
         // 삭제 성공!
@@ -355,10 +377,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
         // 갤러리 다시 불러오기
         _loadGalleryData();
       } else {
-        throw Exception('삭제 실패: ${response.statusCode}');
+        final errorData = json.decode(response.body);
+        throw Exception('삭제 실패: ${errorData['error'] ?? response.statusCode}');
       }
     } catch (e) {
       if (Navigator.canPop(context)) Navigator.pop(context);
+      print('❌ 삭제 에러: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('삭제 중 오류 발생: $e'),
@@ -368,7 +392,113 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
-  // 갤러리에서 공유 기능
+  // 🎯 색칠 완성작 전용 공유 기능 (새로 추가)
+  Future<void> _shareColoringWork(GalleryItem item) async {
+    print('🎨 색칠 완성작 공유 시작 - ColoringWorkId: ${item.coloringWorkId}');
+
+    // 공유 확인 다이얼로그
+    bool? shouldShare = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('색칠 완성작 공유하기'),
+        content: Text('이 색칠 작품을 기록일지에 공유하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFF6B756),
+            ),
+            child: Text('공유하기'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldShare != true) return;
+
+    // 로딩 다이얼로그 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFFF6B756)),
+              SizedBox(height: 16),
+              Text(
+                '색칠 작품을 공유하는 중...',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '잠시만 기다려주세요.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final headers = await _getAuthHeaders();
+
+      // 🎯 색칠 완성작 ID 사용 (storyId 대신 coloringWorkId 사용)
+      final shareId = item.coloringWorkId ?? item.storyId;
+      print('🎨 색칠 완성작 공유 요청 - ID: $shareId');
+
+      // 색칠 완성작 전용 공유 API 엔드포인트
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/share/coloring-work/$shareId'),
+        headers: headers,
+      );
+
+      // 로딩 다이얼로그 닫기
+      Navigator.pop(context);
+
+      print('🎨 색칠 완성작 공유 응답: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        // 성공 메시지
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 색칠 작품이 성공적으로 공유되었습니다!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // 공유 화면으로 이동
+        Navigator.pushNamed(context, '/share');
+
+      } else {
+        throw Exception('공유 실패: ${response.statusCode}');
+      }
+
+    } catch (e) {
+      // 로딩 다이얼로그가 열려있다면 닫기
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      print('❌ 색칠 완성작 공유 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('공유 중 오류가 발생했습니다: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // 갤러리에서 공유 기능 (기존)
   Future<void> _shareFromGallery(GalleryItem item) async {
     // 공유 가능한 이미지가 있는지 확인
     if (item.colorImageUrl == null && item.coloringImageUrl == null) {
@@ -539,87 +669,86 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
             // 컨텐츠 영역
             Expanded(
-              child:
-                  _isLoading
-                      ? Center(
-                        child: CircularProgressIndicator(color: primaryColor),
-                      )
-                      : _errorMessage != null
-                      ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 64,
-                              color: Colors.white.withOpacity(0.7),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              _errorMessage!,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _loadGalleryData,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryColor,
-                              ),
-                              child: Text('다시 시도'),
-                            ),
-                          ],
-                        ),
-                      )
-                      : _filteredItems.isEmpty
-                      ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.photo_library_outlined,
-                              size: 64,
-                              color: Colors.white.withOpacity(0.7),
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              '아직 이미지가 없어요',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              '동화를 만들고 이미지를 생성해보세요!',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                      : Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: GridView.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 1.0,
-                              ),
-                          itemCount: _filteredItems.length,
-                          itemBuilder: (context, index) {
-                            return _buildGalleryCard(_filteredItems[index]);
-                          },
-                        ),
+              child: _isLoading
+                  ? Center(
+                child: CircularProgressIndicator(color: primaryColor),
+              )
+                  : _errorMessage != null
+                  ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.white.withOpacity(0.7),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      _errorMessage!,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 16,
                       ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _loadGalleryData,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                      ),
+                      child: Text('다시 시도'),
+                    ),
+                  ],
+                ),
+              )
+                  : _filteredItems.isEmpty
+                  ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.photo_library_outlined,
+                      size: 64,
+                      color: Colors.white.withOpacity(0.7),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      '아직 이미지가 없어요',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '동화를 만들고 이미지를 생성해보세요!',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+                  : Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: GridView.builder(
+                  gridDelegate:
+                  SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.0,
+                  ),
+                  itemCount: _filteredItems.length,
+                  itemBuilder: (context, index) {
+                    return _buildGalleryCard(_filteredItems[index]);
+                  },
+                ),
+              ),
             ),
 
             SizedBox(height: 16),
@@ -645,7 +774,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color:
-                isSelected ? Color(0xFFF6B756) : Colors.white.withOpacity(0.5),
+            isSelected ? Color(0xFFF6B756) : Colors.white.withOpacity(0.5),
             width: 1,
           ),
         ),
@@ -801,22 +930,26 @@ class _GalleryScreenState extends State<GalleryScreen> {
     return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
   }
 
-  // 타입별 색상
+  // 타입별 색상 (기존 필드 지원)
   Color _getTypeColor(GalleryItem item) {
+    final isColoringWork = item.isColoringWork ?? (item.type == 'coloring');
+
     if (item.coloringImageUrl != null && item.colorImageUrl != null) {
       return Color(0xFF9C27B0); // 보라색 (둘 다)
-    } else if (item.coloringImageUrl != null) {
+    } else if (item.coloringImageUrl != null || isColoringWork) {
       return Color(0xFF4CAF50); // 녹색 (색칠)
     } else {
       return Color(0xFF2196F3); // 파란색 (컬러)
     }
   }
 
-  // 타입별 텍스트
+  // 타입별 텍스트 (기존 필드 지원)
   String _getTypeText(GalleryItem item) {
+    final isColoringWork = item.isColoringWork ?? (item.type == 'coloring');
+
     if (item.coloringImageUrl != null && item.colorImageUrl != null) {
       return '완성';
-    } else if (item.coloringImageUrl != null) {
+    } else if (item.coloringImageUrl != null || isColoringWork) {
       return '색칠';
     } else {
       return '컬러';
@@ -824,13 +957,16 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 }
 
-// 갤러리 아이템 모델
+// 🎯 수정된 갤러리 아이템 모델 (기존 구조 유지)
 class GalleryItem {
   final int storyId;
   final String? storyTitle;
   final String? colorImageUrl;
   final String? coloringImageUrl;
   final DateTime? createdAt;
+  final bool? isColoringWork;   // 🎯 기존 필드 유지
+  final String? type;           // 🎯 새로 추가 (호환성)
+  final int? coloringWorkId;    // 🎯 새로 추가
 
   GalleryItem({
     required this.storyId,
@@ -838,6 +974,9 @@ class GalleryItem {
     this.colorImageUrl,
     this.coloringImageUrl,
     this.createdAt,
+    this.isColoringWork,
+    this.type,
+    this.coloringWorkId,
   });
 
   factory GalleryItem.fromJson(Map<String, dynamic> json) {
@@ -846,11 +985,13 @@ class GalleryItem {
       storyTitle: json['storyTitle'] ?? json['story_title'],
       colorImageUrl: json['colorImageUrl'] ?? json['color_image_url'],
       coloringImageUrl: json['coloringImageUrl'] ?? json['coloring_image_url'],
-      createdAt:
-          json['createdAt'] != null
-              ? DateTime.tryParse(json['createdAt']) ??
-                  DateTime.tryParse(json['created_at'])
-              : null,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt']) ??
+          DateTime.tryParse(json['created_at'])
+          : null,
+      isColoringWork: json['isColoringWork'] ?? json['is_coloring_work'] ?? false, // 🎯 기존 필드
+      type: json['type'] ?? (json['isColoringWork'] == true ? 'coloring' : 'story'), // 🎯 호환성 처리
+      coloringWorkId: json['coloringWorkId'] ?? json['coloring_work_id'], // 🎯 새로 추가
     );
   }
 }

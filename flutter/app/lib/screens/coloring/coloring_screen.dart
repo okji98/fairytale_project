@@ -1,4 +1,4 @@
-// lib/screens/coloring/coloring_screen.dart - 완전히 새로 작성
+// lib/screens/coloring/coloring_screen.dart - 완전히 수정된 버전
 
 import 'dart:ui' as ui;
 import 'dart:typed_data';
@@ -33,39 +33,145 @@ class _ColoringScreenState extends State<ColoringScreen> {
   bool _isBlackAndWhite = false;
   bool _isPanMode = false;
 
+  // 🎨 템플릿 정보 변수 추가
+  Map<String, dynamic>? _templateData;
+  int? _templateId;
+  bool _fromStory = false;
+  bool _fallbackMode = false;
+
   // 확대/축소 관련
   double _currentScale = 1.0;
   final double _minScale = 0.5;
   final double _maxScale = 3.0;
-  final TransformationController _transformationController =
-      TransformationController();
+  final TransformationController _transformationController = TransformationController();
 
   // 그리기 관련
   List<DrawingPoint> _drawingPoints = [];
 
   // 색상 팔레트
   final List<Color> _colorPalette = [
-    Colors.red,
-    Colors.pink,
-    Colors.orange,
-    Colors.yellow,
-    Colors.green,
-    Colors.lightGreen,
-    Colors.blue,
-    Colors.lightBlue,
-    Colors.purple,
-    Colors.deepPurple,
-    Colors.brown,
-    Colors.grey,
-    Colors.black,
-    Colors.white,
+    Colors.red, Colors.pink, Colors.orange, Colors.yellow,
+    Colors.green, Colors.lightGreen, Colors.blue, Colors.lightBlue,
+    Colors.purple, Colors.deepPurple, Colors.brown, Colors.grey,
+    Colors.black, Colors.white,
   ];
 
   @override
   void initState() {
     super.initState();
     _loadColoringTemplates();
-    _checkForSharedImage();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // 🔍 전달받은 arguments 처리
+    final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    if (arguments != null) {
+      print('🔍 색칠공부 화면 arguments: $arguments');
+
+      // 🎨 템플릿 정보 확인
+      if (arguments.containsKey('templateId')) {
+        _templateId = arguments['templateId'];
+        print('✅ templateId 받음: $_templateId');
+      }
+
+      if (arguments.containsKey('templateData')) {
+        _templateData = arguments['templateData'];
+        print('✅ templateData 받음: $_templateData');
+      }
+
+      // 🔍 동화에서 왔는지 확인
+      _fromStory = arguments['fromStory'] ?? false;
+      _fallbackMode = arguments['fallbackMode'] ?? false;
+
+      print('🔍 fromStory: $_fromStory, fallbackMode: $_fallbackMode');
+
+      // 🖼️ 이미지 URL 설정
+      if (arguments.containsKey('imageUrl')) {
+        setState(() {
+          _selectedImageUrl = arguments['imageUrl'];
+          _isBlackAndWhite = arguments['isBlackAndWhite'] ?? false;
+        });
+        print('✅ imageUrl 받음: $_selectedImageUrl');
+      }
+
+      // 🎨 템플릿 데이터에서 이미지 URL 추출 (우선순위)
+      if (_templateData != null && _templateData!.containsKey('imageUrl')) {
+        setState(() {
+          _selectedImageUrl = _templateData!['imageUrl'];
+        });
+        print('✅ 템플릿에서 imageUrl 사용: $_selectedImageUrl');
+      }
+    }
+  }
+
+  // 🎯 템플릿 삭제 기능
+  Future<void> _deleteTemplate(ColoringTemplate template) async {
+    bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('템플릿 삭제'),
+        content: Text('정말로 이 색칠공부 템플릿을 삭제하시겠습니까?\n삭제된 템플릿은 복구할 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final headers = await _getAuthHeaders();
+      final url = Uri.parse('${ApiService.baseUrl}/api/coloring/templates/${template.id}');
+
+      print('🗑️ 템플릿 삭제 API 호출: $url');
+      final response = await http.delete(url, headers: headers);
+
+      Navigator.pop(context); // 로딩 다이얼로그 닫기
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('템플릿이 삭제되었습니다.'), backgroundColor: Colors.green),
+        );
+        _loadColoringTemplates();
+      } else {
+        throw Exception('삭제 실패: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (Navigator.canPop(context)) Navigator.pop(context);
+      print('❌ 템플릿 삭제 에러: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('삭제 중 오류 발생: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // 인증된 HTTP 요청을 위한 헤더 가져오기
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accessToken = prefs.getString('access_token');
+
+    return {
+      'Content-Type': 'application/json',
+      if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+    };
   }
 
   // 확대/축소 기능들
@@ -90,69 +196,27 @@ class _ColoringScreenState extends State<ColoringScreen> {
   Future<void> _loadColoringTemplates() async {
     setState(() => _isLoading = true);
     try {
-      final templatesData = await ApiService.getColoringTemplates(
-        page: 0,
-        size: 20,
-      );
+      final templatesData = await ApiService.getColoringTemplates(page: 0, size: 20);
       if (templatesData != null && templatesData.isNotEmpty) {
         setState(() {
-          _templates =
-              templatesData
-                  .map((json) => ColoringTemplate.fromJson(json))
-                  .toList();
+          _templates = templatesData.map((json) => ColoringTemplate.fromJson(json)).toList();
         });
       } else {
-        _loadDummyTemplates();
+        setState(() {
+          _templates = [];
+        });
       }
     } catch (e) {
-      _loadDummyTemplates();
+      print('❌ 템플릿 로드 실패: $e');
+      setState(() {
+        _templates = [];
+      });
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  void _loadDummyTemplates() {
-    setState(() {
-      _templates = [
-        ColoringTemplate(
-          id: 'coloring_1',
-          title: '토끼와 꽃밭',
-          imageUrl: 'https://picsum.photos/400/400?random=1',
-          createdAt: '2024-05-30',
-          storyTitle: '동글이의 자연 동화',
-        ),
-        ColoringTemplate(
-          id: 'coloring_2',
-          title: '마법의 성 모험',
-          imageUrl: 'https://picsum.photos/400/400?random=2',
-          createdAt: '2024-05-29',
-          storyTitle: '동글이의 용기 동화',
-        ),
-        ColoringTemplate(
-          id: 'coloring_3',
-          title: '우주 여행',
-          imageUrl: 'https://picsum.photos/400/400?random=3',
-          createdAt: '2024-05-28',
-          storyTitle: '동글이의 도전 동화',
-        ),
-      ];
-    });
-  }
-
-  void _checkForSharedImage() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args =
-          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args?['imageUrl'] != null) {
-        setState(() {
-          _selectedImageUrl = args!['imageUrl'] as String;
-          _isBlackAndWhite = args['isBlackAndWhite'] ?? false;
-        });
-      }
-    });
-  }
-
-  // 이미지 저장
+  // 🎨 색칠 완성작 저장 메서드 (완전히 새로운 버전)
   Future<void> _saveColoredImage() async {
     if (_selectedImageUrl == null || _drawingPoints.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -162,22 +226,27 @@ class _ColoringScreenState extends State<ColoringScreen> {
     }
 
     setState(() => _isProcessing = true);
+
     try {
+      print('🎨 색칠 완성작 저장 시작');
+      print('🔍 템플릿 ID: $_templateId');
+      print('🔍 템플릿 데이터: $_templateData');
+      print('🔍 fromStory: $_fromStory');
+      print('🔍 fallbackMode: $_fallbackMode');
+
       // 1. Canvas를 이미지로 변환
-      RenderRepaintBoundary boundary =
-          _canvasKey.currentContext!.findRenderObject()
-              as RenderRepaintBoundary;
+      RenderRepaintBoundary boundary = _canvasKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-      ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
       if (byteData != null) {
-        // 2. 현재 선택된 템플릿에서 storyId 가져오기
-        String? storyId = _getCurrentTemplateStoryId();
+        // 2. storyId 결정 - 여러 방법 시도
+        String? storyId = _getStoryIdForSaving();
 
         if (storyId == null) {
-          throw Exception('템플릿 정보를 찾을 수 없습니다.');
+          // 🔄 폴백: 기본값 사용 또는 새 ID 생성
+          storyId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+          print('⚠️ storyId를 찾을 수 없어 임시 ID 사용: $storyId');
         }
 
         // 3. MultipartFile로 Spring Boot API 호출
@@ -193,6 +262,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
               backgroundColor: Colors.green,
             ),
           );
+
           // 갤러리로 이동하면서 성공 메시지 표시
           Navigator.pushReplacement(
             context,
@@ -223,11 +293,133 @@ class _ColoringScreenState extends State<ColoringScreen> {
     }
   }
 
-  // 현재 선택된 템플릿의 storyId 가져오기 (안전한 버전)
+  // 🎯 저장용 storyId 결정 메서드 (여러 방법 시도)
+  String? _getStoryIdForSaving() {
+    print('🔍 저장용 storyId 결정 시작');
+
+    // 1. 템플릿 데이터에서 storyId 추출
+    if (_templateData != null) {
+      if (_templateData!.containsKey('storyId')) {
+        final storyId = _templateData!['storyId']?.toString();
+        if (storyId != null && storyId.isNotEmpty) {
+          print('✅ 템플릿 데이터에서 storyId 발견: $storyId');
+          return storyId;
+        }
+      }
+
+      if (_templateData!.containsKey('id')) {
+        final id = _templateData!['id']?.toString();
+        if (id != null && id.isNotEmpty) {
+          print('✅ 템플릿 데이터에서 id 발견: $id');
+          return id;
+        }
+      }
+    }
+
+    // 2. 기존 템플릿 목록에서 찾기
+    final templateStoryId = _getCurrentTemplateStoryId();
+    if (templateStoryId != null) {
+      print('✅ 기존 템플릿에서 storyId 발견: $templateStoryId');
+      return templateStoryId;
+    }
+
+    // 3. URL에서 추출 시도
+    if (_selectedImageUrl != null) {
+      // S3 URL에서 story ID 패턴 추출 시도
+      final urlPatterns = [
+        RegExp(r'story[_-](\d+)'),
+        RegExp(r'stories/(\d+)'),
+        RegExp(r'/(\d+)/'),
+      ];
+
+      for (final pattern in urlPatterns) {
+        final match = pattern.firstMatch(_selectedImageUrl!);
+        if (match != null) {
+          final extractedId = match.group(1);
+          print('✅ URL에서 storyId 추출: $extractedId');
+          return extractedId;
+        }
+      }
+    }
+
+    print('❌ 모든 방법으로 storyId를 찾을 수 없음');
+    return null;
+  }
+
+  // 📋 서버에 색칠 완성작 저장
+  Future<Map<String, dynamic>?> _saveColoringWorkToServer(
+      Uint8List imageData,
+      String storyId,
+      ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final accessToken = prefs.getString('access_token');
+
+      if (accessToken == null) {
+        throw Exception('로그인이 필요합니다.');
+      }
+
+      // MultipartRequest 생성
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${ApiService.baseUrl}/api/coloring/save-coloring-work'),
+      );
+
+      // 헤더 설정
+      request.headers['Authorization'] = 'Bearer $accessToken';
+
+      // 파라미터 추가
+      request.fields['storyId'] = storyId;
+
+      // 🎯 추가 메타데이터 포함 (템플릿 정보가 있는 경우)
+      if (_templateData != null) {
+        if (_templateData!.containsKey('title')) {
+          request.fields['storyTitle'] = _templateData!['title'].toString();
+        }
+        if (_templateData!.containsKey('category')) {
+          request.fields['category'] = _templateData!['category'].toString();
+        }
+      }
+
+      // 이미지 파일 추가
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'coloredImage',
+          imageData,
+          filename: 'coloring_work_${DateTime.now().millisecondsSinceEpoch}.png',
+        ),
+      );
+
+      print('🎨 색칠 완성작 저장 요청 - StoryId: $storyId');
+
+      // 요청 전송
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('🎨 색칠 완성작 저장 응답: ${response.statusCode}');
+      print('🎨 응답 본문: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('서버 오류: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ 색칠 완성작 저장 실패: $e');
+      throw e;
+    }
+  }
+
+  // 기존 템플릿에서 storyId 찾기 (기존 로직 유지)
   String? _getCurrentTemplateStoryId() {
     try {
       print('🔍 템플릿 찾기 시작 - 선택된 URL: $_selectedImageUrl');
       print('🔍 전체 템플릿 개수: ${_templates.length}');
+
+      if (_templates.isEmpty) {
+        print('❌ 사용할 수 있는 템플릿이 없음');
+        return null;
+      }
 
       // 선택된 이미지 URL과 일치하는 템플릿 찾기
       ColoringTemplate? template;
@@ -235,9 +427,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
       // 1. 정확히 일치하는 템플릿 찾기
       try {
         template = _templates.firstWhere(
-          (t) =>
-              t.imageUrl == _selectedImageUrl ||
-              t.blackWhiteImageUrl == _selectedImageUrl,
+              (t) => t.imageUrl == _selectedImageUrl || t.blackWhiteImageUrl == _selectedImageUrl,
         );
         print('✅ 정확히 일치하는 템플릿 발견: ${template.title}');
       } catch (e) {
@@ -245,13 +435,9 @@ class _ColoringScreenState extends State<ColoringScreen> {
 
         // 2. URL 일부분 매칭 시도
         template = _templates.cast<ColoringTemplate?>().firstWhere(
-          (t) =>
-              t != null &&
-              ((_selectedImageUrl?.contains(t.id) == true) ||
-                  (t.imageUrl.isNotEmpty &&
-                      _selectedImageUrl?.contains('image-') == true) ||
-                  (t.storyId != null &&
-                      _selectedImageUrl?.contains(t.storyId!) == true)),
+              (t) => t != null && ((_selectedImageUrl?.contains(t.id) == true) ||
+              (t.imageUrl.isNotEmpty && _selectedImageUrl?.contains('image-') == true) ||
+              (t.storyId != null && _selectedImageUrl?.contains(t.storyId!) == true)),
           orElse: () => null,
         );
 
@@ -276,70 +462,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
       return null;
     } catch (e) {
       print('❌ 템플릿 찾기 실패: $e');
-
-      // 최후의 수단: 첫 번째 템플릿 사용
-      if (_templates.isNotEmpty) {
-        final fallbackTemplate = _templates.first;
-        print('🔄 폴백: 첫 번째 템플릿 사용 - ${fallbackTemplate.title}');
-        return fallbackTemplate.storyId ?? fallbackTemplate.id;
-      }
-
       return null;
-    }
-  }
-
-  // 서버에 색칠 완성작 저장
-  Future<Map<String, dynamic>?> _saveColoringWorkToServer(
-    Uint8List imageData,
-    String storyId,
-  ) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final accessToken = prefs.getString('access_token');
-
-      if (accessToken == null) {
-        throw Exception('로그인이 필요합니다.');
-      }
-
-      // MultipartRequest 생성
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${ApiService.baseUrl}/api/coloring/save-coloring-work'),
-      );
-
-      // 헤더 설정
-      request.headers['Authorization'] = 'Bearer $accessToken';
-
-      // 파라미터 추가
-      request.fields['storyId'] = storyId;
-
-      // 이미지 파일 추가
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'coloredImage',
-          imageData,
-          filename:
-              'coloring_work_${DateTime.now().millisecondsSinceEpoch}.png',
-        ),
-      );
-
-      print('🎨 색칠 완성작 저장 요청 - StoryId: $storyId');
-
-      // 요청 전송
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      print('🎨 색칠 완성작 저장 응답: ${response.statusCode}');
-      print('🎨 응답 본문: ${response.body}');
-
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
-      } else {
-        throw Exception('서버 오류: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ 색칠 완성작 저장 실패: $e');
-      throw e;
     }
   }
 
@@ -445,102 +568,178 @@ class _ColoringScreenState extends State<ColoringScreen> {
             ),
           ),
           SizedBox(height: screenHeight * 0.03),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: screenWidth * 0.04,
-              mainAxisSpacing: screenWidth * 0.04,
-              childAspectRatio: 0.8,
+
+          // 🎯 템플릿이 없을 때 안내 메시지
+          if (_templates.isEmpty)
+            Container(
+              padding: EdgeInsets.all(screenWidth * 0.06),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.palette_outlined,
+                    size: 80,
+                    color: Colors.grey[400],
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    '아직 색칠공부 템플릿이 없어요',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.05,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    '동화를 만들고 이미지를 생성하면\n색칠공부 템플릿이 자동으로 만들어져요!',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.04,
+                      color: Colors.grey[500],
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/stories');
+                    },
+                    icon: Icon(Icons.auto_stories),
+                    label: Text('동화 만들러 가기'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFD3A8),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+          // 🎯 기존 GridView (템플릿이 있을 때만 표시)
+            GridView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: screenWidth * 0.04,
+                mainAxisSpacing: screenWidth * 0.04,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: _templates.length,
+              itemBuilder: (context, index) {
+                final template = _templates[index];
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedImageUrl = template.imageUrl;
+                      _drawingPoints.clear();
+                      _isBlackAndWhite = false;
+                    });
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(16),
+                                ),
+                                child: Image.network(
+                                  template.imageUrl,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        color: Color(0xFFFFD3A8),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) => Center(
+                                    child: Icon(Icons.error, color: Colors.red),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Padding(
+                                padding: EdgeInsets.all(screenWidth * 0.03),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      template.title,
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.035,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      template.storyTitle,
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.03,
+                                        color: Colors.black54,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        // 🎯 삭제 버튼 추가
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: GestureDetector(
+                            onTap: () => _deleteTemplate(template),
+                            child: Container(
+                              padding: EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.8),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.delete,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-            itemCount: _templates.length,
-            itemBuilder: (context, index) {
-              final template = _templates[index];
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedImageUrl = template.imageUrl;
-                    _drawingPoints.clear();
-                    _isBlackAndWhite = false;
-                  });
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(16),
-                          ),
-                          child: Image.network(
-                            template.imageUrl,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Center(
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFFFFD3A8),
-                                ),
-                              );
-                            },
-                            errorBuilder:
-                                (context, error, stackTrace) => Center(
-                                  child: Icon(Icons.error, color: Colors.red),
-                                ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Padding(
-                          padding: EdgeInsets.all(screenWidth * 0.03),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                template.title,
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.035,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                template.storyTitle,
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.03,
-                                  color: Colors.black54,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
         ],
       ),
     );
@@ -579,16 +778,11 @@ class _ColoringScreenState extends State<ColoringScreen> {
               SizedBox(width: 16),
               // 색상 버튼
               GestureDetector(
-                onTap:
-                    () =>
-                        setState(() => _showColorPalette = !_showColorPalette),
+                onTap: () => setState(() => _showColorPalette = !_showColorPalette),
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color:
-                        _showColorPalette
-                            ? Color(0xFFFFD3A8)
-                            : Colors.grey[300],
+                    color: _showColorPalette ? Color(0xFFFFD3A8) : Colors.grey[300],
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -608,10 +802,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
                         '색상',
                         style: TextStyle(
                           fontSize: screenWidth * 0.035,
-                          color:
-                              _showColorPalette
-                                  ? Colors.white
-                                  : Colors.grey[600],
+                          color: _showColorPalette ? Colors.white : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -645,10 +836,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
                       color: color,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color:
-                            _selectedColor == color
-                                ? Colors.black
-                                : Colors.grey,
+                        color: _selectedColor == color ? Colors.black : Colors.grey,
                         width: _selectedColor == color ? 3 : 1,
                       ),
                     ),
@@ -703,8 +891,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
                       min: 0.1,
                       max: 1.0,
                       activeColor: Color(0xFFFFD3A8),
-                      onChanged:
-                          (value) => setState(() => _brushOpacity = value),
+                      onChanged: (value) => setState(() => _brushOpacity = value),
                     ),
                   ),
                   Text(
@@ -764,58 +951,36 @@ class _ColoringScreenState extends State<ColoringScreen> {
                             // 터치 레이어
                             Positioned.fill(
                               child: GestureDetector(
-                                onPanStart:
-                                    _isPanMode
-                                        ? null
-                                        : (details) {
-                                          setState(() {
-                                            _drawingPoints.add(
-                                              DrawingPoint(
-                                                offset: details.localPosition,
-                                                color: _selectedColor
-                                                    .withOpacity(_brushOpacity),
-                                                strokeWidth: _brushSize,
-                                              ),
-                                            );
-                                          });
-                                        },
-                                onPanUpdate:
-                                    _isPanMode
-                                        ? (details) {
-                                          final transform =
-                                              _transformationController.value;
-                                          final newTransform = Matrix4.copy(
-                                            transform,
-                                          );
-                                          newTransform.translate(
-                                            details.delta.dx,
-                                            details.delta.dy,
-                                          );
-                                          _transformationController.value =
-                                              newTransform;
-                                        }
-                                        : (details) {
-                                          setState(() {
-                                            _drawingPoints.add(
-                                              DrawingPoint(
-                                                offset: details.localPosition,
-                                                color: _selectedColor
-                                                    .withOpacity(_brushOpacity),
-                                                strokeWidth: _brushSize,
-                                              ),
-                                            );
-                                          });
-                                        },
-                                onPanEnd:
-                                    _isPanMode
-                                        ? null
-                                        : (details) {
-                                          setState(
-                                            () => _drawingPoints.add(
-                                              DrawingPoint(),
-                                            ),
-                                          );
-                                        },
+                                onPanStart: _isPanMode ? null : (details) {
+                                  setState(() {
+                                    _drawingPoints.add(
+                                      DrawingPoint(
+                                        offset: details.localPosition,
+                                        color: _selectedColor.withOpacity(_brushOpacity),
+                                        strokeWidth: _brushSize,
+                                      ),
+                                    );
+                                  });
+                                },
+                                onPanUpdate: _isPanMode ? (details) {
+                                  final transform = _transformationController.value;
+                                  final newTransform = Matrix4.copy(transform);
+                                  newTransform.translate(details.delta.dx, details.delta.dy);
+                                  _transformationController.value = newTransform;
+                                } : (details) {
+                                  setState(() {
+                                    _drawingPoints.add(
+                                      DrawingPoint(
+                                        offset: details.localPosition,
+                                        color: _selectedColor.withOpacity(_brushOpacity),
+                                        strokeWidth: _brushSize,
+                                      ),
+                                    );
+                                  });
+                                },
+                                onPanEnd: _isPanMode ? null : (details) {
+                                  setState(() => _drawingPoints.add(DrawingPoint()));
+                                },
                                 child: CustomPaint(
                                   painter: ColoringPainter(_drawingPoints),
                                   size: Size.infinite,
@@ -837,40 +1002,26 @@ class _ColoringScreenState extends State<ColoringScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // 축소
-                        _buildZoomButton(
-                          Icons.remove,
-                          _currentScale > _minScale,
-                          _zoomOut,
-                        ),
+                        _buildZoomButton(Icons.remove, _currentScale > _minScale, _zoomOut),
                         SizedBox(width: 12),
                         // 홈/배율
                         GestureDetector(
                           onTap: _resetZoom,
                           child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.black54,
                               borderRadius: BorderRadius.circular(15),
                             ),
                             child: Text(
                               '${(_currentScale * 100).round()}%',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
+                              style: TextStyle(color: Colors.white, fontSize: 12),
                             ),
                           ),
                         ),
                         SizedBox(width: 12),
                         // 확대
-                        _buildZoomButton(
-                          Icons.add,
-                          _currentScale < _maxScale,
-                          _zoomIn,
-                        ),
+                        _buildZoomButton(Icons.add, _currentScale < _maxScale, _zoomIn),
                       ],
                     ),
                   ),
@@ -910,13 +1061,9 @@ class _ColoringScreenState extends State<ColoringScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: _isProcessing ? null : _saveColoredImage,
-                  child:
-                      _isProcessing
-                          ? CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          )
-                          : Text('저장'),
+                  child: _isProcessing
+                      ? CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      : Text('저장'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFFFD3A8),
                     foregroundColor: Colors.white,
@@ -974,10 +1121,9 @@ class ColoringPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    Paint paint =
-        Paint()
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke;
+    Paint paint = Paint()
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
     for (int i = 0; i < drawingPoints.length; i++) {
       final point = drawingPoints[i];
@@ -1001,15 +1147,15 @@ class ColoringPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ColoringTemplate 모델 수정
+// ColoringTemplate 모델
 class ColoringTemplate {
   final String id;
   final String title;
   final String imageUrl;
-  final String? blackWhiteImageUrl; // 흑백 이미지 URL 추가
+  final String? blackWhiteImageUrl;
   final String createdAt;
   final String storyTitle;
-  final String? storyId; // StoryId 추가
+  final String? storyId;
 
   ColoringTemplate({
     required this.id,
@@ -1025,11 +1171,11 @@ class ColoringTemplate {
     return ColoringTemplate(
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? '제목 없음',
-      imageUrl: json['originalImageUrl'] ?? json['imageUrl'] ?? '', // 컬러 이미지
-      blackWhiteImageUrl: json['blackWhiteImageUrl'], // 흑백 이미지
+      imageUrl: json['originalImageUrl'] ?? json['imageUrl'] ?? '',
+      blackWhiteImageUrl: json['blackWhiteImageUrl'],
       createdAt: json['createdAt'] ?? '',
       storyTitle: json['title'] ?? '동화 제목 없음',
-      storyId: json['storyId']?.toString(), // 이게 핵심!
+      storyId: json['storyId']?.toString(),
     );
   }
 }

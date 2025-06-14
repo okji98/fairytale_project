@@ -245,6 +245,7 @@ class _MyAppState extends State<MyApp> {
         '/share': (context) => ShareScreen(),
         '/lullaby': (context) => LullabyScreen(),
         '/gallery': (context) => GalleryScreen(),
+        // '/story_create': (context) => StoriesScreen(), // 추가
       },
     );
   }
