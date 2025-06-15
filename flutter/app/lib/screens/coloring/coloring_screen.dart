@@ -216,7 +216,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
     }
   }
 
-  // 🎨 색칠 완성작 저장 메서드 (완전히 새로운 버전)
+// 🎨 색칠 완성작 저장 메서드 (완전히 새로운 버전)
   Future<void> _saveColoredImage() async {
     if (_selectedImageUrl == null || _drawingPoints.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,10 +229,9 @@ class _ColoringScreenState extends State<ColoringScreen> {
 
     try {
       print('🎨 색칠 완성작 저장 시작');
-      print('🔍 템플릿 ID: $_templateId');
+      print('🔍 선택된 이미지 URL: $_selectedImageUrl');
       print('🔍 템플릿 데이터: $_templateData');
       print('🔍 fromStory: $_fromStory');
-      print('🔍 fallbackMode: $_fallbackMode');
 
       // 1. Canvas를 이미지로 변환
       RenderRepaintBoundary boundary = _canvasKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
@@ -240,16 +239,26 @@ class _ColoringScreenState extends State<ColoringScreen> {
       ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
       if (byteData != null) {
-        // 2. storyId 결정 - 여러 방법 시도
-        String? storyId = _getStoryIdForSaving();
+        // 2. storyId 추출 - 개선된 방식
+        String? storyId = _extractStoryIdFromUrl(_selectedImageUrl!);
 
         if (storyId == null) {
-          // 🔄 폴백: 기본값 사용 또는 새 ID 생성
+          // 🔄 폴백: 템플릿 데이터에서 추출 시도
+          if (_templateData != null) {
+            storyId = _templateData!['storyId']?.toString() ??
+                _templateData!['id']?.toString();
+          }
+        }
+
+        if (storyId == null) {
+          // 🔄 최종 폴백: 임시 ID 생성
           storyId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
           print('⚠️ storyId를 찾을 수 없어 임시 ID 사용: $storyId');
         }
 
-        // 3. MultipartFile로 Spring Boot API 호출
+        print('✅ 최종 결정된 storyId: $storyId');
+
+        // 3. 서버에 저장 요청
         final result = await _saveColoringWorkToServer(
           byteData.buffer.asUint8List(),
           storyId,
@@ -291,6 +300,35 @@ class _ColoringScreenState extends State<ColoringScreen> {
     } finally {
       setState(() => _isProcessing = false);
     }
+  }
+
+
+// 🎯 URL에서 storyId 추출 (개선된 패턴 매칭)
+  String? _extractStoryIdFromUrl(String imageUrl) {
+    print('🔍 URL에서 storyId 추출 시도: $imageUrl');
+
+    // S3 URL 패턴들
+    final patterns = [
+      // 1. 파일명에서 story ID 추출 (가장 일반적)
+      RegExp(r'image-([a-f0-9]{8})\.'),
+      RegExp(r'story[_-](\d+)'),
+      RegExp(r'stories/(\d+)'),
+      RegExp(r'/(\d+)/'),
+      // 2. 해시 기반 ID 패턴
+      RegExp(r'([a-f0-9]{8,})'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(imageUrl);
+      if (match != null) {
+        final extractedId = match.group(1);
+        print('✅ URL에서 storyId 추출 성공: $extractedId');
+        return extractedId;
+      }
+    }
+
+    print('❌ URL에서 storyId 추출 실패');
+    return null;
   }
 
   // 🎯 저장용 storyId 결정 메서드 (여러 방법 시도)
@@ -346,7 +384,8 @@ class _ColoringScreenState extends State<ColoringScreen> {
     return null;
   }
 
-  // 📋 서버에 색칠 완성작 저장
+
+// 📋 서버에 색칠 완성작 저장 (개선된 버전)
   Future<Map<String, dynamic>?> _saveColoringWorkToServer(
       Uint8List imageData,
       String storyId,
@@ -371,7 +410,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
       // 파라미터 추가
       request.fields['storyId'] = storyId;
 
-      // 🎯 추가 메타데이터 포함 (템플릿 정보가 있는 경우)
+      // 🎯 추가 메타데이터 포함
       if (_templateData != null) {
         if (_templateData!.containsKey('title')) {
           request.fields['storyTitle'] = _templateData!['title'].toString();
@@ -379,6 +418,15 @@ class _ColoringScreenState extends State<ColoringScreen> {
         if (_templateData!.containsKey('category')) {
           request.fields['category'] = _templateData!['category'].toString();
         }
+      }
+
+      // 원본 이미지 URL 추가 (템플릿 연결용)
+      if (_selectedImageUrl != null) {
+        // 흑백 이미지 URL을 컬러 이미지 URL로 변환
+        String originalImageUrl = _selectedImageUrl!
+            .replaceAll('/bw-images/', '/story-images/')
+            .replaceAll('/black-white/', '/color/');
+        request.fields['originalImageUrl'] = originalImageUrl;
       }
 
       // 이미지 파일 추가
@@ -402,7 +450,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('서버 오류: ${response.statusCode}');
+        throw Exception('서버 오류: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       print('❌ 색칠 완성작 저장 실패: $e');

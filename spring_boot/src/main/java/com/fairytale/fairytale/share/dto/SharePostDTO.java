@@ -24,4 +24,6 @@ public class SharePostDTO {
     private Boolean isLiked;        // 현재 사용자가 좋아요했는지
     private Boolean isOwner;        // 현재 사용자가 작성자인지
     private LocalDateTime createdAt;
+    private int commentCount; // 🎯 이 필드 추가
+
 }

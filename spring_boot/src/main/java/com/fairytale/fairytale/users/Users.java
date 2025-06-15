@@ -19,7 +19,6 @@ import java.util.List;
         @Index(name = "idx_user_email", columnList = "email"),
         @Index(name = "idx_user_google_id", columnList = "googleId"),
         @Index(name = "idx_user_kakao_id", columnList = "kakaoId"),
-//        @Index(name = "idx_user_apple_id", columnList = "appleId")
 })
 @Getter
 @Setter
@@ -54,7 +53,6 @@ public class Users {
     @Column(unique = true, length = 100)
     private String kakaoId;
 
-    // 🆕 프로필 이미지 URL 필드 추가
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl;
 
@@ -74,13 +72,7 @@ public class Users {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Like> likes;
 
-    /**
-     * 사용자 표시명 반환 (nickname 우선, 없으면 username)
-     */
     public String getName() {
-        if (nickname != null && !nickname.trim().isEmpty()) {
-            return nickname;
-        }
-        return username;
+        return nickname != null && !nickname.trim().isEmpty() ? nickname : username;
     }
 }

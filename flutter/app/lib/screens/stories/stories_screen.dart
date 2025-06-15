@@ -652,16 +652,16 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // 흑백 이미지 변환 및 색칠하기 화면 이동
+// stories_screen.dart - _getBlackWhiteImageAndNavigate 메서드 수정
+
+// 1. 🎯 _getBlackWhiteImageAndNavigate 메서드 완전 수정 (색칠공부 화면으로 이동)
   Future<void> _getBlackWhiteImageAndNavigate() async {
     if (_storyId == null) {
       _showError('동화를 먼저 생성해주세요.');
       return;
     }
 
-    if (_colorImageUrl == null ||
-        _colorImageUrl!.isEmpty ||
-        _colorImageUrl == 'null') {
+    if (_colorImageUrl == null || _colorImageUrl!.isEmpty || _colorImageUrl == 'null') {
       _showError('컬러 이미지를 먼저 생성해주세요.');
       return;
     }
@@ -669,47 +669,106 @@ class _StoriesScreenState extends State<StoriesScreen> {
     setState(() => _isGeneratingBlackWhite = true);
 
     try {
-      final requestData = {'text': _colorImageUrl!};
+      print('🎨 색칠공부 화면으로 이동 시작');
+      print('🔍 컬러 이미지 URL: $_colorImageUrl');
+      print('🔍 StoryId: $_storyId');
 
-      final response = await http.post(
-        Uri.parse('${ApiService.baseUrl}/api/fairytale/convert/bwimage'),
-        headers: await _getAuthHeaders(),
-        body: json.encode(requestData),
-      );
+      // 1. 먼저 색칠공부 템플릿이 있는지 확인
+      final existingTemplates = await ApiService.getColoringTemplates(page: 0, size: 100);
 
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
+      String? templateImageUrl;
+      String? templateId;
 
-        String? blackWhiteImageUrl;
+      if (existingTemplates != null && existingTemplates.isNotEmpty) {
+        // 현재 스토리에 해당하는 템플릿 찾기
+        final matchingTemplate = existingTemplates.where((template) {
+          final templateStoryId = template['storyId']?.toString();
+          return templateStoryId == _storyId.toString();
+        }).toList();
 
-        if (responseData.containsKey('image_url')) {
-          blackWhiteImageUrl = responseData['image_url'];
-        } else if (responseData.containsKey('path')) {
-          blackWhiteImageUrl = responseData['path'];
-        }
-
-        if (blackWhiteImageUrl != null && blackWhiteImageUrl.isNotEmpty) {
-          Navigator.pushNamed(
-            context,
-            '/coloring',
-            arguments: {
-              'imageUrl':
-              blackWhiteImageUrl.startsWith('http')
-                  ? blackWhiteImageUrl
-                  : _colorImageUrl!,
-              'isBlackAndWhite': false,
-            },
-          );
-          return;
+        if (matchingTemplate.isNotEmpty) {
+          print('✅ 기존 템플릿 발견');
+          final template = matchingTemplate.first;
+          templateImageUrl = template['blackWhiteImageUrl'] ?? template['originalImageUrl'];
+          templateId = template['id']?.toString();
         }
       }
 
-      throw Exception('흑백 변환 실패');
-    } catch (e) {
+      // 2. 템플릿이 없으면 새로 생성 요청
+      if (templateImageUrl == null) {
+        print('📝 색칠공부 템플릿 생성 요청');
+
+        try {
+          final headers = await _getAuthHeaders();
+          final createTemplateRequest = {
+            'storyId': _storyId.toString(),
+            'title': '${_nameController.text}의 $_selectedTheme 색칠공부',
+            'originalImageUrl': _colorImageUrl,
+          };
+
+          final createResponse = await http.post(
+            Uri.parse('${ApiService.baseUrl}/api/coloring/create-template'),
+            headers: headers,
+            body: json.encode(createTemplateRequest),
+          );
+
+          print('🔍 템플릿 생성 응답: ${createResponse.statusCode}');
+          print('🔍 템플릿 생성 응답 본문: ${createResponse.body}');
+
+          if (createResponse.statusCode == 200) {
+            final responseData = json.decode(createResponse.body);
+            if (responseData['success'] == true && responseData['template'] != null) {
+              final template = responseData['template'];
+              templateImageUrl = template['blackWhiteImageUrl'] ?? template['originalImageUrl'];
+              templateId = template['id']?.toString();
+              print('✅ 새 템플릿 생성 완료');
+            }
+          }
+        } catch (e) {
+          print('⚠️ 템플릿 생성 실패, 원본 이미지로 진행: $e');
+        }
+      }
+
+      // 3. 최종 이미지 URL 결정
+      final finalImageUrl = templateImageUrl ?? _colorImageUrl!;
+      print('✅ 최종 사용할 이미지 URL: $finalImageUrl');
+
+      // 4. 색칠공부 화면으로 이동 (템플릿 데이터 포함)
       Navigator.pushNamed(
         context,
         '/coloring',
-        arguments: {'imageUrl': _colorImageUrl!, 'isBlackAndWhite': false},
+        arguments: {
+          'imageUrl': finalImageUrl,
+          'isBlackAndWhite': templateImageUrl != null,
+          'fromStory': true,
+          'templateData': {
+            'storyId': _storyId.toString(),
+            'title': '${_nameController.text}의 $_selectedTheme 색칠공부',
+            'originalImageUrl': _colorImageUrl,
+            'blackWhiteImageUrl': templateImageUrl,
+            'templateId': templateId,
+          },
+        },
+      );
+
+    } catch (e) {
+      print('❌ 색칠공부 이동 처리 실패: $e');
+
+      // 실패해도 색칠공부 화면으로 이동 (원본 이미지 사용)
+      Navigator.pushNamed(
+        context,
+        '/coloring',
+        arguments: {
+          'imageUrl': _colorImageUrl!,
+          'isBlackAndWhite': false,
+          'fromStory': true,
+          'fallbackMode': true,
+          'templateData': {
+            'storyId': _storyId.toString(),
+            'title': '${_nameController.text}의 $_selectedTheme 색칠공부',
+            'originalImageUrl': _colorImageUrl,
+          },
+        },
       );
     } finally {
       setState(() => _isGeneratingBlackWhite = false);
@@ -973,6 +1032,8 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
+// stories_screen.dart - build 메서드 전체
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -985,393 +1046,213 @@ class _StoriesScreenState extends State<StoriesScreen> {
       );
     }
 
-    return BaseScaffold(
-      background: Image.asset('assets/bg_image.png', fit: BoxFit.cover),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(screenWidth * 0.04),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      icon: Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                  Image.asset('assets/logo.png', height: screenHeight * 0.25),
-                  Positioned(
-                    top: 20,
-                    right: -18,
-                    child: Image.asset(
-                      'assets/rabbit.png',
-                      width: screenWidth * 0.375,
-                      height: screenWidth * 0.375,
-                    ),
-                  ),
-                ],
-              ),
-
-              SizedBox(height: screenHeight * 0.02),
-
-              // 아이 이름
-              Row(
-                children: [
-                  Text(
-                    '아이 이름: ',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                      fontSize: screenWidth * 0.04,
-                    ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: screenWidth * 0.04,
-                        vertical: screenWidth * 0.02,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        _nameController.text,
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.045,
-                          fontWeight: FontWeight.w600,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              SizedBox(height: screenHeight * 0.02),
-
-              // 1. 테마 선택
-              Text(
-                '1. 테마를 선택해 주세요',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: screenWidth * 0.04,
-                ),
-              ),
-              SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedTheme,
-                items:
-                _themes
-                    .map(
-                      (theme) => DropdownMenuItem(
-                    value: theme,
-                    child: Text(theme),
-                  ),
-                )
-                    .toList(),
-                hint: Text('테마 선택'),
-                onChanged: (val) => setState(() => _selectedTheme = val),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-
-              SizedBox(height: screenHeight * 0.02),
-
-              // 2. 목소리 선택
-              Text(
-                '2. 목소리를 선택해 주세요',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: screenWidth * 0.04,
-                ),
-              ),
-              SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedVoice,
-                items:
-                _voices
-                    .map(
-                      (voice) => DropdownMenuItem(
-                    value: voice,
-                    child: Text(voice),
-                  ),
-                )
-                    .toList(),
-                hint: Text('음성 선택'),
-                onChanged: (val) => setState(() => _selectedVoice = val),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-
-              SizedBox(height: screenHeight * 0.02),
-
-              // 3. 속도 선택
-              Text(
-                '3. 속도를 선택해 주세요',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: screenWidth * 0.04,
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
+    return WillPopScope(
+      onWillPop: () async {
+        // 🎯 동화세상에서 뒤로가기 누르면 홈으로 이동
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/home',
+              (route) => false,
+        );
+        return false; // 기본 뒤로가기 동작 방지
+      },
+      child: BaseScaffold(
+        background: Image.asset('assets/bg_image.png', fit: BoxFit.cover),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(screenWidth * 0.04),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Icon(Icons.slow_motion_video, color: primaryColor),
-                    Expanded(
-                      child: Slider(
-                        value: _speed,
-                        min: 0.5,
-                        max: 2.0,
-                        divisions: 15,
-                        activeColor: primaryColor,
-                        inactiveColor: primaryColor.withOpacity(0.3),
-                        label: _speed.toStringAsFixed(1) + 'x',
-                        onChanged: (val) => setState(() => _speed = val),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () {
+                          // 🎯 뒤로가기 버튼도 홈으로 이동
+                          Navigator.pushNamedAndRemoveUntil(
+                            context,
+                            '/home',
+                                (route) => false,
+                          );
+                        },
                       ),
                     ),
-                    Icon(Icons.fast_forward, color: primaryColor),
+                    Image.asset('assets/logo.png', height: screenHeight * 0.25),
+                    Positioned(
+                      top: 20,
+                      right: -18,
+                      child: Image.asset(
+                        'assets/rabbit.png',
+                        width: screenWidth * 0.375,
+                        height: screenWidth * 0.375,
+                      ),
+                    ),
                   ],
                 ),
-              ),
 
-              SizedBox(height: screenHeight * 0.03),
+                SizedBox(height: screenHeight * 0.02),
 
-              // 동화 생성 버튼
-              SizedBox(
-                width: double.infinity,
-                height: screenHeight * 0.06,
-                child: ElevatedButton(
-                  onPressed: _isGeneratingStory ? null : _generateStory,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                // 아이 이름
+                Row(
+                  children: [
+                    Text(
+                      '아이 이름: ',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: screenWidth * 0.04,
+                      ),
                     ),
-                  ),
-                  child:
-                  _isGeneratingStory
-                      ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+                    Expanded(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: screenWidth * 0.04,
+                          vertical: screenWidth * 0.02,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _nameController.text,
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.045,
+                            fontWeight: FontWeight.w600,
+                            color: primaryColor,
                           ),
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Text('동화 생성 중...'),
-                    ],
-                  )
-                      : Text(
-                    '동화 생성',
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.04,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
+                  ],
                 ),
-              ),
 
-              // 에러 메시지
-              if (_errorMessage != null) ...[
-                SizedBox(height: 16),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    _errorMessage!,
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
+                SizedBox(height: screenHeight * 0.02),
 
-              // 생성된 동화 영역
-              if (_generatedStory != null) ...[
-                SizedBox(height: screenHeight * 0.03),
+                // 1. 테마 선택
                 Text(
-                  '생성된 동화',
+                  '1. 테마를 선택해 주세요',
                   style: TextStyle(
-                    fontSize: screenWidth * 0.045,
-                    fontWeight: FontWeight.bold,
                     color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: screenWidth * 0.04,
                   ),
                 ),
                 SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    _generatedStory!,
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.035,
-                      height: 1.5,
-                      color: Colors.black87,
+                DropdownButtonFormField<String>(
+                  value: _selectedTheme,
+                  items: _themes
+                      .map(
+                        (theme) => DropdownMenuItem(
+                      value: theme,
+                      child: Text(theme),
+                    ),
+                  )
+                      .toList(),
+                  hint: Text('테마 선택'),
+                  onChanged: (val) => setState(() => _selectedTheme = val),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
                     ),
                   ),
                 ),
 
                 SizedBox(height: screenHeight * 0.02),
 
-                // 🎯 향상된 음성 재생 컨트롤 (로컬/HTTP 파일 지원)
-                if (_audioUrl != null) ...[
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
+                // 2. 목소리 선택
+                Text(
+                  '2. 목소리를 선택해 주세요',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: screenWidth * 0.04,
+                  ),
+                ),
+                SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _selectedVoice,
+                  items: _voices
+                      .map(
+                        (voice) => DropdownMenuItem(
+                      value: voice,
+                      child: Text(voice),
                     ),
-                    child: Column(
-                      children: [
-                        // 🎯 파일 타입 표시
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                        ),
-
-                        SizedBox(height: 12),
-
-                        // 재생/일시정지 버튼들
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // 재생/일시정지 버튼
-                            IconButton(
-                              iconSize: screenWidth * 0.15,
-                              icon: Icon(
-                                _isPlaying
-                                    ? Icons.pause_circle_filled
-                                    : Icons.play_circle_fill,
-                                color: primaryColor,
-                              ),
-                              onPressed: _playPauseAudio,
-                            ),
-                            SizedBox(width: 20),
-                            // 정지 버튼
-                            IconButton(
-                              iconSize: screenWidth * 0.08,
-                              icon: Icon(Icons.stop, color: Colors.grey[600]),
-                              onPressed:
-                              _isPlaying || _position > Duration.zero
-                                  ? _stopAudio
-                                  : null,
-                            ),
-                          ],
-                        ),
-
-                        // 재생 진행 바
-                        if (_duration > Duration.zero) ...[
-                          SizedBox(height: 8),
-                          SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              thumbShape: RoundSliderThumbShape(
-                                enabledThumbRadius: 6,
-                              ),
-                              trackHeight: 4,
-                            ),
-                            child: Slider(
-                              value: _position.inMilliseconds.toDouble(),
-                              min: 0.0,
-                              max: _duration.inMilliseconds.toDouble(),
-                              activeColor: primaryColor,
-                              inactiveColor: primaryColor.withOpacity(0.3),
-                              onChanged: (value) async {
-                                final newPosition = Duration(
-                                  milliseconds: value.toInt(),
-                                );
-                                await _audioPlayer.seek(newPosition);
-                              },
-                            ),
-                          ),
-
-                          // 시간 표시
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                _formatDuration(_position),
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.03,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              Text(
-                                _formatDuration(_duration),
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.03,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
+                  )
+                      .toList(),
+                  hint: Text('음성 선택'),
+                  onChanged: (val) => setState(() => _selectedVoice = val),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
                     ),
                   ),
-                ] else ...[
-                  // 음성이 아직 생성되지 않은 경우
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                ),
+
+                SizedBox(height: screenHeight * 0.02),
+
+                // 3. 속도 선택
+                Text(
+                  '3. 속도를 선택해 주세요',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: screenWidth * 0.04,
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.slow_motion_video, color: primaryColor),
+                      Expanded(
+                        child: Slider(
+                          value: _speed,
+                          min: 0.5,
+                          max: 2.0,
+                          divisions: 15,
+                          activeColor: primaryColor,
+                          inactiveColor: primaryColor.withOpacity(0.3),
+                          label: _speed.toStringAsFixed(1) + 'x',
+                          onChanged: (val) => setState(() => _speed = val),
+                        ),
+                      ),
+                      Icon(Icons.fast_forward, color: primaryColor),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: screenHeight * 0.03),
+
+                // 동화 생성 버튼
+                SizedBox(
+                  width: double.infinity,
+                  height: screenHeight * 0.06,
+                  child: ElevatedButton(
+                    onPressed: _isGeneratingStory ? null : _generateStory,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
                     ),
-                    child: Row(
+                    child: _isGeneratingStory
+                        ? Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         SizedBox(
@@ -1380,83 +1261,85 @@ class _StoriesScreenState extends State<StoriesScreen> {
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.grey,
+                              Colors.white,
                             ),
                           ),
                         ),
-                        SizedBox(width: 12),
-                        Text(
-                          '음성 생성 중...',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
+                        SizedBox(width: 8),
+                        Text('동화 생성 중...'),
                       ],
+                    )
+                        : Text(
+                      '동화 생성',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.04,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 에러 메시지
+                if (_errorMessage != null) ...[
+                  SizedBox(height: 16),
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      _errorMessage!,
+                      style: TextStyle(color: Colors.red),
                     ),
                   ),
                 ],
 
-                SizedBox(height: screenHeight * 0.03),
-
-                // 이미지 생성 섹션
-                if (_colorImageUrl == null) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    height: screenHeight * 0.06,
-                    child: ElevatedButton(
-                      onPressed:
-                      _isGeneratingImage ? null : _generateColorImage,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                      ),
-                      child:
-                      _isGeneratingImage
-                          ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text('이미지 생성 중...'),
-                        ],
-                      )
-                          : Text(
-                        '이미지 생성',
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.04,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  // 컬러 이미지가 생성된 후 표시되는 영역
+                // 생성된 동화 영역
+                if (_generatedStory != null) ...[
+                  SizedBox(height: screenHeight * 0.03),
                   Text(
-                    '생성된 이미지',
+                    '생성된 동화',
                     style: TextStyle(
                       fontSize: screenWidth * 0.045,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
                   ),
-                  SizedBox(height: 16),
+                  SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      _generatedStory!,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        height: 1.5,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
 
-                  // 컬러 이미지 표시
-                  Center(
-                    child: Container(
-                      width: screenWidth * 0.8,
-                      height: screenWidth * 0.8,
+                  SizedBox(height: screenHeight * 0.02),
+
+                  // 🎯 향상된 음성 재생 컨트롤 (로컬/HTTP 파일 지원)
+                  if (_audioUrl != null) ...[
+                    Container(
+                      padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -1466,108 +1349,288 @@ class _StoriesScreenState extends State<StoriesScreen> {
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.network(
-                          _colorImageUrl!,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Center(
-                              child: CircularProgressIndicator(
-                                color: primaryColor,
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[300],
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.image,
-                                      size: screenWidth * 0.2,
-                                      color: Colors.grey[600],
-                                    ),
-                                    SizedBox(height: 16),
-                                    Text(
-                                      '이미지 로드 실패',
-                                      style: TextStyle(color: Colors.grey[600]),
-                                    ),
-                                  ],
+                      child: Column(
+                        children: [
+                          SizedBox(height: 12),
+
+                          // 재생/일시정지 버튼들
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // 재생/일시정지 버튼
+                              IconButton(
+                                iconSize: screenWidth * 0.15,
+                                icon: Icon(
+                                  _isPlaying
+                                      ? Icons.pause_circle_filled
+                                      : Icons.play_circle_fill,
+                                  color: primaryColor,
                                 ),
+                                onPressed: _playPauseAudio,
                               ),
-                            );
-                          },
-                        ),
+                              SizedBox(width: 20),
+                              // 정지 버튼
+                              IconButton(
+                                iconSize: screenWidth * 0.08,
+                                icon: Icon(Icons.stop, color: Colors.grey[600]),
+                                onPressed: _isPlaying || _position > Duration.zero
+                                    ? _stopAudio
+                                    : null,
+                              ),
+                            ],
+                          ),
+
+                          // 재생 진행 바
+                          if (_duration > Duration.zero) ...[
+                            SizedBox(height: 8),
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                thumbShape: RoundSliderThumbShape(
+                                  enabledThumbRadius: 6,
+                                ),
+                                trackHeight: 4,
+                              ),
+                              child: Slider(
+                                value: _position.inMilliseconds.toDouble(),
+                                min: 0.0,
+                                max: _duration.inMilliseconds.toDouble(),
+                                activeColor: primaryColor,
+                                inactiveColor: primaryColor.withOpacity(0.3),
+                                onChanged: (value) async {
+                                  final newPosition = Duration(
+                                    milliseconds: value.toInt(),
+                                  );
+                                  await _audioPlayer.seek(newPosition);
+                                },
+                              ),
+                            ),
+
+                            // 시간 표시
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _formatDuration(_position),
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.03,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  _formatDuration(_duration),
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.03,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ),
-
-                  SizedBox(height: 16),
-
-                  // 버튼들
-                  Row(
-                    children: [
-                      // 흑백(색칠용) 버튼
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed:
-                          _isGeneratingBlackWhite
-                              ? null
-                              : _getBlackWhiteImageAndNavigate,
-                          icon:
-                          _isGeneratingBlackWhite
-                              ? SizedBox(
+                  ] else ...[
+                    // 음성이 아직 생성되지 않은 경우
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
+                                Colors.grey,
                               ),
                             ),
-                          )
-                              : Icon(Icons.brush),
-                          label: Text(
-                            _isGeneratingBlackWhite ? '변환중...' : '흑백(색칠용)',
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.purple,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 12),
+                          SizedBox(width: 12),
+                          Text(
+                            '음성 생성 중...',
+                            style: TextStyle(color: Colors.grey[600]),
                           ),
-                        ),
+                        ],
                       ),
-                      SizedBox(width: 16),
-                      // 공유 버튼
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _shareStoryVideo,
-                          icon: Icon(Icons.share),
-                          label: Text('동화 공유하기'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
+                    ),
+                  ],
 
-              SizedBox(height: screenHeight * 0.05),
-            ],
+                  SizedBox(height: screenHeight * 0.03),
+
+                  // 이미지 생성 섹션
+                  if (_colorImageUrl == null) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: screenHeight * 0.06,
+                      child: ElevatedButton(
+                        onPressed: _isGeneratingImage ? null : _generateColorImage,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: _isGeneratingImage
+                            ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text('이미지 생성 중...'),
+                          ],
+                        )
+                            : Text(
+                          '이미지 생성',
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.04,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    // 컬러 이미지가 생성된 후 표시되는 영역
+                    Text(
+                      '생성된 이미지',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.045,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // 컬러 이미지 표시
+                    Center(
+                      child: Container(
+                        width: screenWidth * 0.8,
+                        height: screenWidth * 0.8,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(
+                            _colorImageUrl!,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  color: primaryColor,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[300],
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.image,
+                                        size: screenWidth * 0.2,
+                                        color: Colors.grey[600],
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        '이미지 로드 실패',
+                                        style: TextStyle(color: Colors.grey[600]),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // 버튼들
+                    Row(
+                      children: [
+                        // 🎯 흑백(색칠용) 버튼 - 색칠공부 화면으로 이동
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isGeneratingBlackWhite
+                                ? null
+                                : _getBlackWhiteImageAndNavigate,
+                            icon: _isGeneratingBlackWhite
+                                ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                                : Icon(Icons.brush),
+                            label: Text(
+                              _isGeneratingBlackWhite ? '처리중...' : '색칠하기',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.purple,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        // 공유 버튼
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _shareStoryVideo,
+                            icon: Icon(Icons.share),
+                            label: Text('동화 공유하기'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+
+                SizedBox(height: screenHeight * 0.05),
+              ],
+            ),
           ),
         ),
       ),

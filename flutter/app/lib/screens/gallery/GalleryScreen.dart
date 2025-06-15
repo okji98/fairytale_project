@@ -128,7 +128,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
-  // 이미지 상세보기 모달 (공유 기능 추가)
+
+// GalleryScreen.dart - _showImageDetail 메서드 수정
+
+// 🎯 이미지 상세보기 모달 (색칠 완성작만 표시)
   void _showImageDetail(GalleryItem item) {
     showDialog(
       context: context,
@@ -167,55 +170,21 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       ),
                     ),
 
-                    // 이미지들
+                    // 🎯 색칠된 이미지만 표시 (조건부 렌더링)
                     Flexible(
                       child: SingleChildScrollView(
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: 16),
                           child: Column(
                             children: [
-                              // 컬러 이미지
-                              if (item.colorImageUrl != null) ...[
-                                Text(
-                                  '컬러 이미지',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    item.colorImageUrl!,
-                                    width: double.infinity,
-                                    fit: BoxFit.contain,
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Container(
-                                        height: 200,
-                                        child: Center(child: CircularProgressIndicator()),
-                                      );
-                                    },
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        height: 200,
-                                        color: Colors.grey[300],
-                                        child: Center(child: Icon(Icons.error)),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-                              ],
-
-                              // 색칠한 이미지
+                              // 🎯 색칠 완성작이 있으면 색칠된 이미지만 표시
                               if (item.coloringImageUrl != null) ...[
                                 Text(
-                                  '색칠한 이미지',
+                                  '🎨 색칠 완성작',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
+                                    color: Color(0xFF4CAF50),
                                   ),
                                 ),
                                 SizedBox(height: 8),
@@ -228,13 +197,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
                                     loadingBuilder: (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;
                                       return Container(
-                                        height: 200,
+                                        height: 300,
                                         child: Center(child: CircularProgressIndicator()),
                                       );
                                     },
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
-                                        height: 200,
+                                        height: 300,
                                         color: Colors.grey[300],
                                         child: Center(child: Icon(Icons.error)),
                                       );
@@ -242,61 +211,119 @@ class _GalleryScreenState extends State<GalleryScreen> {
                                   ),
                                 ),
                                 SizedBox(height: 16),
-                              ],
+                              ]
+                              // 🎯 색칠 완성작이 없고 컬러 이미지만 있는 경우
+                              else if (item.colorImageUrl != null) ...[
+                                Text(
+                                  '🖼️ 컬러 이미지',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF2196F3),
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    item.colorImageUrl!,
+                                    width: double.infinity,
+                                    fit: BoxFit.contain,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        height: 300,
+                                        child: Center(child: CircularProgressIndicator()),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        height: 300,
+                                        color: Colors.grey[300],
+                                        child: Center(child: Icon(Icons.error)),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                              ]
+                              // 🎯 이미지가 없는 경우
+                              else ...[
+                                  Container(
+                                    height: 200,
+                                    color: Colors.grey[200],
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                                          SizedBox(height: 8),
+                                          Text('이미지를 찾을 수 없습니다', style: TextStyle(color: Colors.grey)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: 16),
+                                ],
                             ],
                           ),
                         ),
                       ),
                     ),
 
-                    // 공유 버튼
+                    // 버튼들 (기존과 동일)
                     Padding(
                       padding: EdgeInsets.all(16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context); // 다이얼로그 닫기
-                            _shareFromGallery(item);
-                          },
-                          icon: Icon(Icons.share),
-                          label: Text('기록일지에 공유하기'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFFF6B756),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
+                      child: Column(
+                        children: [
+                          // 공유 버튼
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                if (item.coloringImageUrl != null) {
+                                  _shareColoringWork(item);
+                                } else {
+                                  _shareFromGallery(item);
+                                }
+                              },
+                              icon: Icon(Icons.share),
+                              label: Text('기록일지에 공유하기'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color(0xFFF6B756),
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-
-                    // 🎯 삭제 버튼 (수정됨)
-                    Padding(
-                      padding: EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            Navigator.pop(context); // 상세보기 닫기
-                            await _deleteGalleryItem(item); // 삭제
-                          },
-                          icon: Icon(Icons.delete),
-                          label: Text('삭제하기'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
+                          SizedBox(height: 12),
+                          // 삭제 버튼
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                await _deleteGalleryItem(item);
+                              },
+                              icon: Icon(Icons.delete),
+                              label: Text('삭제하기'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-
                     SizedBox(height: 16),
                   ],
                 ),

@@ -1,4 +1,4 @@
-// lib/screens/share/share_screen.dart
+// lib/screens/share/share_screen.dart - 전체 코드 (댓글 시스템 포함)
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -221,6 +221,16 @@ class _ShareScreenState extends State<ShareScreen> {
           ),
         );
       },
+    );
+  }
+
+  // 🎯 댓글 바텀시트 표시
+  Future<void> _showCommentsBottomSheet(SharePost post) async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CommentsBottomSheet(postId: post.id),
     );
   }
 
@@ -634,7 +644,7 @@ class _ShareScreenState extends State<ShareScreen> {
             ),
           ),
 
-          // 좋아요 및 액션 버튼
+          // 🎯 좋아요 및 댓글 버튼 (댓글 기능 활성화)
           Padding(
             padding: EdgeInsets.all(16),
             child: Row(
@@ -662,10 +672,24 @@ class _ShareScreenState extends State<ShareScreen> {
                   ),
                 ),
                 SizedBox(width: 16),
-                // 댓글 버튼 (추후 구현)
-                Icon(Icons.chat_bubble_outline, color: Colors.grey, size: 24),
-                SizedBox(width: 4),
-                Text('0', style: TextStyle(color: Colors.grey)),
+                // 🎯 댓글 버튼 (클릭 기능 추가)
+                GestureDetector(
+                  onTap: () => _showCommentsBottomSheet(post),
+                  child: Row(
+                    children: [
+                      Icon(Icons.chat_bubble_outline, color: Colors.grey, size: 24),
+                      SizedBox(width: 4),
+                      Text(
+                        '${post.commentCount ?? 0}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -701,7 +725,7 @@ class _ShareScreenState extends State<ShareScreen> {
   }
 }
 
-// 공유 게시물 데이터 모델
+// 🎯 공유 게시물 데이터 모델 (commentCount 추가)
 class SharePost {
   final int id;
   final String userName;
@@ -714,6 +738,7 @@ class SharePost {
   final bool isLiked;
   final bool isOwner;
   final DateTime? createdAt;
+  final int? commentCount; // 🎯 댓글 개수 필드 추가
 
   SharePost({
     required this.id,
@@ -727,6 +752,7 @@ class SharePost {
     required this.isLiked,
     required this.isOwner,
     required this.createdAt,
+    this.commentCount, // 🎯 추가
   });
 
   factory SharePost.fromJson(Map<String, dynamic> json) {
@@ -745,6 +771,276 @@ class SharePost {
       createdAt: (createdAtStr != null && createdAtStr.isNotEmpty)
           ? DateTime.tryParse(createdAtStr)
           : null,
+      commentCount: json['commentCount'] ?? 0, // 🎯 추가
+    );
+  }
+}
+
+// 🎯 댓글 바텀시트 위젯
+class CommentsBottomSheet extends StatefulWidget {
+  final int postId;
+
+  const CommentsBottomSheet({Key? key, required this.postId}) : super(key: key);
+
+  @override
+  _CommentsBottomSheetState createState() => _CommentsBottomSheetState();
+}
+
+class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
+  final TextEditingController _commentController = TextEditingController();
+  List<Comment> _comments = [];
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComments();
+  }
+
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accessToken = prefs.getString('access_token');
+    return {
+      'Content-Type': 'application/json',
+      if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+    };
+  }
+
+  Future<void> _loadComments() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiService.baseUrl}/api/share/comments/${widget.postId}'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        if (responseData['success'] == true) {
+          setState(() {
+            _comments = (responseData['comments'] as List)
+                .map((json) => Comment.fromJson(json))
+                .toList();
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ 댓글 로드 실패: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _submitComment() async {
+    if (_commentController.text.trim().isEmpty) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/share/comments/${widget.postId}'),
+        headers: headers,
+        body: json.encode({'content': _commentController.text.trim()}),
+      );
+
+      if (response.statusCode == 200) {
+        _commentController.clear();
+        _loadComments(); // 댓글 목록 새로고침
+      }
+    } catch (e) {
+      print('❌ 댓글 작성 실패: $e');
+    } finally {
+      setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.8,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // 헤더
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Text(
+                  '댓글 ${_comments.length}개',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1),
+
+          // 댓글 목록
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : _comments.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('첫 번째 댓글을 작성해보세요!'),
+                ],
+              ),
+            )
+                : ListView.builder(
+              itemCount: _comments.length,
+              itemBuilder: (context, index) {
+                final comment = _comments[index];
+                return Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.grey[300],
+                        child: Icon(Icons.person, color: Colors.grey[600]),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              comment.userName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              comment.content,
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              _formatCommentDate(comment.createdAt),
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // 댓글 입력
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey[300]!)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    decoration: InputDecoration(
+                      hintText: '댓글을 입력하세요...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    maxLines: null,
+                  ),
+                ),
+                SizedBox(width: 8),
+                IconButton(
+                  onPressed: _isSubmitting ? null : _submitComment,
+                  icon: _isSubmitting
+                      ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                      : Icon(Icons.send, color: Color(0xFFFF9F8D)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatCommentDate(DateTime? date) {
+    if (date == null) return '';
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}일 전';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}시간 전';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}분 전';
+    } else {
+      return '방금 전';
+    }
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+}
+
+// 🎯 Comment 모델
+class Comment {
+  final int id;
+  final String content;
+  final String username;
+  final String userName;
+  final DateTime? createdAt;
+  final bool? isEdited;
+
+  Comment({
+    required this.id,
+    required this.content,
+    required this.username,
+    required this.userName,
+    this.createdAt,
+    this.isEdited,
+  });
+
+  factory Comment.fromJson(Map<String, dynamic> json) {
+    return Comment(
+      id: json['id'],
+      content: json['content'],
+      username: json['username'],
+      userName: json['userName'],
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
+      isEdited: json['isEdited'] ?? false,
     );
   }
 }

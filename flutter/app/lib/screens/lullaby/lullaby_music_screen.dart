@@ -1,8 +1,15 @@
 // lib/screens/lullaby/lullaby_music_screen.dart
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../service/api_service.dart';
 
 class LullabyMusicScreen extends StatefulWidget {
   const LullabyMusicScreen({super.key});
@@ -63,45 +70,311 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
    * - 일관된 API 응답 형식 제공
    * - 보안 및 접근 제어 가능
    */
+  /**
+   * 개선된 테마 로드 (에러 처리 강화)
+   */
+// 🎯 _loadThemesFromSpringBoot 메서드 완전 수정
   Future<void> _loadThemesFromSpringBoot() async {
     try {
       setState(() {
         _isLoading = true;
       });
 
+      print('🔍 자장가 테마 로드 시작');
+
+      // 🎯 서버 URL 수정 (실제 환경에 맞게)
+      final serverUrl = '${ApiService.baseUrl}'; // ApiService의 baseUrl 사용
+      print('🔍 서버 URL: $serverUrl');
+
       final response = await http.get(
-        Uri.parse('$SPRING_SERVER_URL/api/lullaby/themes'),
-        headers: {'Content-Type': 'application/json'},
-      );
+        Uri.parse('$serverUrl/api/lullaby/themes'),
+        headers: await _getAuthHeaders(), // 인증 헤더 추가
+      ).timeout(Duration(seconds: 15)); // 타임아웃 15초로 연장
+
+      print('🔍 테마 로드 응답: ${response.statusCode}');
+      print('🔍 응답 본문: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonData = json.decode(response.body);
 
-        // 스프링부트의 ApiResponse 형식 파싱
         if (jsonData['success'] == true && jsonData['data'] != null) {
           final List<dynamic> themesData = jsonData['data'];
 
           setState(() {
-            _themes =
-                themesData.map((json) => LullabyTheme.fromJson(json)).toList();
+            _themes = themesData.map((json) => LullabyTheme.fromJson(json)).toList();
             _isLoading = false;
           });
 
-          print('스프링부트에서 ${_themes.length}개 테마를 로드했습니다.');
-          print('메시지: ${jsonData['message']}');
+          print('✅ ${_themes.length}개 테마 로드 성공');
+
+          if (_themes.isEmpty) {
+            _showEmptyThemesDialog();
+          }
         } else {
-          print('스프링부트 응답 오류: ${jsonData['message']}');
+          print('❌ API 응답 형식 오류: ${jsonData['message']}');
           _loadFallbackThemes();
         }
+      } else if (response.statusCode == 404) {
+        print('❌ API 엔드포인트를 찾을 수 없음 (404)');
+        _showApiNotImplementedDialog();
+      } else if (response.statusCode == 500) {
+        print('❌ 서버 내부 오류 (500)');
+        _showServerErrorDialog();
       } else {
-        print('스프링부트 서버 응답 오류: ${response.statusCode}');
+        print('❌ 서버 오류: ${response.statusCode}');
         _loadFallbackThemes();
       }
+    } on TimeoutException catch (e) {
+      print('❌ 요청 타임아웃: $e');
+      _showTimeoutDialog();
+    } on SocketException catch (e) {
+      print('❌ 네트워크 연결 실패: $e');
+      _showNetworkErrorDialog();
     } catch (e) {
-      print('테마 로드 중 오류: $e');
+      print('❌ 테마 로드 실패: $e');
       _loadFallbackThemes();
     }
   }
+
+// 🎯 인증 헤더 가져오기 메서드 추가
+  Future<Map<String, String>> _getAuthHeaders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final accessToken = prefs.getString('access_token');
+
+      return {
+        'Content-Type': 'application/json',
+        if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+      };
+    } catch (e) {
+      return {'Content-Type': 'application/json'};
+    }
+  }
+
+// 🎯 API 미구현 안내 다이얼로그
+  void _showApiNotImplementedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.construction, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('기능 개발 중'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('자장가 기능이 아직 개발 중입니다.'),
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('🎵 곧 추가될 기능:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('• 다양한 자장가 음원'),
+                  Text('• 테마별 음악 검색'),
+                  Text('• 수면 타이머 기능'),
+                  Text('• 사용자 맞춤 플레이리스트'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadFallbackThemes();
+            },
+            child: Text('샘플 음악 듣기'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
+// 🎯 서버 내부 오류 다이얼로그
+  void _showServerErrorDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red),
+            SizedBox(width: 8),
+            Text('서버 오류'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('자장가 서비스에 일시적인 문제가 발생했습니다.'),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.refresh, color: Colors.orange[700]),
+                  SizedBox(height: 8),
+                  Text(
+                    '잠시 후 다시 시도해주세요',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadFallbackThemes();
+            },
+            child: Text('오프라인 모드'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadThemesFromSpringBoot();
+            },
+            child: Text('다시 시도'),
+          ),
+        ],
+      ),
+    );
+  }
+
+// 🎯 네트워크 연결 오류 다이얼로그
+  void _showNetworkErrorDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.wifi_off, color: Colors.grey),
+            SizedBox(width: 8),
+            Text('네트워크 오류'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.signal_wifi_off, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('네트워크 연결을 확인해주세요.'),
+            SizedBox(height: 12),
+            Text(
+              '• Wi-Fi 또는 모바일 데이터 연결 확인\n• 네트워크 설정 재설정\n• 잠시 후 다시 시도',
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadFallbackThemes();
+            },
+            child: Text('오프라인 모드'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadThemesFromSpringBoot();
+            },
+            child: Text('다시 시도'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /**
+   * API 엔드포인트 없음 안내
+   */
+  void _showApiNotFoundDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('API 준비 중'),
+        content: Text('자장가 기능이 아직 준비되지 않았습니다.\n곧 업데이트 예정입니다.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadFallbackThemes();
+            },
+            child: Text('오프라인 모드로'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /**
+   * 타임아웃 안내
+   */
+  void _showTimeoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('연결 시간 초과'),
+        content: Text('서버 응답이 너무 늦습니다.\n네트워크 상태를 확인해주세요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('확인'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadThemesFromSpringBoot();
+            },
+            child: Text('다시 시도'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /**
+   * 빈 테마 목록 안내
+   */
+  void _showEmptyThemesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('자장가 준비 중'),
+        content: Text('아직 이용 가능한 자장가가 없습니다.\n잠시 후 다시 시도해주세요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   /**
    * 특정 테마로 음악 검색
@@ -148,63 +421,188 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
     }
   }
 
-  /**
-   * 서버 연결 실패시 사용할 기본 테마들
-   */
+// 🎯 개선된 폴백 테마 (더 많은 샘플 음악)
   void _loadFallbackThemes() {
     setState(() {
       _themes = [
         LullabyTheme(
-          title: 'Focus Attention',
-          duration: '10:00',
-          audioUrl: '',
-          description: '서버 연결 실패 - 임시 데이터',
-          artist: 'System',
+          title: '🎹 브람스 자장가',
+          duration: '3:45',
+          audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav', // 샘플 URL
+          description: '클래식 피아노 자장가',
+          artist: '브람스',
           imageUrl: '',
         ),
         LullabyTheme(
-          title: 'Body Scan',
-          duration: '6:00',
+          title: '🌊 바다 소리',
+          duration: '10:00',
+          audioUrl: '', // 실제 음원이 없으면 빈 값
+          description: '잔잔한 파도 소리',
+          artist: 'Nature Sounds',
+          imageUrl: '',
+        ),
+        LullabyTheme(
+          title: '🌙 달빛 소나타',
+          duration: '5:30',
           audioUrl: '',
-          description: '서버 연결 실패 - 임시 데이터',
-          artist: 'System',
+          description: '베토벤의 달빛 소나타',
+          artist: '베토벤',
+          imageUrl: '',
+        ),
+        LullabyTheme(
+          title: '🎵 오르골 멜로디',
+          duration: '4:15',
+          audioUrl: '',
+          description: '부드러운 오르골 소리',
+          artist: 'Music Box',
+          imageUrl: '',
+        ),
+        LullabyTheme(
+          title: '🌲 숲 속의 소리',
+          duration: '8:20',
+          audioUrl: '',
+          description: '새소리와 바람소리',
+          artist: 'Forest Sounds',
           imageUrl: '',
         ),
       ];
       _isLoading = false;
     });
+
+    // 오프라인 모드 안내
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.offline_bolt, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(child: Text('오프라인 모드로 전환되었습니다. 일부 기능이 제한될 수 있습니다.')),
+          ],
+        ),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 4),
+        action: SnackBarAction(
+          label: '재시도',
+          textColor: Colors.white,
+          onPressed: _loadThemesFromSpringBoot,
+        ),
+      ),
+    );
   }
 
+
   /**
-   * 스프링부트 및 파이썬 서버 상태 확인
+   * 개선된 서버 상태 확인 및 폴백 처리
    */
   Future<void> _checkServerHealth() async {
     try {
-      // 스프링부트 서버 상태 확인
+      print('🔍 서버 상태 확인 시작');
+
+      // 스프링부트 서버 상태 확인 (타임아웃 5초)
       final springResponse = await http.get(
         Uri.parse('$SPRING_SERVER_URL/api/lullaby/health'),
-      );
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(Duration(seconds: 5));
 
-      // 파이썬 서버 상태 확인 (스프링부트를 통해)
-      final pythonResponse = await http.get(
-        Uri.parse('$SPRING_SERVER_URL/api/lullaby/python-health'),
-      );
+      print('🔍 스프링부트 서버 응답: ${springResponse.statusCode}');
 
-      if (springResponse.statusCode == 200 &&
-          pythonResponse.statusCode == 200) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('모든 서버가 정상 작동 중입니다!')));
+      if (springResponse.statusCode == 200) {
+        // 파이썬 서버 상태 확인 (타임아웃 3초)
+        try {
+          final pythonResponse = await http.get(
+            Uri.parse('$SPRING_SERVER_URL/api/lullaby/python-health'),
+            headers: {'Content-Type': 'application/json'},
+          ).timeout(Duration(seconds: 3));
+
+          print('🔍 파이썬 서버 응답: ${pythonResponse.statusCode}');
+
+          if (pythonResponse.statusCode == 200) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text('모든 서버가 정상 작동 중입니다!'),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            _showServerIssueDialog('파이썬 서버 연결 실패', 'Jamendo API 서버에 연결할 수 없습니다.');
+          }
+        } catch (e) {
+          print('❌ 파이썬 서버 연결 실패: $e');
+          _showServerIssueDialog('파이썬 서버 타임아웃', 'Jamendo API 서버가 응답하지 않습니다.');
+        }
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('일부 서버에 문제가 있습니다.')));
+        _showServerIssueDialog('스프링부트 서버 오류', '메인 서버에 문제가 있습니다.');
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('서버 상태 확인 실패: $e')));
+      print('❌ 서버 상태 확인 실패: $e');
+      _showServerIssueDialog('네트워크 연결 실패', '서버에 연결할 수 없습니다. 네트워크를 확인해주세요.');
     }
+  }
+
+  /**
+   * 서버 문제 안내 다이얼로그
+   */
+  void _showServerIssueDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '💡 해결 방법:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 4),
+                  Text('• 잠시 후 다시 시도해보세요'),
+                  Text('• 네트워크 연결을 확인해보세요'),
+                  Text('• 앱을 다시 시작해보세요'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('확인'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadThemesFromSpringBoot(); // 다시 시도
+            },
+            child: Text('다시 시도'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

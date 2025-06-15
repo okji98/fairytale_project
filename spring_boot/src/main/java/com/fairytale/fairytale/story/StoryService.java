@@ -45,7 +45,6 @@ public class StoryService {
     private final BabyRepository babyRepository;
     private final GalleryRepository galleryRepository;
 
-
     // ✅ @Lazy로 순환 의존성 해결!
     @Lazy
     @Autowired
@@ -192,92 +191,156 @@ public class StoryService {
         }
     }
 
-    // ====== 이미지 생성 ======
+    // ====== 🎯 수정된 이미지 생성 메서드 ======
+    @Transactional
     public Story createImage(ImageRequest request) {
-        log.info("🔍 이미지 생성 요청 - StoryId: {}", request.getStoryId());
-
-        Story story = storyRepository.findById(request.getStoryId())
-                .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
-
-        log.info("✅ 스토리 조회 성공 - Title: {}", story.getTitle());
-        log.info("🔍 스토리 내용 길이: {}자", story.getContent().length());
-
-        Map<String, Object> fastApiRequest = new HashMap<>();
-        fastApiRequest.put("text", story.getContent());
-
-        String imageUrl = fastApiBaseUrl + "/generate/image";
-        boolean isRealImageGenerated = false;
-
         try {
-            String fastApiResponse = callFastApi(imageUrl, fastApiRequest);
-            String localImagePath = extractImagePathFromResponse(fastApiResponse);
+            log.info("🎨 이미지 생성 요청 - StoryId: {}", request.getStoryId());
 
-            log.info("🎯 로컬 이미지 생성 완료: {}", localImagePath);
+            Story story = storyRepository.findById(request.getStoryId())
+                    .orElseThrow(() -> new RuntimeException("Story not found: " + request.getStoryId()));
 
-            if (localImagePath == null || localImagePath.trim().isEmpty() || "null".equals(localImagePath)) {
-                log.warn("❌ FastAPI에서 null 이미지 경로 반환");
-                throw new RuntimeException("이미지 생성 실패");
+            // 🔍 기존 이미지가 있는지 확인
+            if (story.getImage() != null && !story.getImage().isEmpty() && !"null".equals(story.getImage())) {
+                log.info("✅ 기존 이미지 존재, 재사용: {}", story.getImage());
+
+                // 🎯 기존 이미지가 있어도 색칠공부 템플릿 확인 및 생성
+                ensureColoringTemplate(story);
+                return story;
             }
 
-            String s3ImageUrl;
+            // 기존 FastAPI 호출 로직...
+            Map<String, Object> fastApiRequest = new HashMap<>();
+            fastApiRequest.put("text", story.getContent());
+
+            String imageUrl = fastApiBaseUrl + "/generate/image";
+
             try {
-                s3ImageUrl = processLocalImageWithS3(localImagePath, story.getId());
-                log.info("✅ S3 이미지 업로드 완료: {}", s3ImageUrl);
-//                isRealImageGenerated = true;
+                String fastApiResponse = callFastApi(imageUrl, fastApiRequest);
+                String localImagePath = extractImagePathFromResponse(fastApiResponse);
+
+                log.info("🎯 로컬 이미지 생성 완료: {}", localImagePath);
+
+                if (localImagePath == null || localImagePath.trim().isEmpty() || "null".equals(localImagePath)) {
+                    log.warn("❌ FastAPI에서 null 이미지 경로 반환");
+                    throw new RuntimeException("이미지 생성 실패");
+                }
+
+                String s3ImageUrl;
+                try {
+                    s3ImageUrl = processLocalImageWithS3(localImagePath, story.getId());
+                    log.info("✅ S3 이미지 업로드 완료: {}", s3ImageUrl);
+                } catch (Exception e) {
+                    log.error("❌ S3 이미지 업로드 실패: {}", e.getMessage());
+                    s3ImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
+                }
+
+                story.setImage(s3ImageUrl);
+                Story savedStory = storyRepository.save(story);
+
+                log.info("✅ 이미지 저장 완료");
+
+                // 🎯 Gallery 엔티티 저장 로직 (기존 유지)
+                String childName = "우리 아이";
+                if (story.getBaby() != null && story.getBaby().getBabyName() != null) {
+                    childName = story.getBaby().getBabyName();
+                }
+
+                Gallery gallery = galleryRepository.findByStoryIdAndUser(story.getId(), story.getUser());
+                if (gallery == null) {
+                    gallery = new Gallery();
+                    gallery.setStoryId(story.getId());
+                    gallery.setUser(story.getUser());
+                    gallery.setStoryTitle(story.getTitle());
+                    gallery.setColorImageUrl(s3ImageUrl);
+                    gallery.setChildName(childName);
+                    gallery.setCreatedAt(LocalDateTime.now());
+                    galleryRepository.save(gallery);
+                } else {
+                    gallery.setColorImageUrl(s3ImageUrl);
+                    gallery.setUpdatedAt(LocalDateTime.now());
+                    galleryRepository.save(gallery);
+                }
+
+                // 🎯 색칠공부 템플릿 자동 생성 (핵심 추가!)
+                createColoringTemplateAsync(savedStory);
+
+                return savedStory;
+
             } catch (Exception e) {
-                log.error("❌ S3 이미지 업로드 실패: {}", e.getMessage());
-                s3ImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
-//                isRealImageGenerated = false;
+                log.error("❌ 이미지 생성 실패: {}", e.getMessage());
+
+                String dummyImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
+                story.setImage(dummyImageUrl);
+                Story savedStory = storyRepository.save(story);
+
+                log.info("🔄 더미 이미지로 저장 완료: {}", dummyImageUrl);
+                log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
+
+                return savedStory;
             }
-
-            story.setImage(s3ImageUrl);
-            Story savedStory = storyRepository.save(story);
-
-            log.info("✅ 이미지 저장 완료");
-
-//            if (isRealImageGenerated) {
-//                log.info("🎨 실제 이미지로 색칠공부 템플릿 생성 시작");
-//                createColoringTemplateAsync(savedStory, s3ImageUrl);
-//            } else {
-//                log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
-//            }
-
-            // StoryService.java - createImage 메소드 내 try 블록의 마지막 부분에 아래 추가!
-            String childName = "우리 아이";
-            if (story.getBaby() != null && story.getBaby().getBabyName() != null) {
-                childName = story.getBaby().getBabyName();
-            }
-
-            Gallery gallery = galleryRepository.findByStoryIdAndUser(story.getId(), story.getUser());
-            if (gallery == null) {
-                gallery = new Gallery();
-                gallery.setStoryId(story.getId());
-                gallery.setUser(story.getUser());
-                gallery.setStoryTitle(story.getTitle());
-                gallery.setColorImageUrl(s3ImageUrl);
-                gallery.setChildName(childName); // ← 여기!
-                gallery.setCreatedAt(LocalDateTime.now());
-                galleryRepository.save(gallery);
-            } else {
-                gallery.setColorImageUrl(s3ImageUrl);
-                gallery.setUpdatedAt(LocalDateTime.now());
-                galleryRepository.save(gallery);
-            }
-
-
-            return savedStory;
 
         } catch (Exception e) {
             log.error("❌ 이미지 생성 실패: {}", e.getMessage());
+            throw new RuntimeException("이미지 생성에 실패했습니다: " + e.getMessage());
+        }
+    }
 
-            String dummyImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
-            story.setImage(dummyImageUrl);
-            Story savedStory = storyRepository.save(story);
+    // 🎯 색칠공부 템플릿 자동 생성 (비동기) - 새로 추가
+    @Async
+    public void createColoringTemplateAsync(Story story) {
+        try {
+            log.info("🎨 색칠공부 템플릿 자동 생성 시작 - StoryId: {}", story.getId());
 
-            log.info("🔄 더미 이미지로 저장 완료: {}", dummyImageUrl);
-            log.info("⚠️ 더미 이미지이므로 색칠공부 템플릿 생성 건너뜀");
+            // 기존 템플릿 확인
+            if (coloringTemplateService.getTemplateByStoryId(story.getId().toString()).isPresent()) {
+                log.info("✅ 색칠공부 템플릿이 이미 존재함");
+                return;
+            }
 
-            return savedStory;
+            // 컬러 이미지가 있고 유효한 경우에만 템플릿 생성
+            if (story.getImage() != null && !story.getImage().isEmpty() &&
+                    !"null".equals(story.getImage()) && isValidImageUrlForColoring(story.getImage())) {
+
+                // 색칠공부 템플릿 생성 (흑백 변환 포함)
+                ColoringTemplate template = coloringTemplateService.createColoringTemplate(
+                        story.getId().toString(),
+                        story.getTitle() != null ? story.getTitle() + " 색칠하기" : "동화 색칠공부",
+                        story.getImage(),
+                        null // 흑백 이미지는 서비스에서 자동 생성
+                );
+
+                log.info("✅ 색칠공부 템플릿 자동 생성 완료 - TemplateId: {}", template.getId());
+            } else {
+                log.warn("⚠️ 유효하지 않은 이미지 URL로 색칠공부 템플릿 생성 건너뜀: {}", story.getImage());
+            }
+
+        } catch (Exception e) {
+            log.error("❌ 색칠공부 템플릿 자동 생성 실패: {}", e.getMessage());
+            // 템플릿 생성 실패해도 메인 플로우에는 영향 없음
+        }
+    }
+
+    // 🎯 기존 스토리의 색칠공부 템플릿 확인 및 생성 - 새로 추가
+    private void ensureColoringTemplate(Story story) {
+        try {
+            log.info("🔍 색칠공부 템플릿 존재 확인 - StoryId: {}", story.getId());
+
+            // 기존 템플릿 확인
+            boolean templateExists = coloringTemplateService
+                    .getTemplateByStoryId(story.getId().toString()).isPresent();
+
+            if (!templateExists && story.getImage() != null && !story.getImage().isEmpty() &&
+                    isValidImageUrlForColoring(story.getImage())) {
+                log.info("🎨 누락된 색칠공부 템플릿 생성 - StoryId: {}", story.getId());
+
+                createColoringTemplateAsync(story);
+            } else {
+                log.info("✅ 색칠공부 템플릿이 이미 존재하거나 유효하지 않은 이미지");
+            }
+
+        } catch (Exception e) {
+            log.error("❌ 색칠공부 템플릿 확인 실패: {}", e.getMessage());
         }
     }
 
@@ -947,11 +1010,13 @@ public class StoryService {
         }
     }
 
+    // 🎯 색칠공부용 이미지 유효성 검사 메서드 (새로 추가/수정)
     private boolean isValidImageUrlForColoring(String imageUrl) {
         if (imageUrl == null || imageUrl.trim().isEmpty()) {
             return false;
         }
 
+        // 🚫 더미 이미지 서비스들 제외
         if (imageUrl.contains("picsum.photos")) {
             log.info("🚫 Picsum 더미 이미지는 색칠공부에서 제외: {}", imageUrl);
             return false;
@@ -959,7 +1024,8 @@ public class StoryService {
 
         String lowerUrl = imageUrl.toLowerCase();
         String[] dummyServices = {
-                "placeholder.com", "via.placeholder.com", "dummyimage.com", "fakeimg.pl", "lorempixel.com"
+                "placeholder.com", "via.placeholder.com", "dummyimage.com",
+                "fakeimg.pl", "lorempixel.com", "unsplash.it"
         };
 
         for (String dummyService : dummyServices) {
@@ -969,8 +1035,9 @@ public class StoryService {
             }
         }
 
-        if (lowerUrl.contains("amazonaws.com") ||
-                lowerUrl.contains("cloudfront.net") ||
+        // ✅ 유효한 이미지 URL 패턴들
+        if (lowerUrl.contains("amazonaws.com") ||  // S3
+                lowerUrl.contains("cloudfront.net") || // CloudFront
                 (lowerUrl.startsWith("http") &&
                         (lowerUrl.contains(".jpg") || lowerUrl.contains(".png") ||
                                 lowerUrl.contains(".jpeg") || lowerUrl.contains(".webp")))) {
@@ -999,7 +1066,6 @@ public class StoryService {
         }
         return null;
     }
-
 
     // ====== Utility 메서드들 ======
     public byte[] downloadVoiceFromS3(String s3Url) {
