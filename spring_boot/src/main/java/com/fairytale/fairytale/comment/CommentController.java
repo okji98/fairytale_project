@@ -1,6 +1,8 @@
 // src/main/java/com/fairytale/fairytale/comment/CommentController.java
 package com.fairytale.fairytale.comment;
 
+import com.fairytale.fairytale.users.Users;
+import com.fairytale.fairytale.users.UsersRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -23,6 +26,7 @@ import java.util.stream.Collectors;
 public class CommentController {
 
     private final CommentService commentService;
+    private final UsersRepository usersRepository; // 🎯 추가
 
     /**
      * 🗨️ 댓글 작성
@@ -196,7 +200,7 @@ public class CommentController {
     }
 
     /**
-     * 🔧 Comment 엔티티를 DTO로 변환 (isOwner 정보 포함)
+     * 🔧 Comment 엔티티를 DTO로 변환 (아기 이름으로 표시명 생성)
      */
     private Map<String, Object> convertCommentToDTO(Comment comment, String currentUsername) {
         Map<String, Object> dto = new HashMap<>();
@@ -204,8 +208,8 @@ public class CommentController {
         dto.put("content", comment.getContent());
         dto.put("username", comment.getUsername());
 
-        // 🎯 userName 처리 - username + "님" 형태로 처리
-        String displayName = comment.getUsername() + "님";
+        // 🎯 사용자 정보 조회해서 아기 이름으로 표시명 생성
+        String displayName = generateDisplayName(comment.getUsername());
         dto.put("userName", displayName);
 
         dto.put("createdAt", comment.getCreatedAt().toString());
@@ -217,5 +221,26 @@ public class CommentController {
         dto.put("isOwner", comment.getUsername().equals(currentUsername));
 
         return dto;
+    }
+
+    /**
+     * 🎯 사용자명을 아기 이름으로 변환하는 메서드
+     */
+    private String generateDisplayName(String username) {
+        try {
+            Optional<Users> userOpt = usersRepository.findByUsername(username);
+            if (userOpt.isPresent()) {
+                Users user = userOpt.get();
+                // Users 엔티티에 getDisplayNameWithBaby() 메서드가 있으면 사용
+                if (user.getDisplayNameWithBaby() != null) {
+                    return user.getDisplayNameWithBaby();
+                } else {
+                    return user.getNickname() + "님";
+                }
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ 사용자 표시명 생성 실패: {}", e.getMessage());
+        }
+        return username + "님";
     }
 }
