@@ -2,6 +2,7 @@
 import 'package:app/screens/gallery/GalleryScreen.dart';
 import 'package:app/screens/service/auth_service.dart';
 import 'package:app/screens/share/share_screen.dart';
+import 'package:app/widgets/auth_guard.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 // ⭐ 소셜 로그인 SDK 추가
@@ -231,21 +232,25 @@ class _MyAppState extends State<MyApp> {
         ),
       ) : null, // ⭐ initialRoute가 null일 때만 home 사용
       routes: {
+        // 인증 불필요
         '/onboarding': (context) => OnboardingScreen(),
         '/login': (context) => LoginScreen(),
         '/child-info': (context) => ChildInfoScreen(),
-        '/home': (context) => HomeScreen(),
-        '/stories': (ctx) => StoriesScreen(),
-        '/profile': (context) => ProfileScreen(),
-        '/profile-details': (context) => ProfileDetailsScreen(),
-        '/settings': (context) => SettingsScreen(),
-        '/contacts': (context) => ContactsScreen(),
-        '/support': (context) => SupportScreen(),
-        '/coloring': (context) => ColoringScreen(),
-        '/share': (context) => ShareScreen(),
-        '/lullaby': (context) => LullabyScreen(),
-        '/gallery': (context) => GalleryScreen(),
-        // '/story_create': (context) => StoriesScreen(), // 추가
+
+        // 🔒 메인 기능 (완전한 인증 필요)
+        '/home': (context) => AuthGuard(child: HomeScreen()),
+        '/stories': (context) => AuthGuard(child: StoriesScreen()),
+        '/coloring': (context) => AuthGuard(child: ColoringScreen()),
+        '/share': (context) => AuthGuard(child: ShareScreen()),
+        '/gallery': (context) => AuthGuard(child: GalleryScreen()),
+        '/lullaby': (context) => AuthGuard(child: LullabyScreen()),
+
+        // 🔒 프로필 관련 (로그인만 필요)
+        '/profile': (context) => ProfileAuthGuard(child: ProfileScreen()),
+        '/profile-details': (context) => ProfileAuthGuard(child: ProfileDetailsScreen()),
+        '/settings': (context) => ProfileAuthGuard(child: SettingsScreen()),
+        '/contacts': (context) => ProfileAuthGuard(child: ContactsScreen()),
+        '/support': (context) => ProfileAuthGuard(child: SupportScreen()),
       },
     );
   }
