@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
 import 'video_player_screen.dart';
 import '../../models/lullaby_models.dart';
+import '../service/api_service.dart';
 
 class LullabyVideoScreen extends StatefulWidget {
   const LullabyVideoScreen({super.key});
@@ -13,10 +15,8 @@ class LullabyVideoScreen extends StatefulWidget {
 }
 
 class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
-  // Spring Boot 서버 설정
-  static const String baseUrl = 'http://localhost:8080';
-  static const String searchEndpoint =
-      '/api/lullaby/search'; // YouTube 검색용 엔드포인트로 변경
+  // 🎯 ApiService.baseUrl 사용 (하드코딩된 URL 제거)
+  static const String searchEndpoint = '/api/lullaby/search';
   static const String recommendEndpoint = '/api/lullaby/recommend';
 
   // 테마 목록 추가
@@ -117,26 +117,33 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
         _errorMessage = '';
       });
 
+      // 🎯 ApiService.baseUrl 사용 (플랫폼 자동 감지)
+      final baseUrl = ApiService.baseUrl;
+      print('🔍 영상 검색 - 플랫폼: ${Platform.operatingSystem}');
+      print('🔍 영상 검색 - 서버 URL: $baseUrl');
+
       final response = await http
           .post(
-            Uri.parse('$baseUrl$searchEndpoint'),
-            headers: {
-              'Content-Type': 'application/json; charset=UTF-8',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'themeId': selectedTheme.id,
-              'themeName': selectedTheme.title,
-              'searchKeywords': selectedTheme.searchKeywords,
-              'filters': {
-                'maxResults': 20,
-                'videoDuration': 'long',
-                'order': 'relevance',
-              },
-              'userId': 'user123',
-            }),
-          )
+        Uri.parse('$baseUrl$searchEndpoint'),
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'themeId': selectedTheme.id,
+          'themeName': selectedTheme.title,
+          'searchKeywords': selectedTheme.searchKeywords,
+          'filters': {
+            'maxResults': 20,
+            'videoDuration': 'long',
+            'order': 'relevance',
+          },
+          'userId': 'user123',
+        }),
+      )
           .timeout(const Duration(seconds: 15));
+
+      print('🔍 영상 검색 응답: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final responseBody = utf8.decode(response.bodyBytes);
@@ -147,13 +154,15 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
               (data['videos'] as List)
                   .map(
                     (item) => LullabyVideoTheme.fromYouTubeSearch(
-                      item,
-                      selectedTheme,
-                    ),
-                  )
+                  item,
+                  selectedTheme,
+                ),
+              )
                   .toList();
           _isLoading = false;
         });
+
+        print('✅ ${_videoThemes.length}개 영상 로드 성공');
 
         // 사용자 맞춤 추천 받기
         _getRecommendations();
@@ -161,6 +170,7 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
         throw Exception('서버 오류: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ 영상 검색 실패: $e');
       setState(() {
         _errorMessage = '비디오 목록을 불러올 수 없습니다: $e';
         _isLoading = false;
@@ -173,6 +183,9 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
     if (_videoThemes.isEmpty) return;
 
     try {
+      // 🎯 ApiService.baseUrl 사용
+      final baseUrl = ApiService.baseUrl;
+
       final response = await http.post(
         Uri.parse('$baseUrl$recommendEndpoint'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -244,6 +257,9 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
   // 재생 통계 전송
   Future<void> _sendPlayStatistics(LullabyVideoTheme theme) async {
     try {
+      // 🎯 ApiService.baseUrl 사용
+      final baseUrl = ApiService.baseUrl;
+
       await http.post(
         Uri.parse('$baseUrl/api/lullaby/play-stats'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -262,10 +278,13 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
 
   // 사용자 피드백 전송
   Future<void> _sendFeedback(
-    String videoId,
-    Map<String, dynamic> feedback,
-  ) async {
+      String videoId,
+      Map<String, dynamic> feedback,
+      ) async {
     try {
+      // 🎯 ApiService.baseUrl 사용
+      final baseUrl = ApiService.baseUrl;
+
       await http.post(
         Uri.parse('$baseUrl/api/lullaby/feedback'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -357,22 +376,22 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors:
-                                isSelected
-                                    ? [
-                                      theme.color,
-                                      theme.color.withOpacity(0.7),
-                                    ]
-                                    : [
-                                      theme.color.withOpacity(0.3),
-                                      theme.color.withOpacity(0.1),
-                                    ],
+                            isSelected
+                                ? [
+                              theme.color,
+                              theme.color.withOpacity(0.7),
+                            ]
+                                : [
+                              theme.color.withOpacity(0.3),
+                              theme.color.withOpacity(0.1),
+                            ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color:
-                                isSelected
-                                    ? Colors.white
-                                    : Colors.white.withOpacity(0.3),
+                            isSelected
+                                ? Colors.white
+                                : Colors.white.withOpacity(0.3),
                             width: isSelected ? 2 : 1,
                           ),
                         ),
@@ -387,9 +406,9 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
                                 color: Colors.white,
                                 fontSize: 12,
                                 fontWeight:
-                                    isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
+                                isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           ],
@@ -447,84 +466,84 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
                       // 로딩, 에러, 컨텐츠 표시
                       Expanded(
                         child:
-                            _selectedTheme == null
-                                ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.touch_app,
-                                        color: Colors.white.withOpacity(0.5),
-                                        size: 64,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        '원하는 테마를 선택하세요',
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.7),
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                                : _isLoading
-                                ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      CircularProgressIndicator(
-                                        color: _selectedTheme!.color,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      const Text(
-                                        'AI가 최적의 영상을 찾고 있습니다...',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                                : _errorMessage.isNotEmpty
-                                ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.error_outline,
-                                        color: Colors.white.withOpacity(0.7),
-                                        size: 48,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        _errorMessage,
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.7),
-                                          fontSize: 16,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      ElevatedButton(
-                                        onPressed: _searchVideos,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              _selectedTheme!.color,
-                                        ),
-                                        child: const Text('다시 시도'),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                                : ListView.builder(
-                                  itemCount: _videoThemes.length,
-                                  itemBuilder: (context, index) {
-                                    final theme = _videoThemes[index];
-                                    return _buildVideoCard(theme, index < 3);
-                                  },
+                        _selectedTheme == null
+                            ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.touch_app,
+                                color: Colors.white.withOpacity(0.5),
+                                size: 64,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                '원하는 테마를 선택하세요',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 16,
                                 ),
+                              ),
+                            ],
+                          ),
+                        )
+                            : _isLoading
+                            ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                color: _selectedTheme!.color,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'AI가 최적의 영상을 찾고 있습니다...',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                            : _errorMessage.isNotEmpty
+                            ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                color: Colors.white.withOpacity(0.7),
+                                size: 48,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 16,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _searchVideos,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                  _selectedTheme!.color,
+                                ),
+                                child: const Text('다시 시도'),
+                              ),
+                            ],
+                          ),
+                        )
+                            : ListView.builder(
+                          itemCount: _videoThemes.length,
+                          itemBuilder: (context, index) {
+                            final theme = _videoThemes[index];
+                            return _buildVideoCard(theme, index < 3);
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -545,9 +564,9 @@ class _LullabyVideoScreenState extends State<LullabyVideoScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color:
-              isRecommended
-                  ? theme.color.withOpacity(0.6)
-                  : Colors.white.withOpacity(0.2),
+          isRecommended
+              ? theme.color.withOpacity(0.6)
+              : Colors.white.withOpacity(0.2),
           width: isRecommended ? 2 : 1,
         ),
         boxShadow: [

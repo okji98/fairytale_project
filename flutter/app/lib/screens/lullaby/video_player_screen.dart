@@ -4,7 +4,9 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 import '../../models/lullaby_models.dart';
+import '../service/api_service.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final LullabyVideoTheme theme;
@@ -17,9 +19,6 @@ class VideoPlayerScreen extends StatefulWidget {
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late YoutubePlayerController _controller;
-
-  // Spring Boot 서버 설정
-  static const String baseUrl = 'http://localhost:8080';
 
   // 재생 시간 추적
   DateTime? _playStartTime;
@@ -66,6 +65,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // AI 기반 개인화된 팁 로드
   Future<void> _loadPersonalizedTips() async {
     try {
+      // 🎯 ApiService.baseUrl 사용 (플랫폼 자동 감지)
+      final baseUrl = ApiService.baseUrl;
+      print('🔍 팁 로드 - 플랫폼: ${Platform.operatingSystem}');
+      print('🔍 팁 로드 - 서버 URL: $baseUrl');
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/lullaby/tips'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -77,6 +81,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         }),
       );
 
+      print('🔍 팁 로드 응답: ${response.statusCode}');
+
       if (response.statusCode == 200) {
         final responseBody = utf8.decode(response.bodyBytes);
         final data = jsonDecode(responseBody);
@@ -85,11 +91,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           _personalizedTips = List<String>.from(data['tips'] ?? []);
           _tipsLoading = false;
         });
+
+        print('✅ 개인화된 팁 ${_personalizedTips.length}개 로드 성공');
       } else {
+        print('⚠️ 팁 로드 실패, 기본 팁 사용');
         _useDefaultTips();
       }
     } catch (e) {
-      print('팁 로드 실패: $e');
+      print('❌ 팁 로드 실패: $e');
       _useDefaultTips();
     }
   }
@@ -104,6 +113,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       ];
       _tipsLoading = false;
     });
+    print('✅ 기본 팁 ${_personalizedTips.length}개 로드');
   }
 
   // 시청 시간 추적
@@ -121,6 +131,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // 시청 진행 상황 전송
   Future<void> _sendWatchProgress() async {
     try {
+      // 🎯 ApiService.baseUrl 사용
+      final baseUrl = ApiService.baseUrl;
+
       await http.post(
         Uri.parse('$baseUrl/api/lullaby/watch-progress'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -224,7 +237,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     if (_userRating == null) return;
 
     try {
-      await http.post(
+      // 🎯 ApiService.baseUrl 사용
+      final baseUrl = ApiService.baseUrl;
+
+      final response = await http.post(
         Uri.parse('$baseUrl/api/lullaby/feedback'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
         body: jsonEncode({
@@ -237,8 +253,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           'timestamp': DateTime.now().toIso8601String(),
         }),
       );
+
+      print('🔍 피드백 제출 응답: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        print('✅ 피드백 제출 성공');
+      }
     } catch (e) {
-      print('피드백 전송 실패: $e');
+      print('❌ 피드백 전송 실패: $e');
     }
   }
 
@@ -567,6 +589,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // 즐겨찾기 저장
   Future<void> _saveToFavorites() async {
     try {
+      // 🎯 ApiService.baseUrl 사용
+      final baseUrl = ApiService.baseUrl;
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/lullaby/favorites'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -577,13 +602,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         }),
       );
 
+      print('🔍 즐겨찾기 저장 응답: ${response.statusCode}');
+
       if (response.statusCode == 200) {
+        print('✅ 즐겨찾기 저장 성공');
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('즐겨찾기에 추가되었습니다')));
       }
     } catch (e) {
-      print('즐겨찾기 저장 실패: $e');
+      print('❌ 즐겨찾기 저장 실패: $e');
     }
   }
 
@@ -604,7 +632,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // 최종 통계 전송
   Future<void> _sendFinalStats() async {
     try {
-      await http.post(
+      // 🎯 ApiService.baseUrl 사용
+      final baseUrl = ApiService.baseUrl;
+
+      final response = await http.post(
         Uri.parse('$baseUrl/api/lullaby/session-end'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
         body: jsonEncode({
@@ -612,13 +643,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           'userId': 'user123',
           'totalWatchTime': _totalWatchTime.inSeconds,
           'completionRate':
-              _controller.value.position.inSeconds /
+          _controller.value.position.inSeconds /
               _controller.metadata.duration.inSeconds,
           'timestamp': DateTime.now().toIso8601String(),
         }),
       );
+
+      print('🔍 최종 통계 전송 응답: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        print('✅ 최종 통계 전송 성공');
+      }
     } catch (e) {
-      print('최종 통계 전송 실패: $e');
+      print('❌ 최종 통계 전송 실패: $e');
     }
   }
 }

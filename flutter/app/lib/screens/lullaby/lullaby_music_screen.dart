@@ -27,9 +27,6 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
   Duration _position = Duration.zero;
   int _selectedThemeIndex = 0;
 
-  // 스프링부트 서버 URL (실제 서버 주소로 변경 필요)
-  static const String SPRING_SERVER_URL = 'http://localhost:8080';
-
   List<LullabyTheme> _themes = [];
 
   @override
@@ -82,8 +79,9 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
 
       print('🔍 자장가 테마 로드 시작');
 
-      // 🎯 서버 URL 수정 (실제 환경에 맞게)
-      final serverUrl = '${ApiService.baseUrl}'; // ApiService의 baseUrl 사용
+      // 🎯 ApiService의 baseUrl 사용 (플랫폼 자동 감지)
+      final serverUrl = ApiService.baseUrl;
+      print('🔍 플랫폼: ${Platform.operatingSystem}');
       print('🔍 서버 URL: $serverUrl');
 
       final response = await http.get(
@@ -375,7 +373,6 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
     );
   }
 
-
   /**
    * 특정 테마로 음악 검색
    * 스프링부트 API를 통해 파이썬 FastAPI 호출
@@ -389,9 +386,12 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
       // URL 인코딩 (한국어 테마명 처리)
       final encodedThemeName = Uri.encodeComponent(themeName);
 
+      // 🎯 ApiService.baseUrl 사용
+      final serverUrl = ApiService.baseUrl;
+
       final response = await http.get(
         Uri.parse(
-          '$SPRING_SERVER_URL/api/lullaby/theme/$encodedThemeName?limit=5',
+          '$serverUrl/api/lullaby/theme/$encodedThemeName?limit=5',
         ),
         headers: {'Content-Type': 'application/json'},
       );
@@ -490,7 +490,6 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
     );
   }
 
-
   /**
    * 개선된 서버 상태 확인 및 폴백 처리
    */
@@ -498,9 +497,13 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
     try {
       print('🔍 서버 상태 확인 시작');
 
+      // 🎯 ApiService.baseUrl 사용
+      final serverUrl = ApiService.baseUrl;
+      print('🔍 사용할 서버 URL: $serverUrl');
+
       // 스프링부트 서버 상태 확인 (타임아웃 5초)
       final springResponse = await http.get(
-        Uri.parse('$SPRING_SERVER_URL/api/lullaby/health'),
+        Uri.parse('$serverUrl/api/lullaby/health'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(Duration(seconds: 5));
 
@@ -510,7 +513,7 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
         // 파이썬 서버 상태 확인 (타임아웃 3초)
         try {
           final pythonResponse = await http.get(
-            Uri.parse('$SPRING_SERVER_URL/api/lullaby/python-health'),
+            Uri.parse('$serverUrl/api/lullaby/python-health'),
             headers: {'Content-Type': 'application/json'},
           ).timeout(Duration(seconds: 3));
 
@@ -820,41 +823,41 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children:
-                                    [
-                                          '잔잔한 피아노',
-                                          '기타 멜로디',
-                                          '자연의 소리',
-                                          '달빛',
-                                          '하늘',
-                                          '클래식',
-                                        ]
-                                        .map(
-                                          (theme) => Padding(
-                                            padding: const EdgeInsets.only(
-                                              right: 8,
-                                            ),
-                                            child: ElevatedButton(
-                                              onPressed:
-                                                  () => _searchByTheme(theme),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(
-                                                  0xFF6B73FF,
-                                                ),
-                                                foregroundColor: Colors.white,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 8,
-                                                    ),
-                                                textStyle: const TextStyle(
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              child: Text(theme),
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
+                                [
+                                  '잔잔한 피아노',
+                                  '기타 멜로디',
+                                  '자연의 소리',
+                                  '달빛',
+                                  '하늘',
+                                  '클래식',
+                                ]
+                                    .map(
+                                      (theme) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      right: 8,
+                                    ),
+                                    child: ElevatedButton(
+                                      onPressed:
+                                          () => _searchByTheme(theme),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFF6B73FF,
+                                        ),
+                                        foregroundColor: Colors.white,
+                                        padding:
+                                        const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      child: Text(theme),
+                                    ),
+                                  ),
+                                )
+                                    .toList(),
                               ),
                             ),
                             const SizedBox(height: 20),
@@ -898,18 +901,18 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                                       shape: BoxShape.circle,
                                     ),
                                     child:
-                                        _isLoading
-                                            ? const CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            )
-                                            : Icon(
-                                              _isPlaying
-                                                  ? Icons.pause
-                                                  : Icons.play_arrow,
-                                              color: Colors.white,
-                                              size: 30,
-                                            ),
+                                    _isLoading
+                                        ? const CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    )
+                                        : Icon(
+                                      _isPlaying
+                                          ? Icons.pause
+                                          : Icons.play_arrow,
+                                      color: Colors.white,
+                                      size: 30,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 30),
@@ -956,15 +959,15 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                                   ),
                                   child: Slider(
                                     value:
-                                        _duration.inSeconds > 0
-                                            ? _position.inSeconds
-                                                .toDouble()
-                                                .clamp(
-                                                  0.0,
-                                                  _duration.inSeconds
-                                                      .toDouble(),
-                                                )
-                                            : 0.0,
+                                    _duration.inSeconds > 0
+                                        ? _position.inSeconds
+                                        .toDouble()
+                                        .clamp(
+                                      0.0,
+                                      _duration.inSeconds
+                                          .toDouble(),
+                                    )
+                                        : 0.0,
                                     max: _duration.inSeconds.toDouble(),
                                     onChanged: (value) async {
                                       final position = Duration(
@@ -980,7 +983,7 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                                   ),
                                   child: Row(
                                     mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                    MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         _formatDuration(_position),
@@ -1006,206 +1009,206 @@ class _LullabyMusicScreenState extends State<LullabyMusicScreen> {
                             // 플레이리스트
                             Expanded(
                               child:
-                                  _isLoading
-                                      ? const Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            CircularProgressIndicator(),
-                                            SizedBox(height: 16),
-                                            Text('음악을 불러오는 중...'),
-                                          ],
-                                        ),
-                                      )
-                                      : _themes.isEmpty
-                                      ? Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(
-                                              Icons.music_off,
-                                              size: 48,
-                                              color: Colors.grey,
-                                            ),
-                                            const SizedBox(height: 16),
-                                            const Text('음악을 불러올 수 없습니다'),
-                                            const SizedBox(height: 8),
-                                            ElevatedButton(
-                                              onPressed:
-                                                  _loadThemesFromSpringBoot,
-                                              child: const Text('다시 시도'),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            ElevatedButton(
-                                              onPressed: _checkServerHealth,
-                                              child: const Text('서버 상태 확인'),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                      : ListView.builder(
-                                        itemCount: _themes.length,
-                                        itemBuilder: (context, index) {
-                                          final theme = _themes[index];
-                                          final isSelected =
-                                              _selectedThemeIndex == index;
+                              _isLoading
+                                  ? const Center(
+                                child: Column(
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.center,
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 16),
+                                    Text('음악을 불러오는 중...'),
+                                  ],
+                                ),
+                              )
+                                  : _themes.isEmpty
+                                  ? Center(
+                                child: Column(
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.music_off,
+                                      size: 48,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text('음악을 불러올 수 없습니다'),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed:
+                                      _loadThemesFromSpringBoot,
+                                      child: const Text('다시 시도'),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed: _checkServerHealth,
+                                      child: const Text('서버 상태 확인'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                                  : ListView.builder(
+                                itemCount: _themes.length,
+                                itemBuilder: (context, index) {
+                                  final theme = _themes[index];
+                                  final isSelected =
+                                      _selectedThemeIndex == index;
 
-                                          return GestureDetector(
-                                            onTap: () => _playTheme(index),
-                                            child: Container(
-                                              margin: const EdgeInsets.only(
-                                                bottom: 12,
-                                              ),
-                                              padding: const EdgeInsets.all(18),
-                                              decoration: BoxDecoration(
-                                                color:
+                                  return GestureDetector(
+                                    onTap: () => _playTheme(index),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      padding: const EdgeInsets.all(18),
+                                      decoration: BoxDecoration(
+                                        color:
+                                        isSelected
+                                            ? const Color(
+                                          0xFF6B73FF,
+                                        ).withOpacity(0.15)
+                                            : Colors.white
+                                            .withOpacity(0.7),
+                                        borderRadius:
+                                        BorderRadius.circular(16),
+                                        border:
+                                        isSelected
+                                            ? Border.all(
+                                          color: const Color(
+                                            0xFF6B73FF,
+                                          ).withOpacity(0.4),
+                                          width: 1.5,
+                                        )
+                                            : Border.all(
+                                          color: Colors.grey
+                                              .withOpacity(0.2),
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withOpacity(0.05),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              color:
+                                              isSelected
+                                                  ? const Color(
+                                                0xFF6B73FF,
+                                              )
+                                                  : Colors
+                                                  .grey[300],
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.1),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(
+                                                    0,
+                                                    2,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Icon(
+                                              isSelected && _isPlaying
+                                                  ? Icons.pause
+                                                  : Icons.play_arrow,
+                                              color:
+                                              isSelected
+                                                  ? Colors.white
+                                                  : Colors
+                                                  .grey[600],
+                                              size: 24,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 20),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                              CrossAxisAlignment
+                                                  .start,
+                                              children: [
+                                                Text(
+                                                  theme.title,
+                                                  style: TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight:
+                                                    FontWeight.w600,
+                                                    color:
                                                     isSelected
                                                         ? const Color(
-                                                          0xFF6B73FF,
-                                                        ).withOpacity(0.15)
-                                                        : Colors.white
-                                                            .withOpacity(0.7),
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                                border:
-                                                    isSelected
-                                                        ? Border.all(
-                                                          color: const Color(
-                                                            0xFF6B73FF,
-                                                          ).withOpacity(0.4),
-                                                          width: 1.5,
-                                                        )
-                                                        : Border.all(
-                                                          color: Colors.grey
-                                                              .withOpacity(0.2),
-                                                          width: 1,
-                                                        ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withOpacity(0.05),
-                                                    blurRadius: 8,
-                                                    offset: const Offset(0, 2),
+                                                      0xFF6B73FF,
+                                                    )
+                                                        : Colors
+                                                        .black87,
+                                                  ),
+                                                ),
+                                                const SizedBox(
+                                                  height: 4,
+                                                ),
+                                                Text(
+                                                  '${theme.duration} • ${theme.artist}',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color:
+                                                    Colors
+                                                        .grey[600],
+                                                  ),
+                                                ),
+                                                if (theme
+                                                    .description
+                                                    .isNotEmpty) ...[
+                                                  const SizedBox(
+                                                    height: 2,
+                                                  ),
+                                                  Text(
+                                                    theme.description,
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color:
+                                                      Colors
+                                                          .grey[500],
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                    TextOverflow
+                                                        .ellipsis,
                                                   ),
                                                 ],
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Container(
-                                                    width: 50,
-                                                    height: 50,
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          isSelected
-                                                              ? const Color(
-                                                                0xFF6B73FF,
-                                                              )
-                                                              : Colors
-                                                                  .grey[300],
-                                                      shape: BoxShape.circle,
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.black
-                                                              .withOpacity(0.1),
-                                                          blurRadius: 4,
-                                                          offset: const Offset(
-                                                            0,
-                                                            2,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    child: Icon(
-                                                      isSelected && _isPlaying
-                                                          ? Icons.pause
-                                                          : Icons.play_arrow,
-                                                      color:
-                                                          isSelected
-                                                              ? Colors.white
-                                                              : Colors
-                                                                  .grey[600],
-                                                      size: 24,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 20),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          theme.title,
-                                                          style: TextStyle(
-                                                            fontSize: 18,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color:
-                                                                isSelected
-                                                                    ? const Color(
-                                                                      0xFF6B73FF,
-                                                                    )
-                                                                    : Colors
-                                                                        .black87,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 4,
-                                                        ),
-                                                        Text(
-                                                          '${theme.duration} • ${theme.artist}',
-                                                          style: TextStyle(
-                                                            fontSize: 14,
-                                                            color:
-                                                                Colors
-                                                                    .grey[600],
-                                                          ),
-                                                        ),
-                                                        if (theme
-                                                            .description
-                                                            .isNotEmpty) ...[
-                                                          const SizedBox(
-                                                            height: 2,
-                                                          ),
-                                                          Text(
-                                                            theme.description,
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color:
-                                                                  Colors
-                                                                      .grey[500],
-                                                            ),
-                                                            maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                          ),
-                                                        ],
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  // 음악 URL 상태 표시
-                                                  Container(
-                                                    width: 8,
-                                                    height: 8,
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          theme
-                                                                  .audioUrl
-                                                                  .isNotEmpty
-                                                              ? Colors.green
-                                                              : Colors.red,
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                              ],
                                             ),
-                                          );
-                                        },
+                                          ),
+                                          // 음악 URL 상태 표시
+                                          Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              color:
+                                              theme
+                                                  .audioUrl
+                                                  .isNotEmpty
+                                                  ? Colors.green
+                                                  : Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                           ],
                         ),
