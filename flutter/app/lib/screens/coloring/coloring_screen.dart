@@ -1201,6 +1201,7 @@ class ColoringTemplate {
   final String title;
   final String imageUrl;
   final String? blackWhiteImageUrl;
+  final String? originalImageUrl;  // 원본 이미지 URL 추가
   final String createdAt;
   final String storyTitle;
   final String? storyId;
@@ -1210,17 +1211,25 @@ class ColoringTemplate {
     required this.title,
     required this.imageUrl,
     this.blackWhiteImageUrl,
+    this.originalImageUrl,
     required this.createdAt,
     required this.storyTitle,
     this.storyId,
   });
 
   factory ColoringTemplate.fromJson(Map<String, dynamic> json) {
+    print('🔍 [ColoringTemplate] JSON 파싱: ${json.keys.toList()}');
+    print('🔍 [ColoringTemplate] imageUrl: ${json['imageUrl']}');
+    print('🔍 [ColoringTemplate] originalImageUrl: ${json['originalImageUrl']}');
+    print('🔍 [ColoringTemplate] blackWhiteImageUrl: ${json['blackWhiteImageUrl']}');
+
     return ColoringTemplate(
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? '제목 없음',
-      imageUrl: json['originalImageUrl'] ?? json['imageUrl'] ?? '',
+      // 🎯 핵심 수정: 흑백 이미지를 메인 imageUrl로 사용
+      imageUrl: json['imageUrl'] ?? json['blackWhiteImageUrl'] ?? json['originalImageUrl'] ?? '',
       blackWhiteImageUrl: json['blackWhiteImageUrl'],
+      originalImageUrl: json['originalImageUrl'],  // 원본 이미지 별도 저장
       createdAt: json['createdAt'] ?? '',
       storyTitle: json['title'] ?? '동화 제목 없음',
       storyId: json['storyId']?.toString(),
