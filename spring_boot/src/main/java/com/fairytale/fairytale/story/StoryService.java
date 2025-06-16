@@ -345,6 +345,8 @@ public class StoryService {
     }
 
     // ====== 음성 생성 ======
+// StoryService.java - createVoice 메서드 수정
+
     public Story createVoice(VoiceRequest request) {
         log.info("🔍 음성 생성 시작 - StoryId: {}", request.getStoryId());
 
@@ -356,10 +358,16 @@ public class StoryService {
         FastApiVoiceRequest fastApiRequest = new FastApiVoiceRequest();
         fastApiRequest.setText(story.getContent());
         fastApiRequest.setVoice(request.getVoice() != null ? request.getVoice() : "alloy");
-        fastApiRequest.setSpeed(1.0);
 
-        log.info("🔍 FastAPI 음성 요청: text 길이 = {}, voice = {}",
-                fastApiRequest.getText().length(), fastApiRequest.getVoice());
+        // 🎯 중요: 실제 요청받은 속도 사용!
+        Double requestedSpeed = request.getSpeed();
+        if (requestedSpeed == null || requestedSpeed <= 0) {
+            requestedSpeed = 1.0; // 기본값
+        }
+        fastApiRequest.setSpeed(requestedSpeed);
+
+        log.info("🔍 FastAPI 음성 요청: text 길이 = {}, voice = {}, speed = {}",
+                fastApiRequest.getText().length(), fastApiRequest.getVoice(), fastApiRequest.getSpeed());
 
         String url = fastApiBaseUrl + "/generate/voice";
         String fastApiResponse = callFastApi(url, fastApiRequest);

@@ -13,4 +13,6 @@ public class VoiceRequest {
     private Long storyId;
     private String text;
     private String voice;
+    // 🎯 속도 필드 추가!
+    private Double speed;
 }

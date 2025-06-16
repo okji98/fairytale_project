@@ -277,15 +277,22 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
   // 🎯 S3 연동 음성 생성 및 재생 (Flutter)
 
-  // 🎯 S3 기반 음성 생성
+// 🎯 S3 기반 음성 생성 (속도 파라미터 추가)
   Future<void> _generateVoice() async {
     if (_storyId == null) return;
 
     try {
       final headers = await _getAuthHeaders();
-      final requestData = {'storyId': _storyId, 'voice': _selectedVoice};
+
+      // 🎯 중요: speed 파라미터 추가!
+      final requestData = {
+        'storyId': _storyId,
+        'voice': _selectedVoice,
+        'speed': _speed, // 🎯 이 줄이 누락되어 있었음!
+      };
 
       print('🔍 음성 생성 요청: ${json.encode(requestData)}');
+      print('🔍 요청된 속도: $_speed');
 
       final response = await http.post(
         Uri.parse('${ApiService.baseUrl}/api/fairytale/generate/voice'),
@@ -655,6 +662,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
 // stories_screen.dart - _getBlackWhiteImageAndNavigate 메서드 수정
 
 // 1. 🎯 _getBlackWhiteImageAndNavigate 메서드 완전 수정 (색칠공부 화면으로 이동)
+// 🎯 흑백 변환 후 템플릿 목록으로 이동하는 방식
   Future<void> _getBlackWhiteImageAndNavigate() async {
     if (_storyId == null) {
       _showError('동화를 먼저 생성해주세요.');
@@ -669,92 +677,105 @@ class _StoriesScreenState extends State<StoriesScreen> {
     setState(() => _isGeneratingBlackWhite = true);
 
     try {
-      print('🎨 색칠공부 화면으로 이동 시작');
+      print('🎨 흑백 변환 및 템플릿 생성 시작');
       print('🔍 컬러 이미지 URL: $_colorImageUrl');
       print('🔍 StoryId: $_storyId');
 
-      // 1. 먼저 색칠공부 템플릿이 있는지 확인
-      final existingTemplates = await ApiService.getColoringTemplates(page: 0, size: 100);
+      // 1. 🎯 먼저 흑백 변환 API 호출 (중요!)
+      final headers = await _getAuthHeaders();
+      final blackWhiteRequest = {
+        'text': _colorImageUrl, // 컬러 이미지 URL 전송
+      };
 
-      String? templateImageUrl;
-      String? templateId;
+      print('🔍 흑백 변환 요청: ${json.encode(blackWhiteRequest)}');
 
-      if (existingTemplates != null && existingTemplates.isNotEmpty) {
-        // 현재 스토리에 해당하는 템플릿 찾기
-        final matchingTemplate = existingTemplates.where((template) {
-          final templateStoryId = template['storyId']?.toString();
-          return templateStoryId == _storyId.toString();
-        }).toList();
-
-        if (matchingTemplate.isNotEmpty) {
-          print('✅ 기존 템플릿 발견');
-          final template = matchingTemplate.first;
-          templateImageUrl = template['blackWhiteImageUrl'] ?? template['originalImageUrl'];
-          templateId = template['id']?.toString();
-        }
-      }
-
-      // 2. 템플릿이 없으면 새로 생성 요청
-      if (templateImageUrl == null) {
-        print('📝 색칠공부 템플릿 생성 요청');
-
-        try {
-          final headers = await _getAuthHeaders();
-          final createTemplateRequest = {
-            'storyId': _storyId.toString(),
-            'title': '${_nameController.text}의 $_selectedTheme 색칠공부',
-            'originalImageUrl': _colorImageUrl,
-          };
-
-          final createResponse = await http.post(
-            Uri.parse('${ApiService.baseUrl}/api/coloring/create-template'),
-            headers: headers,
-            body: json.encode(createTemplateRequest),
-          );
-
-          print('🔍 템플릿 생성 응답: ${createResponse.statusCode}');
-          print('🔍 템플릿 생성 응답 본문: ${createResponse.body}');
-
-          if (createResponse.statusCode == 200) {
-            final responseData = json.decode(createResponse.body);
-            if (responseData['success'] == true && responseData['template'] != null) {
-              final template = responseData['template'];
-              templateImageUrl = template['blackWhiteImageUrl'] ?? template['originalImageUrl'];
-              templateId = template['id']?.toString();
-              print('✅ 새 템플릿 생성 완료');
-            }
-          }
-        } catch (e) {
-          print('⚠️ 템플릿 생성 실패, 원본 이미지로 진행: $e');
-        }
-      }
-
-      // 3. 최종 이미지 URL 결정
-      final finalImageUrl = templateImageUrl ?? _colorImageUrl!;
-      print('✅ 최종 사용할 이미지 URL: $finalImageUrl');
-
-      // 4. 색칠공부 화면으로 이동 (템플릿 데이터 포함)
-      Navigator.pushNamed(
-        context,
-        '/coloring',
-        arguments: {
-          'imageUrl': finalImageUrl,
-          'isBlackAndWhite': templateImageUrl != null,
-          'fromStory': true,
-          'templateData': {
-            'storyId': _storyId.toString(),
-            'title': '${_nameController.text}의 $_selectedTheme 색칠공부',
-            'originalImageUrl': _colorImageUrl,
-            'blackWhiteImageUrl': templateImageUrl,
-            'templateId': templateId,
-          },
-        },
+      final bwResponse = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/fairytale/convert/bwimage'),
+        headers: headers,
+        body: json.encode(blackWhiteRequest),
       );
 
-    } catch (e) {
-      print('❌ 색칠공부 이동 처리 실패: $e');
+      print('🔍 흑백 변환 응답 상태: ${bwResponse.statusCode}');
+      print('🔍 흑백 변환 응답 본문: ${bwResponse.body}');
 
-      // 실패해도 색칠공부 화면으로 이동 (원본 이미지 사용)
+      String? blackWhiteImageUrl;
+
+      if (bwResponse.statusCode == 200) {
+        final bwResponseData = json.decode(bwResponse.body);
+
+        // 🔍 응답에서 흑백 이미지 URL 추출
+        if (bwResponseData.containsKey('image_url')) {
+          blackWhiteImageUrl = bwResponseData['image_url'];
+          print('✅ 흑백 변환 성공: $blackWhiteImageUrl');
+        } else {
+          print('⚠️ 흑백 변환 응답에 image_url 없음, 원본 사용');
+          blackWhiteImageUrl = _colorImageUrl; // 폴백
+        }
+      } else {
+        print('⚠️ 흑백 변환 실패, 원본 이미지 사용');
+        blackWhiteImageUrl = _colorImageUrl; // 폴백
+      }
+
+      // 2. 🎯 색칠공부 템플릿 생성 API 호출
+      final createTemplateRequest = {
+        'storyId': _storyId.toString(),
+        'title': '${_nameController.text}의 $_selectedTheme 색칠공부',
+        'originalImageUrl': _colorImageUrl, // 원본 컬러 이미지
+        'blackWhiteImageUrl': blackWhiteImageUrl, // 변환된 흑백 이미지
+      };
+
+      print('🔍 템플릿 생성 요청: ${json.encode(createTemplateRequest)}');
+
+      final createResponse = await http.post(
+        Uri.parse('${ApiService.baseUrl}/api/coloring/create-template'),
+        headers: headers,
+        body: json.encode(createTemplateRequest),
+      );
+
+      print('🔍 템플릿 생성 응답: ${createResponse.statusCode}');
+      print('🔍 템플릿 생성 응답 본문: ${createResponse.body}');
+
+      if (createResponse.statusCode == 200) {
+        final responseData = json.decode(createResponse.body);
+        if (responseData['success'] == true) {
+          print('✅ 템플릿 생성 완료');
+
+          // 🎯 성공 메시지 표시
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🎨 색칠공부 템플릿이 생성되었습니다!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // 🎯 색칠공부 화면으로 이동 (템플릿 목록 표시)
+          Navigator.pushNamed(
+            context,
+            '/coloring',
+            arguments: {
+              'showTemplates': true, // 🎯 템플릿 목록 화면 표시
+              'fromStory': true,
+              'newTemplateId': responseData['template']?['id'], // 새로 만든 템플릿 강조
+            },
+          );
+        } else {
+          throw Exception('템플릿 생성 API 응답이 실패');
+        }
+      } else {
+        throw Exception('템플릿 생성 실패: ${createResponse.statusCode}');
+      }
+
+    } catch (e) {
+      print('❌ 색칠공부 템플릿 생성 실패: $e');
+
+      // 🔄 실패해도 기본 색칠공부 화면으로 이동 (폴백)
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ 템플릿 생성에 실패했지만 색칠공부는 가능합니다.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+
       Navigator.pushNamed(
         context,
         '/coloring',
@@ -774,7 +795,6 @@ class _StoriesScreenState extends State<StoriesScreen> {
       setState(() => _isGeneratingBlackWhite = false);
     }
   }
-
 // 공유 기능 - 확인 다이얼로그 추가 및 에러 처리 개선
   Future<void> _shareStoryVideo() async {
     if (_storyId == null) {

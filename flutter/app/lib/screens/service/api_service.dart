@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
@@ -59,6 +61,146 @@ class ApiService {
     } catch (e) {
       print('❌ 서버 전송 오류: $e');
       return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // ApiService.dart에 추가할 메서드
+
+// 🎨 색칠공부 템플릿 생성 (새로 추가)
+  static Future<Map<String, dynamic>?> createColoringTemplate({
+    required String storyId,
+    required String title,
+    required String originalImageUrl,
+    String? blackWhiteImageUrl,
+  }) async {
+    try {
+      print('🎨 [ApiService] 색칠공부 템플릿 생성 요청');
+      print('🎨 [ApiService] StoryId: $storyId');
+      print('🎨 [ApiService] Title: $title');
+      print('🎨 [ApiService] 원본 이미지: $originalImageUrl');
+      print('🎨 [ApiService] 흑백 이미지: $blackWhiteImageUrl');
+
+      // JWT 토큰 가져오기
+      String? accessToken = await getStoredAccessToken();
+
+      if (accessToken == null) {
+        print('❌ [ApiService] JWT 토큰이 없습니다.');
+        return {'success': false, 'error': '로그인이 필요합니다', 'needLogin': true};
+      }
+
+      final requestData = {
+        'storyId': storyId,
+        'title': title,
+        'originalImageUrl': originalImageUrl,
+        if (blackWhiteImageUrl != null && blackWhiteImageUrl.isNotEmpty)
+          'blackWhiteImageUrl': blackWhiteImageUrl,
+      };
+
+      print('🎨 [ApiService] 요청 데이터: ${json.encode(requestData)}');
+
+      final response = await _dio.post(
+        '/api/coloring/create-template',
+        data: requestData,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+        ),
+      );
+
+      print('🎨 [ApiService] 템플릿 생성 응답 상태: ${response.statusCode}');
+      print('🎨 [ApiService] 응답 본문: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        if (responseData is Map && responseData['success'] == true) {
+          print('✅ [ApiService] 색칠공부 템플릿 생성 성공');
+          return Map<String, dynamic>.from(responseData);
+        } else {
+          print('❌ [ApiService] 서버에서 실패 응답: ${responseData['error']}');
+          return Map<String, dynamic>.from(responseData);
+        }
+      } else {
+        print('❌ [ApiService] 색칠공부 템플릿 생성 실패: ${response.statusCode}');
+        return {'success': false, 'error': '서버 오류: ${response.statusCode}'};
+      }
+
+    } on DioException catch (e) {
+      print('❌ [ApiService] 색칠공부 템플릿 생성 네트워크 오류:');
+      print('  - 오류 타입: ${e.type}');
+      print('  - 오류 메시지: ${e.message}');
+
+      if (e.response != null) {
+        print('  - 서버 응답 코드: ${e.response?.statusCode}');
+        print('  - 서버 응답 데이터: ${e.response?.data}');
+
+        // 401 Unauthorized 에러 처리
+        if (e.response?.statusCode == 401) {
+          await removeAccessToken();
+          return {
+            'success': false,
+            'error': '인증이 만료되었습니다. 다시 로그인해주세요.',
+            'needLogin': true,
+          };
+        }
+      }
+
+      return {'success': false, 'error': e.message ?? '네트워크 오류'};
+    } catch (e) {
+      print('❌ [ApiService] 색칠공부 템플릿 생성 오류: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+// 🗑️ 색칠공부 템플릿 삭제 (새로 추가)
+  static Future<bool> deleteColoringTemplate(int templateId) async {
+    try {
+      print('🗑️ [ApiService] 색칠공부 템플릿 삭제 요청 - ID: $templateId');
+
+      // JWT 토큰 가져오기
+      String? accessToken = await getStoredAccessToken();
+
+      if (accessToken == null) {
+        print('❌ [ApiService] JWT 토큰이 없습니다.');
+        return false;
+      }
+
+      final response = await _dio.delete(
+        '/api/coloring/templates/$templateId',
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+        ),
+      );
+
+      print('🗑️ [ApiService] 템플릿 삭제 응답: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+        if (responseData['success'] == true) {
+          print('✅ [ApiService] 색칠공부 템플릿 삭제 성공');
+          return true;
+        }
+      }
+
+      print('❌ [ApiService] 색칠공부 템플릿 삭제 실패');
+      return false;
+
+    } on DioException catch (e) {
+      print('❌ [ApiService] 색칠공부 템플릿 삭제 오류: ${e.message}');
+
+      if (e.response?.statusCode == 401) {
+        await removeAccessToken();
+      }
+
+      return false;
+    } catch (e) {
+      print('❌ [ApiService] 색칠공부 템플릿 삭제 오류: $e');
+      return false;
     }
   }
 
@@ -953,6 +1095,7 @@ class ApiService {
       return {'success': false, 'error': e.toString()};
     }
   }
+
 
 
 // S3에 직접 파일 업로드 (PUT 방식)

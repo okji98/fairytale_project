@@ -252,12 +252,14 @@ public class StoryController {
         }
     }
 
-    // ====== 흑백변환 버튼 API (단일 엔드포인트) ======
+    /**
+     * 🎨 흑백 변환 API (색칠하기 버튼용) - 수정됨
+     */
     @PostMapping("/convert/bwimage")
     public ResponseEntity<String> convertToBlackWhiteImage(@RequestBody Map<String, String> request) {
         try {
             String imageUrl = request.get("text");
-            log.info("🔍 PIL+OpenCV 흑백 변환 요청: {}", imageUrl);
+            log.info("🔍 흑백 변환 요청: {}", imageUrl);
 
             if (imageUrl == null || imageUrl.trim().isEmpty() || "null".equals(imageUrl)) {
                 log.warn("❌ 이미지 URL이 null이거나 비어있음: {}", imageUrl);
@@ -271,24 +273,26 @@ public class StoryController {
                 return ResponseEntity.ok(errorJson);
             }
 
-            // 🎯 새로운 최적화된 방식 사용
+            // 🎯 StoryService의 흑백 변환 메서드 호출
             String blackWhiteUrl = storyService.processImageToBlackWhite(imageUrl);
 
             Map<String, Object> response = new HashMap<>();
             response.put("image_url", blackWhiteUrl);
-            response.put("conversion_method", "S3_Direct");
+            response.put("conversion_method", "S3_PIL_OpenCV");
+            response.put("original_url", imageUrl);
 
             String responseJson = objectMapper.writeValueAsString(response);
-            log.info("✅ PIL+OpenCV 변환 완료 - 상태코드: 200 OK");
+            log.info("✅ 흑백 변환 완료 - 원본: {}, 변환: {}", imageUrl, blackWhiteUrl);
             return ResponseEntity.ok(responseJson);
 
         } catch (Exception e) {
-            log.error("❌ PIL+OpenCV 변환 실패: {}", e.getMessage());
+            log.error("❌ 흑백 변환 실패: {}", e.getMessage());
 
             Map<String, Object> fallbackResponse = new HashMap<>();
             fallbackResponse.put("image_url", request.get("text"));
             fallbackResponse.put("conversion_method", "Flutter_Filter");
-            fallbackResponse.put("message", "PIL+OpenCV 변환 실패로 Flutter에서 필터링 처리됩니다.");
+            fallbackResponse.put("error", "서버 변환 실패로 Flutter에서 필터링 처리됩니다.");
+            fallbackResponse.put("message", e.getMessage());
 
             try {
                 String fallbackJson = objectMapper.writeValueAsString(fallbackResponse);
