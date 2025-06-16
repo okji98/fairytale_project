@@ -51,12 +51,16 @@ public class JwtAuthStrategy implements AuthStrategy {
 
     // 로그인 후 토큰 발급 로직
     @Override
-    public String authenticate(Users username, Long durationMs) {
+    public String authenticate(Users user, Long durationMs) {
         Date now = new Date(); // 현재 시간 생성
         Date expiry = new Date(now.getTime() + durationMs); // 만료 시간 계산
 
+        // 🎯 여기가 핵심! - JWT subject에 username을 확실히 넣기
+        String username = user.getUsername(); // username 필드 사용
+        System.out.println("🔍 JWT 생성 - Username: " + username + ", Nickname: " + user.getNickname());
+
         return Jwts.builder()
-                .setSubject(username.getUsername()) // 토큰의 사용자명 설정
+                .setSubject(username) // 🎯 확실히 username을 넣기
                 .setIssuedAt(now) // 발행 시간 설정
                 .setExpiration(expiry) // 만료 시간 설정
                 .signWith(key, SignatureAlgorithm.HS256) // 비밀키로 HS256 알고리즘 서명

@@ -1,5 +1,3 @@
-// CommentService.java - createComment 메서드 완전 수정
-
 package com.fairytale.fairytale.comment;
 
 import com.fairytale.fairytale.share.SharePost;
@@ -27,7 +25,7 @@ public class CommentService {
     private final UsersRepository usersRepository;
 
     /**
-     * 🗨️ 댓글 작성 (userName 설정 로직 포함)
+     * 🗨️ 댓글 작성
      */
     public Comment createComment(Long sharePostId, String username, String content) {
         log.info("🗨️ 댓글 작성 - SharePostId: {}, Username: {}, Content: {}", sharePostId, username, content);
@@ -40,15 +38,15 @@ public class CommentService {
         Users user = usersRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
 
-        // 🎯 3. 표시명 생성 (ShareService와 동일한 로직)
-        String displayName = generateDisplayName(username);
+        // 🎯 3. Users 엔티티의 메서드 사용
+        String displayName = user.getDisplayNameWithBaby(); // 🎯 Users에서 제공하는 메서드 사용
         log.info("🎯 댓글 작성자 표시명: {}", displayName);
 
         // 4. 댓글 생성
         Comment comment = Comment.builder()
                 .sharePost(sharePost)
                 .username(username)
-                .userName(displayName) // 🎯 "아이이름의 부모" 형식으로 설정
+                .userName(displayName) // 🎯 "아이이름의 부모" 형식
                 .content(content)
                 .build();
 
@@ -64,7 +62,6 @@ public class CommentService {
     public Page<Comment> getCommentsBySharePostId(Long sharePostId, Pageable pageable) {
         log.info("📖 댓글 조회 - SharePostId: {}", sharePostId);
 
-        // 게시물 존재 확인
         if (!sharePostRepository.existsById(sharePostId)) {
             throw new RuntimeException("게시물을 찾을 수 없습니다: " + sharePostId);
         }
@@ -81,7 +78,6 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new RuntimeException("댓글을 찾을 수 없습니다: " + commentId));
 
-        // 작성자 확인
         if (!comment.getUsername().equals(username)) {
             throw new RuntimeException("댓글을 수정할 권한이 없습니다.");
         }
@@ -89,10 +85,7 @@ public class CommentService {
         comment.setContent(content);
         comment.setUpdatedAt(java.time.LocalDateTime.now());
 
-        Comment savedComment = commentRepository.save(comment);
-        log.info("✅ 댓글 수정 완료 - CommentId: {}", savedComment.getId());
-
-        return savedComment;
+        return commentRepository.save(comment);
     }
 
     /**
@@ -104,7 +97,6 @@ public class CommentService {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new RuntimeException("댓글을 찾을 수 없습니다: " + commentId));
 
-        // 작성자 확인
         if (!comment.getUsername().equals(username)) {
             throw new RuntimeException("댓글을 삭제할 권한이 없습니다.");
         }

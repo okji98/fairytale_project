@@ -776,7 +776,7 @@ class SharePost {
   }
 }
 
-// 🎯 댓글 바텀시트 위젯
+// 🎯 댓글 바텀시트 위젯 (삭제 기능 추가)
 class CommentsBottomSheet extends StatefulWidget {
   final int postId;
 
@@ -856,6 +856,58 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
     }
   }
 
+  // 🎯 댓글 삭제 함수 추가
+  Future<void> _deleteComment(int commentId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('${ApiService.baseUrl}/api/share/comments/$commentId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        _loadComments(); // 댓글 목록 새로고침
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('댓글이 삭제되었습니다.')),
+        );
+      } else {
+        throw Exception('댓글 삭제 실패');
+      }
+    } catch (e) {
+      print('❌ 댓글 삭제 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('댓글 삭제에 실패했습니다.')),
+      );
+    }
+  }
+
+  // 🎯 댓글 삭제 확인 다이얼로그
+  Future<void> _showDeleteConfirmDialog(int commentId) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('댓글 삭제'),
+          content: Text('이 댓글을 삭제하시겠습니까?'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('취소'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: Text('삭제', style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteComment(commentId);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -919,12 +971,44 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              comment.userName,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    comment.userName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                // 🎯 삭제 버튼 (작성자만 표시)
+                                if (comment.isOwner)
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'delete') {
+                                        _showDeleteConfirmDialog(comment.id);
+                                      }
+                                    },
+                                    itemBuilder: (BuildContext context) => [
+                                      PopupMenuItem<String>(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.delete, color: Colors.red, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('삭제', style: TextStyle(color: Colors.red)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    child: Icon(
+                                      Icons.more_vert,
+                                      color: Colors.grey[600],
+                                      size: 18,
+                                    ),
+                                  ),
+                              ],
                             ),
                             SizedBox(height: 4),
                             Text(
@@ -1015,7 +1099,7 @@ class _CommentsBottomSheetState extends State<CommentsBottomSheet> {
   }
 }
 
-// 🎯 Comment 모델
+// 🎯 Comment 모델 (isOwner 필드 추가)
 class Comment {
   final int id;
   final String content;
@@ -1023,6 +1107,7 @@ class Comment {
   final String userName;
   final DateTime? createdAt;
   final bool? isEdited;
+  final bool isOwner; // 🎯 추가
 
   Comment({
     required this.id,
@@ -1031,6 +1116,7 @@ class Comment {
     required this.userName,
     this.createdAt,
     this.isEdited,
+    this.isOwner = false, // 🎯 기본값
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) {
@@ -1038,9 +1124,10 @@ class Comment {
       id: json['id'],
       content: json['content'],
       username: json['username'],
-      userName: json['userName'],
+      userName: json['userName'] ?? '${json['username']}님', // 🎯 null 안전 처리
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
       isEdited: json['isEdited'] ?? false,
+      isOwner: json['isOwner'] ?? false, // 🎯 추가
     );
   }
 }

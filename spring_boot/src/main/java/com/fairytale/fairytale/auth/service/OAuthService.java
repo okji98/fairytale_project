@@ -47,6 +47,8 @@ public class OAuthService {
     @Value("${spring.security.oauth2.client.registration.google.client-secret}")
     private String googleClientSecret;
 
+// OAuthService.java의 loginWithAccessToken 메서드에서 TokenResponse 생성 부분만 수정
+
     @Transactional
     public TokenResponse loginWithAccessToken(OAuthLoginRequest request) {
         System.out.println("🔍 OAuth 로그인 시작 - Provider: " + request.getProvider());
@@ -56,21 +58,25 @@ public class OAuthService {
         // 사용자 DB에 저장 또는 업데이트
         Users savedUser = saveOrUpdateUser(user);
         System.out.println("🔍 DB 저장 완료 - ID: " + savedUser.getId() + ", Username: " + savedUser.getUsername());
+
+        // 🎯 중요: JWT에 실제 username이 들어가도록 확인
+        System.out.println("🔍 JWT 토큰 생성 - Username: " + savedUser.getUsername() + ", Nickname: " + savedUser.getNickname());
+
         // JWT 토큰 발급
         TokenResponse tokens = jwtAuthStrategy.generateTokens(savedUser);
         System.out.println("🔍 JWT 토큰 발급 완료");
+
         // RefreshToken 저장
         refreshTokenRepository.save(new RefreshToken(savedUser.getId(), tokens.getRefreshToken()));
-        // =========================== 여기서 반환값을 직접 새로 만듦! =============================
-        // jwtAuthStrategy.generateTokens()가 기본 TokenResponse만 반환할 수 있으므로,
-        // 필요한 정보를 직접 넣어서 새 TokenResponse 생성 (userId, userEmail, userName 포함)
+
+        // 🎯 TokenResponse에서 userName을 실제 username으로 설정
         return TokenResponse.builder()
                 .accessToken(tokens.getAccessToken())
                 .refreshToken(tokens.getRefreshToken())
                 .type(tokens.getType())
-                .userId(savedUser.getId())            // ✅ PK 추가!
-                .userEmail(savedUser.getEmail())      // ✅ 이메일 추가!
-                .userName(savedUser.getUsername())    // ✅ username 추가!
+                .userId(savedUser.getId())
+                .userEmail(savedUser.getEmail())
+                .userName(savedUser.getUsername())    // 🎯 nickname이 아닌 username 사용!
                 .build();
     }
 

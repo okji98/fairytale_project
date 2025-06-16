@@ -72,7 +72,54 @@ public class Users {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Like> likes;
 
+    /**
+     * 🎯 getUsername() 메서드 - Lombok @Getter로 자동 생성되어야 하지만 명시적으로 추가
+     * (실제로는 @Getter 어노테이션이 이미 있어서 자동 생성되어야 하는데,
+     *  혹시 다른 이유로 인식이 안 될 수 있어서 명시적으로 추가)
+     */
+    public String getUsername() {
+        return this.username;
+    }
+
+    /**
+     * 사용자 표시명 반환 (nickname 우선, 없으면 username)
+     */
     public String getName() {
-        return nickname != null && !nickname.trim().isEmpty() ? nickname : username;
+        if (nickname != null && !nickname.trim().isEmpty()) {
+            return nickname;
+        }
+        return username;
+    }
+
+    /**
+     * 🎯 getUserName() 메서드 추가 (CommentService에서 호출)
+     * getName()과 동일한 로직
+     */
+    public String getUserName() {
+        return getName(); // 기존 getName() 메서드 재활용
+    }
+
+    /**
+     * 🎯 사용자의 첫 번째 아기 이름으로 표시명 생성
+     */
+    public String getDisplayNameWithBaby() {
+        try {
+            // Baby 정보에서 아이 이름 조회
+            if (babies != null && !babies.isEmpty()) {
+                Baby firstBaby = babies.get(0);
+                String babyName = firstBaby.getBabyName();
+
+                if (babyName != null && !babyName.trim().isEmpty()) {
+                    return babyName + "의 부모";
+                }
+            }
+
+            // Baby 정보가 없으면 기본 이름 사용
+            return getName() + "님";
+
+        } catch (Exception e) {
+            // 오류 발생 시 기본 이름 반환
+            return getName() + "님";
+        }
     }
 }
