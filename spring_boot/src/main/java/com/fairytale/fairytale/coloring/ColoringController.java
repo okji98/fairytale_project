@@ -1,6 +1,7 @@
 package com.fairytale.fairytale.coloring;
 
 import com.fairytale.fairytale.service.S3Service;
+import com.fairytale.fairytale.share.ShareService; // 🎯 추가
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.juli.logging.Log;
@@ -24,6 +25,7 @@ public class ColoringController {
     private final ColoringTemplateService coloringTemplateService;
     private final ColoringWorkRepository coloringWorkRepository;
     private final S3Service s3Service;
+    private final ShareService shareService; // 🎯 추가
 
     // 🎯 색칠공부 템플릿 목록 조회
     @GetMapping("/templates")
@@ -139,6 +141,59 @@ public class ColoringController {
             log.error("❌ 색칠공부 템플릿 검색 오류: {}", e.getMessage());
             return ResponseEntity.status(500)
                     .body(Map.of("success", false, "error", "검색 실패"));
+        }
+    }
+
+    // 🎯 색칠공부 템플릿 생성 API (새로 추가)
+    @PostMapping("/create-template")
+    public ResponseEntity<Map<String, Object>> createColoringTemplate(
+            @RequestBody Map<String, String> request,
+            Authentication authentication) {
+
+        log.info("🎨 색칠공부 템플릿 생성 요청");
+
+        try {
+            String username = authentication.getName();
+            String storyId = request.get("storyId");
+            String title = request.get("title");
+            String originalImageUrl = request.get("originalImageUrl");
+            String blackWhiteImageUrl = request.get("blackWhiteImageUrl");
+
+            log.info("🎨 템플릿 생성 파라미터:");
+            log.info("  - storyId: {}", storyId);
+            log.info("  - title: {}", title);
+            log.info("  - originalImageUrl: {}", originalImageUrl);
+            log.info("  - blackWhiteImageUrl: {}", blackWhiteImageUrl);
+
+            if (storyId == null || title == null || originalImageUrl == null) {
+                return ResponseEntity.status(400).body(Map.of(
+                        "success", false,
+                        "error", "필수 파라미터가 누락되었습니다."
+                ));
+            }
+
+            // 템플릿 생성
+            ColoringTemplate template = coloringTemplateService.createColoringTemplate(
+                    storyId,
+                    title,
+                    originalImageUrl,
+                    blackWhiteImageUrl
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "색칠공부 템플릿이 생성되었습니다!");
+            response.put("template", convertToDTO(template));
+
+            log.info("✅ 색칠공부 템플릿 생성 완료 - ID: {}", template.getId());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ 색칠공부 템플릿 생성 오류: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", "템플릿 생성 실패: " + e.getMessage()
+            ));
         }
     }
 
@@ -275,6 +330,47 @@ public class ColoringController {
             errorResponse.put("error", "색칠 완성작 저장 실패: " + e.getMessage());
 
             return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
+    // 🎯 색칠 완성작 공유 API (새로 추가) ⭐
+    @PostMapping("/share/{coloringWorkId}")
+    public ResponseEntity<Map<String, Object>> shareColoringWork(
+            @PathVariable Long coloringWorkId,
+            Authentication authentication) {
+
+        log.info("🎨 색칠 완성작 공유 요청 - ColoringWorkId: {}", coloringWorkId);
+
+        try {
+            String username = authentication.getName();
+            log.info("🔍 요청 사용자: {}", username);
+
+            // 1. 색칠 완성작 조회 및 권한 확인
+            ColoringWork coloringWork = coloringWorkRepository.findById(coloringWorkId)
+                    .orElseThrow(() -> new RuntimeException("색칠 완성작을 찾을 수 없습니다."));
+
+            if (!coloringWork.getUsername().equals(username)) {
+                log.error("❌ 권한 없음 - 작품 소유자: {}, 요청자: {}", coloringWork.getUsername(), username);
+                return ResponseEntity.status(403)
+                        .body(Map.of("success", false, "error", "본인의 작품만 공유할 수 있습니다."));
+            }
+
+            // 2. ShareService를 통한 색칠 완성작 공유
+            var sharePostDTO = shareService.shareFromColoringWork(coloringWorkId, username);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "색칠 완성작이 성공적으로 공유되었습니다!");
+            response.put("shareId", sharePostDTO.getId());
+            response.put("coloringWorkId", coloringWorkId);
+
+            log.info("✅ 색칠 완성작 공유 완료 - ShareId: {}", sharePostDTO.getId());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ 색칠 완성작 공유 실패: {}", e.getMessage());
+            return ResponseEntity.status(500)
+                    .body(Map.of("success", false, "error", "공유 실패: " + e.getMessage()));
         }
     }
 

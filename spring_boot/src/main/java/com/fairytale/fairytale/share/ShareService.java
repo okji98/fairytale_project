@@ -1,6 +1,8 @@
 // src/main/java/com/fairytale/fairytale/share/ShareService.java
 package com.fairytale.fairytale.share;
 
+import com.fairytale.fairytale.coloring.ColoringWork;
+import com.fairytale.fairytale.coloring.ColoringWorkRepository;
 import com.fairytale.fairytale.comment.CommentRepository;
 import com.fairytale.fairytale.gallery.Gallery;
 import com.fairytale.fairytale.gallery.GalleryRepository;
@@ -33,7 +35,7 @@ public class ShareService {
     private final UsersRepository usersRepository;
     private final VideoService videoService;
     private final CommentRepository commentRepository;
-
+    private final ColoringWorkRepository coloringWorkRepository; // 추가
     /**
      * Stories에서 비디오 생성 및 공유
      */
@@ -311,6 +313,47 @@ public class ShareService {
         return stats;
     }
 
+
+    /**
+     * 🎨 색칠 완성작에서 공유 (새로 추가)
+     */
+    public SharePostDTO shareFromColoringWork(Long coloringWorkId, String username) {
+        log.info("🎨 색칠 완성작에서 공유 시작 - ColoringWorkId: {}, 사용자: {}", coloringWorkId, username);
+
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+        // 🎯 ColoringWork 조회 (ColoringWorkRepository 필요)
+        ColoringWork coloringWork = coloringWorkRepository.findById(coloringWorkId)
+                .orElseThrow(() -> new RuntimeException("색칠 완성작을 찾을 수 없습니다: " + coloringWorkId));
+
+        // 권한 확인
+        if (!coloringWork.getUsername().equals(username)) {
+            throw new RuntimeException("본인의 작품만 공유할 수 있습니다.");
+        }
+
+        // 공유할 이미지 URL 확인
+        String imageUrl = coloringWork.getCompletedImageUrl();
+        if (imageUrl == null || imageUrl.isEmpty()) {
+            throw new RuntimeException("공유할 색칠 완성작 이미지가 없습니다.");
+        }
+
+        // SharePost 생성
+        SharePost sharePost = new SharePost();
+        sharePost.setUser(user);
+        sharePost.setStoryTitle(coloringWork.getStoryTitle() != null ?
+                coloringWork.getStoryTitle() : "색칠 완성작");
+        sharePost.setImageUrl(imageUrl); // 색칠된 이미지
+        sharePost.setThumbnailUrl(imageUrl); // 썸네일도 같은 이미지
+        sharePost.setSourceType("COLORING_WORK"); // 🎯 새로운 소스 타입
+        sharePost.setSourceId(coloringWorkId); // ColoringWork ID
+        sharePost.setVideoUrl(""); // 비디오 없음
+
+        SharePost savedPost = sharePostRepository.save(sharePost);
+        log.info("✅ 색칠 완성작 공유 완료 - SharePostId: {}", savedPost.getId());
+
+        return convertToDTO(savedPost, user);
+    }
     /**
      * SharePost를 DTO로 변환
      */

@@ -166,6 +166,32 @@ public class ShareController {
         }
     }
 
+    /**
+     * 🎨 색칠 완성작 공유 (새로 추가)
+     */
+    @PostMapping("/coloring-work/{coloringWorkId}")
+    public ResponseEntity<SharePostDTO> shareColoringWork(
+            @PathVariable Long coloringWorkId,
+            Authentication authentication) {
+
+        try {
+            String username = authentication.getName();
+            log.info("🎨 색칠 완성작 공유 요청 - ColoringWorkId: {}, 사용자: {}", coloringWorkId, username);
+
+            SharePostDTO sharePost = shareService.shareFromColoringWork(coloringWorkId, username);
+
+            log.info("✅ 색칠 완성작 공유 성공 - ShareId: {}", sharePost.getId());
+            return ResponseEntity.ok(sharePost);
+
+        } catch (RuntimeException e) {
+            log.error("❌ 색칠 완성작 공유 실패: {}", e.getMessage());
+            return ResponseEntity.status(400).body(null);
+        } catch (Exception e) {
+            log.error("❌ 색칠 완성작 공유 서버 오류: {}", e.getMessage());
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
     // 🎯 아래 메서드들은 ShareService에 구현되지 않았으므로 주석 처리하거나 삭제
 
     /*
