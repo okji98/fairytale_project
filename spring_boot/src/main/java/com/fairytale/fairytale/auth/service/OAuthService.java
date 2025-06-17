@@ -32,19 +32,19 @@ public class OAuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${spring.security.oauth2.client.provider.kakao.user-info-uri}")
+    @Value("${KAKAO_USER_INFO_URI:https://kapi.kakao.com/v2/user/me}")
     private String kakaoUserInfoUri;
-    @Value("${spring.security.oauth2.client.provider.google.user-info-uri}")
+    @Value("${GOOGLE_USER_INFO_URI:https://openidconnect.googleapis.com/v1/userinfo}")
     private String googleUserInfoUri;
-    @Value("${spring.security.oauth2.client.registration.kakao.redirect-uri}")
+    @Value("${KAKAO_REDIRECT_URI:http://localhost:8080/login/oauth2/code/kakao}")
     private String kakaoUserRedirectUri;
-    @Value("${spring.security.oauth2.client.registration.google.redirect-uri}")
+    @Value("${GOOGLE_REDIRECT_URI:http://localhost:8080/login/oauth2/code/google}")
     private String googleUserRedirectUri;
-    @Value("${spring.security.oauth2.client.registration.kakao.client-id}")
+    @Value("${KAKAO_CLIENT_ID}")
     private String kakaoClientId;
-    @Value("${spring.security.oauth2.client.registration.google.client-id}")
+    @Value("${GOOGLE_CLIENT_ID}")
     private String googleClientId;
-    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
+    @Value("${GOOGLE_CLIENT_SECRET}")
     private String googleClientSecret;
 
 // OAuthService.java의 loginWithAccessToken 메서드에서 TokenResponse 생성 부분만 수정

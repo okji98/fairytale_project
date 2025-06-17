@@ -50,7 +50,7 @@ public class StoryService {
     @Autowired
     private ColoringTemplateService coloringTemplateService;
 
-    @Value("${fastapi.base.url:http://localhost:8000}")
+    @Value("${FASTAPI_BASE_URL:http://localhost:8000}")
     private String fastApiBaseUrl;
 
     private final RestTemplate restTemplate;

@@ -30,7 +30,7 @@ public class ColoringTemplateService {
     private final S3Service s3Service;
     private final StoryService storyService; // 직접 주입!
     private final RestTemplate restTemplate = new RestTemplate();
-    @Value("${fastapi.base.url:http://localhost:8000}")
+    @Value("${FASTAPI_BASE_URL:http://localhost:8000}")
     private String fastApiBaseUrl;
 
     // 🎨 색칠공부 템플릿 생성 (메인 흑백 변환 담당)

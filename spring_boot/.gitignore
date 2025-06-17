@@ -35,5 +35,8 @@ out/
 
 ### VS Code ###
 **/.env
+.env
+.env.*
+!.env.example
 .vscode/
 **/application.yml

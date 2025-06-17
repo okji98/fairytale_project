@@ -24,13 +24,13 @@ import java.util.Optional;
 public class JwtAuthStrategy implements AuthStrategy {
     private final UsersRepository usersRepository;
 
-    @Value("${jwt.secret}") // application.yml에서 jwt.secret 값 주입
+    @Value("${JWT_SECRET}") // application.yml에서 jwt.secret 값 주입
     private String secretKeyString;
 
-    @Value("${jwt.expiration}") // application.yml에서 accessToken 만료시간 주입
+    @Value("${JWT_EXPIRATION:3600000}") // application.yml에서 accessToken 만료시간 주입
     private Long accessTokenExpirationTimeMs;
 
-    @Value("${jwt.refresh-expiration}")
+    @Value("${JWT_REFRESH_EXPIRATION:1209600000}")
     private Long refreshTokenExpirationMs;
 
     private Key key; // 실제 JWT 서명에 쓰일 key 객체

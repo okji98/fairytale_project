@@ -19,7 +19,7 @@ public class VideoService {
     private final S3Service s3Service;
     private final RestTemplate restTemplate;
 
-    @Value("${fastapi.base.url}")
+    @Value("${FASTAPI_BASE_URL:http://localhost:8000}")
     private String fastApiBaseUrl;
 
     /**
