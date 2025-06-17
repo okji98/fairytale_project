@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
+import 'privacy_policy_screen.dart'; // 🆕 추가
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -121,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 상단 헤더 (child_info_screen 스타일)
+              // 상단 헤더
               Row(
                 children: [
                   IconButton(
@@ -139,7 +140,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 48), // 균형 맞추기
+                  const SizedBox(width: 48),
                 ],
               ),
 
@@ -199,7 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildSectionTitle('개인정보', screenWidth),
                       SizedBox(height: screenHeight * 0.015),
 
-                      // 개인정보 처리방침
+                      // 🆕 개인정보 처리방침 - 실제 화면으로 이동
                       _buildSettingItem(
                         context,
                         icon: Icons.privacy_tip,
@@ -211,17 +212,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           size: screenWidth * 0.04,
                         ),
                         onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text('준비중'),
-                              content: Text('개인정보 처리방침 기능을 준비 중입니다.'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: Text('확인'),
-                                ),
-                              ],
+                          // 🎯 실제 개인정보 처리방침 화면으로 이동
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PrivacyPolicyScreen(),
                             ),
                           );
                         },
@@ -373,7 +368,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         VoidCallback? onTap,
       }) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
 
     return GestureDetector(
       onTap: onTap,

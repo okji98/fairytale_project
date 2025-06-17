@@ -51,6 +51,8 @@ dependencies:
   url_launcher: ^6.3.1
   http_parser: ^4.0.2
   file_picker: ^8.0.0+1
+  webview_flutter: ^4.4.2  # 웹뷰 패키지
+
 
 dev_dependencies:
   # 앱 아이콘
