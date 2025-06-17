@@ -5,9 +5,9 @@
 
 
     <application
-        android:label="app"
+        android:label="엄빠, 읽어도!"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
 
         <!-- 🆕 메인 Activity (카카오 스키마 제거) -->
         <activity
