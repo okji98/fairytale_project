@@ -22,8 +22,6 @@ import 'screens/profile/contacts_screen.dart';
 import 'screens/profile/support_screen.dart';
 import 'screens/lullaby/lullaby_screen.dart';
 
-
-
 void main() {
   // ⭐ 카카오 SDK 초기화 (앱 실행 전에 설정)
   KakaoSdk.init(
@@ -41,7 +39,7 @@ class BaseScaffold extends StatelessWidget {
   final Widget? background;
 
   const BaseScaffold({required this.child, this.background, Key? key})
-      : super(key: key);
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -50,18 +48,18 @@ class BaseScaffold extends StatelessWidget {
         // background 파라미터가 있으면 Stack으로 덮어주고,
         // 없으면 bg_image.png를 BoxDecoration으로 그립니다.
         decoration:
-        background == null
-            ? BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/bg_image.png'),
-            fit: BoxFit.cover,
-          ),
-        )
-            : null,
+            background == null
+                ? BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/bg_image.png'),
+                    fit: BoxFit.cover,
+                  ),
+                )
+                : null,
         child:
-        background != null
-            ? Stack(fit: StackFit.expand, children: [background!, child])
-            : child,
+            background != null
+                ? Stack(fit: StackFit.expand, children: [background!, child])
+                : child,
       ),
     );
   }
@@ -92,6 +90,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: '1조 Project',
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -201,36 +200,41 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
       initialRoute: initialRoute ?? '/onboarding', // ⭐ null일 때 기본값 설정
-      home: initialRoute == null ? Scaffold(
-        body: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/bg_image.png'),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset('assets/bear.png', width: 120, height: 120),
-                SizedBox(height: 20),
-                CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF6B756)),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  '잠시만 기다려주세요...',
-                  style: GoogleFonts.hiMelody(
-                    fontSize: 16,
-                    color: Color(0xFF754D19),
+      home:
+          initialRoute == null
+              ? Scaffold(
+                body: Container(
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/bg_image.png'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Image.asset('assets/bear.png', width: 120, height: 120),
+                        SizedBox(height: 20),
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF6B756),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          '잠시만 기다려주세요...',
+                          style: GoogleFonts.hiMelody(
+                            fontSize: 16,
+                            color: Color(0xFF754D19),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ) : null, // ⭐ initialRoute가 null일 때만 home 사용
+              )
+              : null, // ⭐ initialRoute가 null일 때만 home 사용
       routes: {
         // 인증 불필요
         '/onboarding': (context) => OnboardingScreen(),
@@ -247,7 +251,8 @@ class _MyAppState extends State<MyApp> {
 
         // 🔒 프로필 관련 (로그인만 필요)
         '/profile': (context) => ProfileAuthGuard(child: ProfileScreen()),
-        '/profile-details': (context) => ProfileAuthGuard(child: ProfileDetailsScreen()),
+        '/profile-details':
+            (context) => ProfileAuthGuard(child: ProfileDetailsScreen()),
         '/settings': (context) => ProfileAuthGuard(child: SettingsScreen()),
         '/contacts': (context) => ProfileAuthGuard(child: ContactsScreen()),
         '/support': (context) => ProfileAuthGuard(child: SupportScreen()),
