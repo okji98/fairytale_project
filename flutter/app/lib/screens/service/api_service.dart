@@ -9,15 +9,16 @@ import 'package:http_parser/http_parser.dart';
 class ApiService {
   // 🚀 플랫폼에 따라 자동으로 서버 주소 선택
   static String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8080'; // Android 에뮬레이터
-    } else if (Platform.isIOS) {
-      return 'http://localhost:8080'; // iOS 시뮬레이터
-    } else if (Platform.isMacOS) {
-      return 'http://localhost:8080'; // macOS
-    } else {
-      return 'http://localhost:8080'; // 기본값
-    }
+      return 'http://3.36.41.71:8080'; // EC2 서버 IP
+    // if (Platform.isAndroid) {
+    //   return 'http://10.0.2.2:8080'; // Android 에뮬레이터
+    // } else if (Platform.isIOS) {
+    //   return 'http://localhost:8080'; // iOS 시뮬레이터
+    // } else if (Platform.isMacOS) {
+    //   return 'http://localhost:8080'; // macOS
+    // } else {
+    //   return 'http://localhost:8080'; // 기본값
+    // }
   }
 
   static final Dio _dio = Dio(
