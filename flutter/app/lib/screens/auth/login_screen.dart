@@ -355,7 +355,7 @@ class LoginScreen extends StatelessWidget {
           accessToken: data['accessToken'],
           refreshToken: data['refreshToken'],
           userId: data['userId'],
-          userEmail: data['userEmail'] ?? 'google@example.com',
+          userEmail: data['userEmail'] ?? 'google@',
         );
 
         return {'success': true, 'data': data};
