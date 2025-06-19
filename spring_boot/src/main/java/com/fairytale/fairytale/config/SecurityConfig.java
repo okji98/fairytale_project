@@ -56,18 +56,9 @@ public class SecurityConfig {
                         // 정적 리소스 경로 허용
                         .requestMatchers("/coloring/**").permitAll()
 
-                        // 🔥 색칠공부 API - 모두 인증 필요로 설정 (핵심!)
-                        .requestMatchers("/api/coloring/templates").authenticated()              // 템플릿 목록 조회
-                        .requestMatchers("/api/coloring/templates/*").authenticated()            // 템플릿 상세/삭제
-                        .requestMatchers("/api/coloring/templates/story/*").authenticated()      // 스토리별 템플릿
-                        .requestMatchers("/api/coloring/templates/search").authenticated()       // 템플릿 검색
-                        .requestMatchers("/api/coloring/create-template").authenticated()        // 템플릿 생성
-                        .requestMatchers("/api/coloring/save-coloring-work").authenticated()     // 작품 저장
-                        .requestMatchers("/api/coloring/share/*").authenticated()                // 작품 공유
-                        .requestMatchers(HttpMethod.POST, "/api/coloring/save").authenticated()  // 기본 저장
-                        .requestMatchers(HttpMethod.DELETE, "/api/coloring/*").authenticated()   // 삭제
-                        .requestMatchers(HttpMethod.GET, "/api/coloring/**").permitAll()         // 나머지 GET은 허용
-                        .requestMatchers("/api/coloring/**").permitAll()                        // 나머지 허용
+                        // 🔥 갤러리처럼 단순하게! (복잡한 설정 제거)
+                        .requestMatchers("/api/gallery/**").authenticated()
+                        .requestMatchers("/api/coloring/**").authenticated()  // 🎯 이것만!
 
                         // 자장가 허용
                         .requestMatchers("/api/lullaby/**").permitAll()
