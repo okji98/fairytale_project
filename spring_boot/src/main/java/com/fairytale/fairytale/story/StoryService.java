@@ -373,6 +373,7 @@ public class StoryService {
     // ====== ColoringTemplateService용 공개 메서드 ======
 
     @Async
+    @Transactional
     public void createColoringTemplateAsync(Story story, Users user) { // 🎯 Users user 파라미터 추가!
         try {
             log.info("🎨 색칠공부 템플릿 자동 생성 시작 - StoryId: {}, Username: {}",
