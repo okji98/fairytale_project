@@ -1,10 +1,13 @@
+// ColoringController.java - 정리된 버전 (중복 제거)
+
 package com.fairytale.fairytale.coloring;
 
 import com.fairytale.fairytale.service.S3Service;
-import com.fairytale.fairytale.share.ShareService; // 🎯 추가
+import com.fairytale.fairytale.share.ShareService;
+import com.fairytale.fairytale.users.Users;
+import com.fairytale.fairytale.users.UsersRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.juli.logging.Log;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
@@ -25,19 +28,22 @@ public class ColoringController {
     private final ColoringTemplateService coloringTemplateService;
     private final ColoringWorkRepository coloringWorkRepository;
     private final S3Service s3Service;
-    private final ShareService shareService; // 🎯 추가
+    private final ShareService shareService;
+    private final UsersRepository usersRepository;
 
-    // 🎯 색칠공부 템플릿 목록 조회
+    // 🎯 내 색칠공부 템플릿 목록 조회 (사용자별)
     @GetMapping("/templates")
-    public ResponseEntity<Map<String, Object>> getColoringTemplates(
+    public ResponseEntity<Map<String, Object>> getMyColoringTemplates(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication) {
 
-        log.info("🔍 색칠공부 템플릿 목록 조회 요청 - page: {}, size: {}", page, size);
+        String username = authentication.getName();
+        log.info("🔍 내 색칠공부 템플릿 목록 조회 요청 - User: {}, page: {}, size: {}", username, page, size);
 
         try {
             Page<ColoringTemplate> templates = coloringTemplateService
-                    .getAllTemplates(PageRequest.of(page, size));
+                    .getAllTemplatesByUser(username, PageRequest.of(page, size));
 
             List<Map<String, Object>> templateList = templates.getContent()
                     .stream()
@@ -51,7 +57,7 @@ public class ColoringController {
             response.put("totalPages", templates.getTotalPages());
             response.put("currentPage", page);
 
-            log.info("✅ 색칠공부 템플릿 {}개 조회 성공", templateList.size());
+            log.info("✅ 내 색칠공부 템플릿 {}개 조회 성공", templateList.size());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -61,21 +67,23 @@ public class ColoringController {
         }
     }
 
-    // 🎯 특정 템플릿 상세 조회
+    // 🎯 내 특정 템플릿 상세 조회 (사용자별)
     @GetMapping("/templates/{templateId}")
-    public ResponseEntity<Map<String, Object>> getTemplateDetail(
-            @PathVariable Long templateId) {
+    public ResponseEntity<Map<String, Object>> getMyTemplateDetail(
+            @PathVariable Long templateId,
+            Authentication authentication) {
 
-        log.info("🔍 색칠공부 템플릿 상세 조회 - ID: {}", templateId);
+        String username = authentication.getName();
+        log.info("🔍 내 색칠공부 템플릿 상세 조회 - ID: {}, User: {}", templateId, username);
 
         try {
-            ColoringTemplate template = coloringTemplateService.getTemplateById(templateId);
+            ColoringTemplate template = coloringTemplateService.getTemplateByIdAndUser(templateId, username);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("template", convertToDTO(template));
 
-            log.info("✅ 색칠공부 템플릿 상세 조회 성공: {}", template.getTitle());
+            log.info("✅ 내 색칠공부 템플릿 상세 조회 성공: {}", template.getTitle());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -85,15 +93,17 @@ public class ColoringController {
         }
     }
 
-    // 🎯 동화 ID로 색칠공부 템플릿 조회
+    // 🎯 내 동화 ID로 색칠공부 템플릿 조회 (사용자별)
     @GetMapping("/templates/story/{storyId}")
-    public ResponseEntity<Map<String, Object>> getTemplateByStoryId(
-            @PathVariable String storyId) {
+    public ResponseEntity<Map<String, Object>> getMyTemplateByStoryId(
+            @PathVariable String storyId,
+            Authentication authentication) {
 
-        log.info("🔍 동화별 색칠공부 템플릿 조회 - StoryId: {}", storyId);
+        String username = authentication.getName();
+        log.info("🔍 내 동화별 색칠공부 템플릿 조회 - StoryId: {}, User: {}", storyId, username);
 
         try {
-            return coloringTemplateService.getTemplateByStoryId(storyId)
+            return coloringTemplateService.getTemplateByStoryIdAndUser(storyId, username)
                     .map(template -> {
                         Map<String, Object> response = new HashMap<>();
                         response.put("success", true);
@@ -110,18 +120,20 @@ public class ColoringController {
         }
     }
 
-    // 🎯 제목으로 색칠공부 템플릿 검색
+    // 🎯 내 색칠공부 템플릿 검색 (사용자별)
     @GetMapping("/templates/search")
-    public ResponseEntity<Map<String, Object>> searchTemplates(
+    public ResponseEntity<Map<String, Object>> searchMyTemplates(
             @RequestParam String keyword,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication) {
 
-        log.info("🔍 색칠공부 템플릿 검색 - 키워드: {}", keyword);
+        String username = authentication.getName();
+        log.info("🔍 내 색칠공부 템플릿 검색 - 키워드: {}, User: {}", keyword, username);
 
         try {
             Page<ColoringTemplate> templates = coloringTemplateService
-                    .searchTemplatesByTitle(keyword, PageRequest.of(page, size));
+                    .searchTemplatesByTitleAndUser(keyword, username, PageRequest.of(page, size));
 
             List<Map<String, Object>> templateList = templates.getContent()
                     .stream()
@@ -134,7 +146,7 @@ public class ColoringController {
             response.put("totalElements", templates.getTotalElements());
             response.put("keyword", keyword);
 
-            log.info("✅ 색칠공부 템플릿 검색 완료 - {}개 발견", templateList.size());
+            log.info("✅ 내 색칠공부 템플릿 검색 완료 - {}개 발견", templateList.size());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -144,16 +156,16 @@ public class ColoringController {
         }
     }
 
-    // 🎯 색칠공부 템플릿 생성 API (새로 추가)
+    // 🎯 색칠공부 템플릿 생성 API (사용자 정보 포함)
     @PostMapping("/create-template")
-    public ResponseEntity<Map<String, Object>> createColoringTemplate(
+    public ResponseEntity<Map<String, Object>> createMyColoringTemplate(
             @RequestBody Map<String, String> request,
             Authentication authentication) {
 
-        log.info("🎨 색칠공부 템플릿 생성 요청");
+        String username = authentication.getName();
+        log.info("🎨 내 색칠공부 템플릿 생성 요청 - User: {}", username);
 
         try {
-            String username = authentication.getName();
             String storyId = request.get("storyId");
             String title = request.get("title");
             String originalImageUrl = request.get("originalImageUrl");
@@ -163,7 +175,7 @@ public class ColoringController {
             log.info("  - storyId: {}", storyId);
             log.info("  - title: {}", title);
             log.info("  - originalImageUrl: {}", originalImageUrl);
-            log.info("  - blackWhiteImageUrl: {}", blackWhiteImageUrl);
+            log.info("  - username: {}", username);
 
             if (storyId == null || title == null || originalImageUrl == null) {
                 return ResponseEntity.status(400).body(Map.of(
@@ -172,12 +184,16 @@ public class ColoringController {
                 ));
             }
 
-            // 템플릿 생성
+            Users user = usersRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+            // 🎯 사용자 정보 포함하여 템플릿 생성
             ColoringTemplate template = coloringTemplateService.createColoringTemplate(
                     storyId,
                     title,
                     originalImageUrl,
-                    blackWhiteImageUrl
+                    blackWhiteImageUrl,
+                    user
             );
 
             Map<String, Object> response = new HashMap<>();
@@ -185,7 +201,7 @@ public class ColoringController {
             response.put("message", "색칠공부 템플릿이 생성되었습니다!");
             response.put("template", convertToDTO(template));
 
-            log.info("✅ 색칠공부 템플릿 생성 완료 - ID: {}", template.getId());
+            log.info("✅ 내 색칠공부 템플릿 생성 완료 - ID: {}", template.getId());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -197,28 +213,16 @@ public class ColoringController {
         }
     }
 
-    // 🎯 색칠 완성작 저장 (Base64 이미지 받아서 처리) - 수정됨
+    // 🎯 색칠 완성작 저장 (Base64 이미지)
     @PostMapping("/save")
-    public ResponseEntity<Map<String, Object>> saveColoredImage(
+    public ResponseEntity<Map<String, Object>> saveMyColoredImage(
             @RequestBody Map<String, Object> request,
             Authentication authentication) {
 
-        log.info("🎨 색칠 완성작 저장 요청");
+        String username = authentication.getName();
+        log.info("🎨 내 색칠 완성작 저장 요청 (Base64) - User: {}", username);
 
         try {
-            String username;
-            if (authentication != null && authentication.isAuthenticated()) {
-                username = authentication.getName();
-                log.info("✅ 인증된 사용자: {}", username);
-            } else {
-                log.error("❌ 인증 실패");
-                return ResponseEntity.status(401).body(Map.of(
-                        "success", false,
-                        "error", "사용자 인증이 필요합니다"
-                ));
-            }
-
-            // 요청 데이터 추출
             String originalImageUrl = (String) request.get("originalImageUrl");
             String completedImageBase64 = (String) request.get("completedImageBase64");
             String storyTitle = (String) request.get("storyTitle");
@@ -234,10 +238,8 @@ public class ColoringController {
                 ));
             }
 
-            // 🎯 색칠 완성작 저장 처리
             String savedImageUrl = saveBase64ImageToStorage(completedImageBase64, username);
 
-            // 🎯 DB에 색칠 완성작 정보 저장
             ColoringWork coloringWork = ColoringWork.builder()
                     .username(username)
                     .originalImageUrl(originalImageUrl)
@@ -246,7 +248,7 @@ public class ColoringController {
                     .build();
 
             ColoringWork saved = coloringWorkRepository.save(coloringWork);
-            log.info("✅ DB에 색칠 완성작 저장 완료: {}", saved.getId());
+            log.info("✅ DB에 내 색칠 완성작 저장 완료: {}", saved.getId());
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -255,13 +257,11 @@ public class ColoringController {
             response.put("coloringWorkId", saved.getId());
             response.put("savedAt", java.time.LocalDateTime.now().toString());
 
-            log.info("✅ 색칠 완성작 저장 완료 - URL: {}", savedImageUrl);
+            log.info("✅ 내 색칠 완성작 저장 완료 - URL: {}", savedImageUrl);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             log.error("❌ 색칠 완성작 저장 오류: {}", e.getMessage());
-            e.printStackTrace();
-
             return ResponseEntity.status(500).body(Map.of(
                     "success", false,
                     "error", "저장 실패: " + e.getMessage()
@@ -269,28 +269,31 @@ public class ColoringController {
         }
     }
 
-    // 🎯 개선된 색칠 완성작 저장 (MultipartFile 방식) - 수정됨
+    // 🎯 개선된 색칠 완성작 저장 (MultipartFile)
     @PostMapping("/save-coloring-work")
-    public ResponseEntity<?> saveColoringWork(
+    public ResponseEntity<?> saveMyColoringWork(
             @RequestParam("storyId") String storyId,
             @RequestParam(value = "originalImageUrl", required = false) String originalImageUrl,
             @RequestParam("coloredImage") MultipartFile coloredImage,
             Authentication authentication) {
 
-        try {
-            String username = authentication.getName();
-            log.info("🎨 색칠 완성작 저장 요청 - StoryId: {}, User: {}", storyId, username);
+        String username = authentication.getName();
+        log.info("🎨 내 색칠 완성작 저장 요청 - StoryId: {}, User: {}", storyId, username);
 
-            // 1. 템플릿 조회 (없으면 기본 생성)
-            ColoringTemplate template = coloringTemplateService.getTemplateByStoryId(storyId)
+        try {
+            // 🎯 Users 엔티티 조회
+            Users user = usersRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+            ColoringTemplate template = coloringTemplateService.getTemplateByStoryIdAndUser(storyId, username)
                     .orElseGet(() -> {
-                        log.info("🔄 템플릿이 없어서 기본 템플릿 생성 - StoryId: {}", storyId);
+                        log.info("🔄 내 템플릿이 없어서 새로 생성 - StoryId: {}, User: {}", storyId, username);
                         try {
                             return coloringTemplateService.createColoringTemplate(
                                     storyId,
                                     "색칠 템플릿 " + storyId,
                                     originalImageUrl != null ? originalImageUrl : "",
-                                    null
+                                    null,
+                                    user
                             );
                         } catch (Exception e) {
                             log.error("템플릿 생성 실패: {}", e.getMessage());
@@ -298,10 +301,8 @@ public class ColoringController {
                         }
                     });
 
-            // 2. 색칠 완성작 S3 업로드
             String coloredImageUrl = s3Service.uploadColoringWork(coloredImage, username, storyId);
 
-            // 3. ColoringWork 엔티티 생성 및 저장
             ColoringWork coloringWork = ColoringWork.builder()
                     .username(username)
                     .storyTitle(template.getTitle())
@@ -312,40 +313,34 @@ public class ColoringController {
 
             ColoringWork savedWork = coloringWorkRepository.save(coloringWork);
 
-            // 4. 응답 데이터 구성
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("coloringWorkId", savedWork.getId());
             response.put("coloredImageUrl", coloredImageUrl);
             response.put("message", "색칠 완성작이 갤러리에 저장되었습니다!");
 
-            log.info("✅ 색칠 완성작 저장 완료 - ID: {}", savedWork.getId());
+            log.info("✅ 내 색칠 완성작 저장 완료 - ID: {}", savedWork.getId());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             log.error("❌ 색칠 완성작 저장 실패: {}", e.getMessage());
-
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("error", "색칠 완성작 저장 실패: " + e.getMessage());
-
-            return ResponseEntity.status(500).body(errorResponse);
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "error", "색칠 완성작 저장 실패: " + e.getMessage()
+            ));
         }
     }
 
-    // 🎯 색칠 완성작 공유 API (새로 추가) ⭐
+    // 🎯 색칠 완성작 공유 API
     @PostMapping("/share/{coloringWorkId}")
-    public ResponseEntity<Map<String, Object>> shareColoringWork(
+    public ResponseEntity<Map<String, Object>> shareMyColoringWork(
             @PathVariable Long coloringWorkId,
             Authentication authentication) {
 
-        log.info("🎨 색칠 완성작 공유 요청 - ColoringWorkId: {}", coloringWorkId);
+        String username = authentication.getName();
+        log.info("🎨 내 색칠 완성작 공유 요청 - ColoringWorkId: {}, User: {}", coloringWorkId, username);
 
         try {
-            String username = authentication.getName();
-            log.info("🔍 요청 사용자: {}", username);
-
-            // 1. 색칠 완성작 조회 및 권한 확인
             ColoringWork coloringWork = coloringWorkRepository.findById(coloringWorkId)
                     .orElseThrow(() -> new RuntimeException("색칠 완성작을 찾을 수 없습니다."));
 
@@ -355,7 +350,6 @@ public class ColoringController {
                         .body(Map.of("success", false, "error", "본인의 작품만 공유할 수 있습니다."));
             }
 
-            // 2. ShareService를 통한 색칠 완성작 공유
             var sharePostDTO = shareService.shareFromColoringWork(coloringWorkId, username);
 
             Map<String, Object> response = new HashMap<>();
@@ -364,7 +358,7 @@ public class ColoringController {
             response.put("shareId", sharePostDTO.getId());
             response.put("coloringWorkId", coloringWorkId);
 
-            log.info("✅ 색칠 완성작 공유 완료 - ShareId: {}", sharePostDTO.getId());
+            log.info("✅ 내 색칠 완성작 공유 완료 - ShareId: {}", sharePostDTO.getId());
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -374,27 +368,46 @@ public class ColoringController {
         }
     }
 
-    // 🎯 Base64 이미지를 저장소에 저장
+    // 🎯 내 색칠공부 템플릿 삭제
+    @DeleteMapping("/templates/{templateId}")
+    public ResponseEntity<Map<String, Object>> deleteMyTemplate(
+            @PathVariable Long templateId,
+            Authentication authentication) {
+
+        String username = authentication.getName();
+        log.info("🗑️ 내 색칠공부 템플릿 삭제 요청 - ID: {}, User: {}", templateId, username);
+
+        try {
+            coloringTemplateService.deleteTemplateByUser(templateId, username);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "템플릿이 삭제되었습니다.");
+
+            log.info("✅ 내 색칠공부 템플릿 삭제 완료 - ID: {}", templateId);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("❌ 색칠공부 템플릿 삭제 실패: {}", e.getMessage());
+            return ResponseEntity.status(500)
+                    .body(Map.of("success", false, "error", "템플릿 삭제 실패: " + e.getMessage()));
+        }
+    }
+
+    // ====== Private 헬퍼 메서드들 ======
+
     private String saveBase64ImageToStorage(String base64Image, String username) {
         try {
             log.info("🔍 Base64 이미지 저장 시작");
-
-            // Base64 디코딩
             byte[] imageBytes = java.util.Base64.getDecoder().decode(base64Image);
-
-            // 파일명 생성
             String fileName = "coloring_" + username + "_" + System.currentTimeMillis() + ".png";
-
-            // 로컬 저장소에 저장
             return saveToLocalStorage(imageBytes, fileName);
-
         } catch (Exception e) {
             log.error("❌ 이미지 저장 실패: {}", e.getMessage());
             throw new RuntimeException("이미지 저장에 실패했습니다", e);
         }
     }
 
-    // 🏠 로컬 저장소에 저장
     private String saveToLocalStorage(byte[] imageBytes, String fileName) {
         try {
             String uploadDir = "src/main/resources/static/coloring/";
@@ -418,36 +431,6 @@ public class ColoringController {
         }
     }
 
-    // 🎯 색칠공부 템플릿 삭제 (새로 추가)
-    @DeleteMapping("/templates/{templateId}")
-    public ResponseEntity<Map<String, Object>> deleteTemplate(
-            @PathVariable Long templateId,
-            Authentication authentication) {
-
-        log.info("🗑️ 색칠공부 템플릿 삭제 요청 - ID: {}", templateId);
-
-        try {
-            String username = authentication.getName();
-            log.info("🔍 요청 사용자: {}", username);
-
-            // 템플릿 삭제
-            coloringTemplateService.deleteTemplate(templateId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "템플릿이 삭제되었습니다.");
-
-            log.info("✅ 색칠공부 템플릿 삭제 완료 - ID: {}", templateId);
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("❌ 색칠공부 템플릿 삭제 실패: {}", e.getMessage());
-            return ResponseEntity.status(500)
-                    .body(Map.of("success", false, "error", "템플릿 삭제 실패: " + e.getMessage()));
-        }
-    }
-
-    // 🔧 ColoringTemplate을 DTO로 변환
     private Map<String, Object> convertToDTO(ColoringTemplate template) {
         Map<String, Object> dto = new HashMap<>();
         dto.put("id", template.getId().toString());
@@ -458,7 +441,6 @@ public class ColoringController {
         dto.put("storyTitle", template.getTitle());
         dto.put("createdAt", template.getCreatedAt().format(
                 DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-
         return dto;
     }
 }

@@ -1,5 +1,6 @@
 package com.fairytale.fairytale.coloring;
 
+import com.fairytale.fairytale.users.Users;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -28,6 +29,11 @@ public class ColoringTemplate {
 
     @Column(name = "black_white_image_url", nullable = false, length = 500)
     private String blackWhiteImageUrl;  // 흑백 변환된 이미지 URL
+
+    // 🎯 사용자 정보 추가 (핵심!)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private Users user;
 
     @CreationTimestamp
     @Column(name = "created_at")
@@ -59,6 +65,7 @@ public class ColoringTemplate {
         private String storyId;
         private String originalImageUrl;
         private String blackWhiteImageUrl;
+        private Users user;
 
         public Builder title(String title) {
             this.title = title;
@@ -80,8 +87,15 @@ public class ColoringTemplate {
             return this;
         }
 
+        public Builder users(Users user) {
+            this.user = user;
+            return this;
+        }
+
         public ColoringTemplate build() {
-            return new ColoringTemplate(title, storyId, originalImageUrl, blackWhiteImageUrl);
+            ColoringTemplate template = new ColoringTemplate(title, storyId, originalImageUrl, blackWhiteImageUrl);
+            template.setUser(user);
+            return template;
         }
     }
 

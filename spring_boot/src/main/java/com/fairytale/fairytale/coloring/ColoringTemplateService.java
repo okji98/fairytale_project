@@ -2,6 +2,8 @@ package com.fairytale.fairytale.coloring;
 
 import com.fairytale.fairytale.service.S3Service;
 import com.fairytale.fairytale.story.StoryService;
+import com.fairytale.fairytale.users.Users;
+import com.fairytale.fairytale.users.UsersRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -10,16 +12,10 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
-
 import java.io.File;
-import java.io.InputStream;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -32,21 +28,23 @@ public class ColoringTemplateService {
     private final RestTemplate restTemplate = new RestTemplate();
     @Value("${FASTAPI_BASE_URL:http://localhost:8000}")
     private String fastApiBaseUrl;
+    private final UsersRepository usersRepository;
 
-    // 🎨 색칠공부 템플릿 생성 (메인 흑백 변환 담당)
+    // 🎯 색칠공부 템플릿 생성 (사용자 정보 포함)
     public ColoringTemplate createColoringTemplate(String storyId, String title,
-                                                   String originalImageUrl, String blackWhiteImageUrl) {
+                                                   String originalImageUrl, String blackWhiteImageUrl,
+                                                   Users user) { // 🎯 user 파라미터 추가
 
-        System.out.println("🎨 [ColoringTemplateService] 색칠공부 템플릿 생성 시작 - StoryId: " + storyId);
+        System.out.println("🎨 [ColoringTemplateService] 색칠공부 템플릿 생성 시작 - StoryId: " + storyId + ", User: " + user.getUsername());
 
-        // 🎯 흑백 이미지가 없으면 여기서 처음 변환 (온디맨드)
+        // 🎯 흑백 이미지가 없으면 변환
         if (blackWhiteImageUrl == null || blackWhiteImageUrl.trim().isEmpty()) {
             System.out.println("🔄 [ColoringTemplateService] 온디맨드 흑백 변환 시작");
             blackWhiteImageUrl = convertImageToColoringBook(originalImageUrl);
         }
 
-        // 기존 템플릿 확인 후 저장
-        Optional<ColoringTemplate> existing = coloringTemplateRepository.findByStoryId(storyId);
+        // 🎯 기존 템플릿 확인 (사용자별로)
+        Optional<ColoringTemplate> existing = coloringTemplateRepository.findByStoryIdAndUser(storyId, user);
 
         ColoringTemplate template;
         if (existing.isPresent()) {
@@ -62,6 +60,7 @@ public class ColoringTemplateService {
                     .storyId(storyId)
                     .originalImageUrl(originalImageUrl)
                     .blackWhiteImageUrl(blackWhiteImageUrl)
+                    .users(user) // 🎯 사용자 정보 추가
                     .build();
         }
 
@@ -71,6 +70,62 @@ public class ColoringTemplateService {
         return savedTemplate;
     }
 
+    // 🎯 오버로드 메서드 (기존 호출 방식 호환성)
+    public ColoringTemplate createColoringTemplate(String storyId, String title,
+                                                   String originalImageUrl, String blackWhiteImageUrl) {
+        // 🚫 사용자 정보 없이 호출되면 에러
+        throw new RuntimeException("색칠공부 템플릿 생성 시 사용자 정보가 필요합니다. createColoringTemplate(storyId, title, originalImageUrl, blackWhiteImageUrl, user)를 사용하세요.");
+    }
+
+    // ====== 사용자별 조회 메서드들 ======
+
+    // 🎯 사용자별 모든 색칠공부 템플릿 조회
+    public Page<ColoringTemplate> getAllTemplatesByUser(String username, Pageable pageable) {
+        System.out.println("🔍 [ColoringTemplateService] 사용자별 색칠공부 템플릿 목록 조회 - User: " + username);
+
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+        return coloringTemplateRepository.findByUserOrderByCreatedAtDesc(user, pageable);
+    }
+
+    // 🎯 사용자별 특정 템플릿 조회
+    public ColoringTemplate getTemplateByIdAndUser(Long templateId, String username) {
+        System.out.println("🔍 [ColoringTemplateService] 사용자별 색칠공부 템플릿 상세 조회 - ID: " + templateId + ", User: " + username);
+
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+        ColoringTemplate template = coloringTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new RuntimeException("색칠공부 템플릿을 찾을 수 없습니다: " + templateId));
+
+        // 🎯 본인의 템플릿인지 확인
+        if (!template.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("접근 권한이 없습니다. 본인의 색칠공부 템플릿만 조회할 수 있습니다.");
+        }
+
+        return template;
+    }
+
+    // 🎯 사용자별 제목으로 검색
+    public Page<ColoringTemplate> searchTemplatesByTitleAndUser(String keyword, String username, Pageable pageable) {
+        System.out.println("🔍 [ColoringTemplateService] 사용자별 색칠공부 템플릿 검색 - 키워드: " + keyword + ", User: " + username);
+
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+        return coloringTemplateRepository.findByUserAndTitleContainingOrderByCreatedAtDesc(user, keyword, pageable);
+    }
+
+    // 🎯 사용자별 템플릿 삭제
+    public void deleteTemplateByUser(Long templateId, String username) {
+        System.out.println("🗑️ [ColoringTemplateService] 사용자별 색칠공부 템플릿 삭제 - ID: " + templateId + ", User: " + username);
+
+        ColoringTemplate template = getTemplateByIdAndUser(templateId, username); // 권한 확인 포함
+        coloringTemplateRepository.delete(template);
+
+        System.out.println("✅ [ColoringTemplateService] 색칠공부 템플릿 삭제 완료");
+    }
 
     // 🎯 효율적인 흑백 변환 (기존 이미지 우선 검색)
     private String convertImageToColoringBook(String originalImageUrl) {
@@ -274,9 +329,18 @@ public class ColoringTemplateService {
     }
 
     // 🎨 동화 ID로 색칠공부 템플릿 조회
-    public Optional<ColoringTemplate> getTemplateByStoryId(String storyId) {
-        System.out.println("🔍 [ColoringTemplateService] 동화별 색칠공부 템플릿 조회 - StoryId: " + storyId);
-        return coloringTemplateRepository.findByStoryId(storyId);
+    public Optional<ColoringTemplate> getTemplateByStoryId(String storyId, String username) {
+        System.out.println("🔍 [ColoringTemplateService] 사용자별 동화 색칠공부 템플릿 조회 - StoryId: " + storyId + ", User: " + username);
+
+        Users user = usersRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+        return coloringTemplateRepository.findByStoryIdAndUser(storyId, user);
+    }
+
+    // 🎯 명확한 네이밍의 별칭 메서드
+    public Optional<ColoringTemplate> getTemplateByStoryIdAndUser(String storyId, String username) {
+        return getTemplateByStoryId(storyId, username);
     }
 
     // 🎨 제목으로 검색
