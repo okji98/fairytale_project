@@ -97,7 +97,7 @@ def generate_image(req: ImageRequest):
         if image_path is None:
             raise HTTPException(status_code=500, detail="이미지 생성 실패")
         
-        return {"image_url": image_path}
+        return {"image_url": os.path.abspath(image_path)}  # ✨ 절대 경로
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"이미지 생성 실패: {str(e)}")
 
@@ -149,9 +149,6 @@ async def convert_to_bw(request: Request):
 # ✅ 기존 로컬 파일용 엔드포인트 (호환성 유지)
 @app.post("/convert/bwimage-local")
 def convert_local_image(req: ImageRequest):
-    """
-    로컬 파일 경로 전용 흑백 변환 (기존 방식)
-    """
     try:
         image_path = req.text
         
@@ -162,7 +159,7 @@ def convert_local_image(req: ImageRequest):
         if bw_image_path is None:
             raise HTTPException(status_code=500, detail="흑백 변환 실패")
         
-        return {"image_url": bw_image_path}
+        return {"image_url": os.path.abspath(bw_image_path)}  # ✨ 절대 경로
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"흑백 변환 실패: {str(e)}")
 
