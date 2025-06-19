@@ -6,6 +6,7 @@ import com.fairytale.fairytale.users.Users;
 import com.fairytale.fairytale.users.UsersRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.*;
@@ -24,6 +25,7 @@ import java.util.Optional;
 public class ColoringTemplateService {
     private final ColoringTemplateRepository coloringTemplateRepository;
     private final S3Service s3Service;
+    @Lazy
     private final StoryService storyService; // 직접 주입!
     private final RestTemplate restTemplate = new RestTemplate();
     @Value("${FASTAPI_BASE_URL:http://localhost:8000}")
