@@ -32,7 +32,7 @@ public class ColoringTemplate {
 
     // 🎯 사용자 정보 추가 (핵심!)
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)
     private Users user;
 
     @CreationTimestamp
