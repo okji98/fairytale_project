@@ -201,20 +201,25 @@ public class StoryService {
         }
     }
 
-    // ====== 🎯 수정된 이미지 생성 메서드 ======
     @Transactional
-    public Story createImage(ImageRequest request) {
+    public Story createImage(ImageRequest request, String username) { // 🎯 String username 파라미터 추가!
         try {
-            log.info("🎨 이미지 생성 요청 - StoryId: {}", request.getStoryId());
+            log.info("🎨 이미지 생성 요청 - StoryId: {}, Username: {}", request.getStoryId(), username);
 
             Story story = storyRepository.findById(request.getStoryId())
                     .orElseThrow(() -> new RuntimeException("Story not found: " + request.getStoryId()));
 
-            // 🔍 기존 이미지가 있는지 확인
+            // 🎯 사용자 권한 확인 추가 (보안상 좋음)
+            Users requestUser = usersRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
+
+            if (!story.getUser().getId().equals(requestUser.getId())) {
+                throw new RuntimeException("접근 권한이 없습니다. 본인의 스토리만 처리할 수 있습니다.");
+            }
+
+            // 🔍 기존 이미지가 있는지 확인 (기존 코드 그대로)
             if (story.getImage() != null && !story.getImage().isEmpty() && !"null".equals(story.getImage())) {
                 log.info("✅ 기존 이미지 존재, 재사용: {}", story.getImage());
-
-                // 🎯 기존 이미지가 있어도 색칠공부 템플릿 확인 및 생성
                 ensureColoringTemplate(story);
                 return story;
             }
@@ -273,7 +278,7 @@ public class StoryService {
                 }
 
                 // 🎯 색칠공부 템플릿 자동 생성 (핵심 추가!)
-                createColoringTemplateAsync(savedStory);
+                createColoringTemplateAsync(savedStory, requestUser);
 
                 return savedStory;
 
@@ -301,8 +306,13 @@ public class StoryService {
         try {
             log.info("🔍 색칠공부 템플릿 존재 확인 - StoryId: {}", story.getId());
 
-            // 🎯 사용자 정보 가져오기
+            // 🎯 사용자 정보 가져오기 (Story에서 직접 가져옴)
             Users user = story.getUser();
+            if (user == null) {
+                log.error("❌ Story에 연결된 사용자 정보가 없습니다 - StoryId: {}", story.getId());
+                return;
+            }
+
             String storyId = story.getId().toString();
             String username = user.getUsername();
 
@@ -314,7 +324,8 @@ public class StoryService {
                     isValidImageUrlForColoring(story.getImage())) {
                 log.info("🎨 누락된 색칠공부 템플릿 생성 - StoryId: {}", story.getId());
 
-                createColoringTemplateAsync(story);
+                // 🎯 사용자 정보 전달!
+                createColoringTemplateAsync(story, user);
             } else {
                 log.info("✅ 색칠공부 템플릿이 이미 존재하거나 유효하지 않은 이미지");
             }
@@ -362,12 +373,11 @@ public class StoryService {
     // ====== ColoringTemplateService용 공개 메서드 ======
 
     @Async
-    public void createColoringTemplateAsync(Story story) {
+    public void createColoringTemplateAsync(Story story, Users user) { // 🎯 Users user 파라미터 추가!
         try {
-            log.info("🎨 색칠공부 템플릿 자동 생성 시작 - StoryId: {}", story.getId());
+            log.info("🎨 색칠공부 템플릿 자동 생성 시작 - StoryId: {}, Username: {}",
+                    story.getId(), user.getUsername());
 
-            // 🎯 Story에서 사용자 정보 가져오기
-            Users user = story.getUser();
             String storyId = story.getId().toString();
             String username = user.getUsername();
 
@@ -387,10 +397,11 @@ public class StoryService {
                         story.getTitle() != null ? story.getTitle() + " 색칠하기" : "동화 색칠공부",
                         story.getImage(),
                         null, // 흑백 이미지는 서비스에서 자동 생성
-                        user
+                        user  // 🎯 사용자 정보 확실히 전달
                 );
 
-                log.info("✅ 색칠공부 템플릿 자동 생성 완료 - TemplateId: {}", template.getId());
+                log.info("✅ 색칠공부 템플릿 자동 생성 완료 - TemplateId: {}, UserId: {}",
+                        template.getId(), user.getId());
             } else {
                 log.warn("⚠️ 유효하지 않은 이미지 URL로 색칠공부 템플릿 생성 건너뜀: {}", story.getImage());
             }

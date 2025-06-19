@@ -222,11 +222,12 @@ public class StoryController {
      * 🎨 이미지 생성 API
      */
     @PostMapping("/generate/image")
-    public ResponseEntity<Story> createImage(@RequestBody ImageRequest request) {
+    public ResponseEntity<Story> createImage(@RequestBody ImageRequest request, Authentication auth) {
         try {
-            Story result = storyService.createImage(request);
+            String username = auth.getName(); // 🎯 이 1줄 추가!
+            Story result = storyService.createImage(request, username); // 🎯 username 파라미터 추가!
 
-            // 🔍 응답 전 디버깅 로그
+            // 🔍 응답 전 디버깅 로그 (기존 코드 그대로)
             log.info("=== 컨트롤러 응답 데이터 ===");
             log.info("Story ID: {}", result.getId());
             log.info("Title: {}", result.getTitle());
@@ -234,7 +235,7 @@ public class StoryController {
             log.info("Image URL 길이: {}", (result.getImage() != null ? result.getImage().length() : "null"));
             log.info("Voice Content: {}", result.getVoiceContent());
 
-            // 🔍 JSON 직렬화 테스트
+            // 🔍 JSON 직렬화 테스트 (기존 코드 그대로)
             try {
                 ObjectMapper mapper = new ObjectMapper();
                 mapper.registerModule(new JavaTimeModule());
@@ -251,7 +252,6 @@ public class StoryController {
             return ResponseEntity.badRequest().build();
         }
     }
-
     /**
      * 🎨 흑백 변환 API (색칠하기 버튼용) - 수정됨
      */
