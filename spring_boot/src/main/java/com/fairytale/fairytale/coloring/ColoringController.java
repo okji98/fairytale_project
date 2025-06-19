@@ -38,6 +38,13 @@ public class ColoringController {
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
 
+        if (authentication == null) {
+            return ResponseEntity.status(401).body(Map.of(
+                    "success", false,
+                    "error", "인증이 필요합니다"
+            ));
+        }
+
         String username = authentication.getName();
         log.info("🔍 내 색칠공부 템플릿 목록 조회 요청 - User: {}, page: {}, size: {}", username, page, size);
 
