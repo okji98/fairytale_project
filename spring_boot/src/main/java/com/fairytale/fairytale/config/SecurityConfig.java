@@ -46,14 +46,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
 
                         // 🎯 색칠공부 API 상세 권한 설정 (핵심 수정!)
-                        .requestMatchers(HttpMethod.GET, "/api/coloring/templates").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/coloring/templates/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/coloring/create-template").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/coloring/save").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/coloring/save-coloring-work").authenticated()
-                        .requestMatchers(HttpMethod.DELETE, "/api/coloring/templates/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/coloring/share/**").authenticated()
-                        .requestMatchers("/api/coloring/templates/search").authenticated()
+                        .requestMatchers("/api/coloring/**").permitAll()
+//                        .requestMatchers(HttpMethod.GET, "/api/coloring/templates").authenticated()
+//                        .requestMatchers(HttpMethod.GET, "/api/coloring/templates/**").authenticated()
+//                        .requestMatchers(HttpMethod.POST, "/api/coloring/create-template").authenticated()
+//                        .requestMatchers(HttpMethod.POST, "/api/coloring/save").authenticated()
+//                        .requestMatchers(HttpMethod.POST, "/api/coloring/save-coloring-work").authenticated()
+//                        .requestMatchers(HttpMethod.DELETE, "/api/coloring/templates/**").authenticated()
+//                        .requestMatchers(HttpMethod.POST, "/api/coloring/share/**").authenticated()
+//                        .requestMatchers("/api/coloring/templates/search").authenticated()
 
                         // 업로드 관련 경로
                         .requestMatchers("/api/upload/**").authenticated()
