@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 # ai_server.py 수정 버전
 
 from typing import Optional
