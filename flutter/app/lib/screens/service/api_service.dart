@@ -205,7 +205,7 @@ class ApiService {
     }
   }
 
-  // 🎨 색칠공부 템플릿 목록 조회 (더 자세한 디버깅 추가)
+// 🎨 색칠공부 템플릿 목록 조회 (JWT 토큰 추가)
   static Future<List<Map<String, dynamic>>?> getColoringTemplates({
     int page = 0,
     int size = 20,
@@ -215,9 +215,26 @@ class ApiService {
       print('🔍 서버 주소: $baseUrl');
       print('🔍 전체 URL: $baseUrl/api/coloring/templates?page=$page&size=$size');
 
+      // 🔥 JWT 토큰 가져오기 (핵심 추가!)
+      String? accessToken = await getStoredAccessToken();
+
+      if (accessToken == null) {
+        print('❌ [ApiService] JWT 토큰이 없습니다. 로그인이 필요합니다.');
+        return null; // 또는 빈 리스트 반환
+      }
+
+      print('🔐 [ApiService] JWT 토큰으로 인증된 요청 전송');
+
       final response = await _dio.get(
         '/api/coloring/templates',
         queryParameters: {'page': page, 'size': size},
+        // 🔥 JWT 토큰을 헤더에 포함 (핵심!)
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+        ),
       );
 
       print('✅ 응답 상태코드: ${response.statusCode}');
@@ -252,6 +269,10 @@ class ApiService {
             return templates;
           }
         }
+      } else if (response.statusCode == 401) {
+        print('❌ 인증 실패: JWT 토큰이 만료되었거나 유효하지 않음');
+        await removeAccessToken(); // 만료된 토큰 삭제
+        return null;
       } else {
         print('❌ HTTP 오류: ${response.statusCode}');
       }
@@ -264,6 +285,13 @@ class ApiService {
         print('  - 서버 응답 코드: ${e.response?.statusCode}');
         print('  - 서버 응답 데이터: ${e.response?.data}');
         print('  - 서버 응답 헤더: ${e.response?.headers}');
+
+        // 🔥 401 에러 처리
+        if (e.response?.statusCode == 401) {
+          print('❌ 인증 실패: 로그인이 필요합니다');
+          await removeAccessToken();
+          return null;
+        }
       } else {
         print('  - 네트워크 연결 오류 (서버가 꺼져있거나 주소가 잘못됨)');
       }
