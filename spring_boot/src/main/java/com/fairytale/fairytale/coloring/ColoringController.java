@@ -38,7 +38,9 @@ public class ColoringController {
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
 
+        // 🔍 Authentication null 체크 추가
         if (authentication == null) {
+            log.error("❌ Authentication 객체가 null입니다");
             return ResponseEntity.status(401).body(Map.of(
                     "success", false,
                     "error", "인증이 필요합니다"
@@ -46,6 +48,16 @@ public class ColoringController {
         }
 
         String username = authentication.getName();
+
+        // 🔍 사용자명 null 체크 추가
+        if (username == null || username.trim().isEmpty()) {
+            log.error("❌ 사용자명이 null이거나 비어있습니다");
+            return ResponseEntity.status(401).body(Map.of(
+                    "success", false,
+                    "error", "유효하지 않은 사용자 정보입니다"
+            ));
+        }
+
         log.info("🔍 내 색칠공부 템플릿 목록 조회 요청 - User: {}, page: {}, size: {}", username, page, size);
 
         try {
