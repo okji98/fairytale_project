@@ -387,7 +387,7 @@ public class StoryService {
                         story.getTitle() != null ? story.getTitle() + " 색칠하기" : "동화 색칠공부",
                         story.getImage(),
                         null, // 흑백 이미지는 서비스에서 자동 생성
-                        story.getUser()
+                        user
                 );
 
                 log.info("✅ 색칠공부 템플릿 자동 생성 완료 - TemplateId: {}", template.getId());
