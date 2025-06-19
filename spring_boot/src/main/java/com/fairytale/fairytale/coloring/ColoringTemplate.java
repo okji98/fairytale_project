@@ -87,7 +87,8 @@ public class ColoringTemplate {
             return this;
         }
 
-        public Builder users(Users user) {
+        // 🎯 메서드명 수정: users → user
+        public Builder user(Users user) {
             this.user = user;
             return this;
         }

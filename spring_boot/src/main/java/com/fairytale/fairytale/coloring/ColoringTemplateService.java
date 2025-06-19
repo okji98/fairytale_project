@@ -60,7 +60,7 @@ public class ColoringTemplateService {
                     .storyId(storyId)
                     .originalImageUrl(originalImageUrl)
                     .blackWhiteImageUrl(blackWhiteImageUrl)
-                    .users(user) // 🎯 사용자 정보 추가
+                    .user(user) // 🎯 .users(user) → .user(user)로 변경
                     .build();
         }
 
