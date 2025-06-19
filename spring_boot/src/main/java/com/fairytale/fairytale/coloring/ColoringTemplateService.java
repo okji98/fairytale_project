@@ -55,6 +55,7 @@ public class ColoringTemplateService {
             template.setTitle(title);
             template.setOriginalImageUrl(originalImageUrl);
             template.setBlackWhiteImageUrl(blackWhiteImageUrl);
+            template.setUser(user); // 🎯 이 줄 추가!
         } else {
             System.out.println("🆕 [ColoringTemplateService] 새 템플릿 생성");
             template = ColoringTemplate.builder()
