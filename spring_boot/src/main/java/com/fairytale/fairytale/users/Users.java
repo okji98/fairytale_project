@@ -2,6 +2,7 @@ package com.fairytale.fairytale.users;
 
 import com.fairytale.fairytale.article.Article;
 import com.fairytale.fairytale.baby.Baby;
+import com.fairytale.fairytale.coloring.ColoringTemplate;
 import com.fairytale.fairytale.like.Like;
 import com.fairytale.fairytale.role.Role;
 import com.fairytale.fairytale.story.Story;
@@ -71,6 +72,10 @@ public class Users {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Like> likes;
+
+    // 🎯 ColoringTemplate 관계 추가 (누락된 부분!)
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<ColoringTemplate> coloringTemplates;
 
     /**
      * 🎯 getUsername() 메서드 - Lombok @Getter로 자동 생성되어야 하지만 명시적으로 추가
