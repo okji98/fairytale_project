@@ -30,21 +30,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 path.startsWith("/coloring/") ||
                 path.equals("/health") ||
                 path.startsWith("/actuator/") ||
-                path.startsWith("/h2-console/")) {
+                path.startsWith("/h2-console/") ||
+                path.startsWith("/api/fairytale/") ||
+                path.startsWith("/api/lullaby/")) {
             filterChain.doFilter(request, response);
             return;
-        }
-
-        // 🎯 색칠공부 GET 요청 중 인증이 필요 없는 것들만 허용
-        if (path.startsWith("/api/coloring") && "GET".equals(method)) {
-            // 내 색칠공부 목록은 인증 필요
-            if (path.equals("/api/coloring/my")) {
-                // JWT 토큰 처리 계속 진행
-            } else {
-                // 다른 GET 요청들은 허용
-                filterChain.doFilter(request, response);
-                return;
-            }
         }
 
         String token = resolveToken(request); // 요청 헤더에서 토큰 꺼내기
@@ -62,12 +52,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             System.out.println("🔍 [JwtFilter] 인증 객체 생성: " + (auth != null));
             if (auth != null) {
                 System.out.println("🔍 [JwtFilter] 사용자명: " + auth.getName());
+                System.out.println("🔍 [JwtFilter] 권한: " + auth.getAuthorities());
             }
 
             // 그러고 시큐리티컨텍스트홀더에 담아준다. 담게 되면 인증을 통과한 객체라고 인식한다.
             SecurityContextHolder.getContext().setAuthentication(auth);
         } else {
             System.out.println("❌ [JwtFilter] 토큰이 없거나 유효하지 않음");
+
+            // 🎯 색칠공부 API에 대한 상세 로그
+            if (path.startsWith("/api/coloring/")) {
+                System.out.println("🎨 [JwtFilter] 색칠공부 API 접근 - 토큰 검증 실패");
+                if (token == null) {
+                    System.out.println("❌ [JwtFilter] Authorization 헤더에 토큰이 없음");
+                } else {
+                    System.out.println("❌ [JwtFilter] 토큰이 유효하지 않음: " + token.substring(0, Math.min(20, token.length())) + "...");
+                }
+            }
         }
 
         // 다음 요청을 처리하도록 넘긴다.

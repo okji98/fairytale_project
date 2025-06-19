@@ -22,6 +22,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
   double _speed = 1.0;
   String? _selectedTheme;
   String? _selectedVoice;
+
   // 🆕 babyId 변수 추가
   int? _selectedBabyId; // baby의 ID를 저장할 변수
 
@@ -232,8 +233,8 @@ class _StoriesScreenState extends State<StoriesScreen> {
         setState(() {
           _generatedStory =
               responseData['content'] ??
-              responseData['story'] ??
-              '동화 내용을 불러올 수 없습니다.';
+                  responseData['story'] ??
+                  '동화 내용을 불러올 수 없습니다.';
           _storyId = responseData['id'];
         });
 
@@ -253,9 +254,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
       } else {
         print('❌ API 오류: ${response.statusCode}');
         final errorMessage =
-            response.body.isNotEmpty
-                ? json.decode(response.body)['message'] ?? '동화 생성에 실패했습니다.'
-                : '동화 생성에 실패했습니다.';
+        response.body.isNotEmpty
+            ? json.decode(response.body)['message'] ?? '동화 생성에 실패했습니다.'
+            : '동화 생성에 실패했습니다.';
         _showError(errorMessage);
       }
     } catch (e) {
@@ -456,7 +457,9 @@ class _StoriesScreenState extends State<StoriesScreen> {
         // 앱의 임시 디렉토리에 저장
         final appDir = await getTemporaryDirectory();
         final fileName =
-            'story_audio_${_storyId}_${DateTime.now().millisecondsSinceEpoch}.mp3';
+            'story_audio_${_storyId}_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.mp3';
         final localFile = File('${appDir.path}/$fileName');
 
         await localFile.writeAsBytes(audioBytes);
@@ -542,8 +545,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
   }
 
   // 🔗 Presigned URL 요청 (보안이 필요한 경우)
-  Future<String?> _requestPresignedUrl(
-    int storyId, {
+  Future<String?> _requestPresignedUrl(int storyId, {
     int expirationMinutes = 60,
   }) async {
     try {
@@ -659,19 +661,17 @@ class _StoriesScreenState extends State<StoriesScreen> {
     }
   }
 
-  // stories_screen.dart - _getBlackWhiteImageAndNavigate 메서드 수정
 
   // 1. 🎯 _getBlackWhiteImageAndNavigate 메서드 완전 수정 (색칠공부 화면으로 이동)
   // 🎯 흑백 변환 후 템플릿 목록으로 이동하는 방식
+
   Future<void> _getBlackWhiteImageAndNavigate() async {
     if (_storyId == null) {
       _showError('동화를 먼저 생성해주세요.');
       return;
     }
 
-    if (_colorImageUrl == null ||
-        _colorImageUrl!.isEmpty ||
-        _colorImageUrl == 'null') {
+    if (_colorImageUrl == null || _colorImageUrl!.isEmpty || _colorImageUrl == 'null') {
       _showError('컬러 이미지를 먼저 생성해주세요.');
       return;
     }
@@ -704,8 +704,6 @@ class _StoriesScreenState extends State<StoriesScreen> {
 
       if (bwResponse.statusCode == 200) {
         final bwResponseData = json.decode(bwResponse.body);
-
-        // 🔍 응답에서 흑백 이미지 URL 추출
         if (bwResponseData.containsKey('image_url')) {
           blackWhiteImageUrl = bwResponseData['image_url'];
           print('✅ 흑백 변환 성공: $blackWhiteImageUrl');
@@ -750,14 +748,27 @@ class _StoriesScreenState extends State<StoriesScreen> {
             ),
           );
 
-          // 🎯 색칠공부 화면으로 이동 (템플릿 목록 표시)
+          // 🔍 디버깅을 위해 1초 대기
+          await Future.delayed(Duration(seconds: 1));
+
+          // 🎯 색칠공부 화면으로 이동 - 새로 생성된 템플릿 정보 전달
           Navigator.pushNamed(
             context,
             '/coloring',
             arguments: {
-              'showTemplates': true, // 🎯 템플릿 목록 화면 표시
               'fromStory': true,
-              'newTemplateId': responseData['template']?['id'], // 새로 만든 템플릿 강조
+              'newTemplateCreated': true,
+              'templateData': {
+                'id': responseData['template']?['id'],
+                'storyId': _storyId.toString(),
+                'title': '${_nameController.text}의 $_selectedTheme 색칠공부',
+                'originalImageUrl': _colorImageUrl,
+                'blackWhiteImageUrl': blackWhiteImageUrl,
+                'imageUrl': blackWhiteImageUrl, // 색칠용으로 흑백 이미지 사용
+              },
+              // 🎯 즉시 색칠할 수 있도록 이미지 URL 직접 전달
+              'imageUrl': blackWhiteImageUrl,
+              'isBlackAndWhite': true,
             },
           );
         } else {

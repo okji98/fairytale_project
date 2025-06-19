@@ -45,6 +45,16 @@ public class SecurityConfig {
                         .requestMatchers("/oauth/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
 
+                        // 🎯 색칠공부 API 상세 권한 설정 (핵심 수정!)
+                        .requestMatchers(HttpMethod.GET, "/api/coloring/templates").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/coloring/templates/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/coloring/create-template").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/coloring/save").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/coloring/save-coloring-work").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/coloring/templates/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/coloring/share/**").authenticated()
+                        .requestMatchers("/api/coloring/templates/search").authenticated()
+
                         // 업로드 관련 경로
                         .requestMatchers("/api/upload/**").authenticated()
 
@@ -53,18 +63,20 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/user/**").authenticated()
                         .requestMatchers("/api/user/health").permitAll()
 
+                        // 갤러리 API
+                        .requestMatchers("/api/gallery/**").authenticated()
+
                         // 정적 리소스 경로 허용
                         .requestMatchers("/coloring/**").permitAll()
-
-                        // 🔥 갤러리처럼 단순하게! (복잡한 설정 제거)
-                        .requestMatchers("/api/gallery/**").authenticated()
-                        .requestMatchers("/api/coloring/**").authenticated()  // 🎯 이것만!
 
                         // 자장가 허용
                         .requestMatchers("/api/lullaby/**").permitAll()
 
                         // FastAPI 경로 허용
-                        .requestMatchers("/api/fairytale/**", "/health", "/actuator/**", "/h2-console/**").permitAll()
+                        .requestMatchers("/api/fairytale/**").permitAll()
+
+                        // 헬스체크 및 관리 경로
+                        .requestMatchers("/health", "/actuator/**", "/h2-console/**").permitAll()
 
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()

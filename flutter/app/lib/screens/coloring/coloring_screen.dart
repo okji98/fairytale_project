@@ -59,7 +59,12 @@ class _ColoringScreenState extends State<ColoringScreen> {
   @override
   void initState() {
     super.initState();
-    _loadColoringTemplates();
+    // 🎯 템플릿 로드를 didChangeDependencies 이후로 연기
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_selectedImageUrl == null) {
+        _loadColoringTemplates();
+      }
+    });
   }
 
   @override
@@ -86,26 +91,56 @@ class _ColoringScreenState extends State<ColoringScreen> {
       // 🔍 동화에서 왔는지 확인
       _fromStory = arguments['fromStory'] ?? false;
       _fallbackMode = arguments['fallbackMode'] ?? false;
+      bool newTemplateCreated = arguments['newTemplateCreated'] ?? false;
 
-      print('🔍 fromStory: $_fromStory, fallbackMode: $_fallbackMode');
+      print('🔍 fromStory: $_fromStory, fallbackMode: $_fallbackMode, newTemplateCreated: $newTemplateCreated');
 
-      // 🖼️ 이미지 URL 설정
+      // 🖼️ 이미지 URL 설정 (우선순위 정리)
+      String? imageUrl;
+
+      // 1. arguments에서 직접 전달된 imageUrl (최우선)
       if (arguments.containsKey('imageUrl')) {
-        setState(() {
-          _selectedImageUrl = arguments['imageUrl'];
-          _isBlackAndWhite = arguments['isBlackAndWhite'] ?? false;
-        });
-        print('✅ imageUrl 받음: $_selectedImageUrl');
+        imageUrl = arguments['imageUrl'];
+        print('✅ arguments에서 imageUrl 받음: $imageUrl');
       }
 
-      // 🎨 템플릿 데이터에서 이미지 URL 추출 (우선순위)
-      if (_templateData != null && _templateData!.containsKey('imageUrl')) {
+      // 2. 템플릿 데이터에서 흑백 이미지 URL 추출
+      if (imageUrl == null && _templateData != null) {
+        imageUrl = _templateData!['blackWhiteImageUrl'] ??
+            _templateData!['imageUrl'];
+        print('✅ 템플릿에서 imageUrl 추출: $imageUrl');
+      }
+
+      if (imageUrl != null && imageUrl.isNotEmpty) {
         setState(() {
-          _selectedImageUrl = _templateData!['imageUrl'];
+          _selectedImageUrl = imageUrl;
+          _isBlackAndWhite = arguments['isBlackAndWhite'] ?? true;
         });
-        print('✅ 템플릿에서 imageUrl 사용: $_selectedImageUrl');
+        print('✅ 최종 선택된 imageUrl: $_selectedImageUrl');
+      }
+
+      // 🎯 새 템플릿이 생성된 경우 템플릿 목록 새로고침
+      if (newTemplateCreated) {
+        print('🔄 새 템플릿 생성으로 인한 목록 새로고침');
+        Future.delayed(Duration(milliseconds: 500), () {
+          _loadColoringTemplates();
+        });
       }
     }
+  }
+  // 🎯 화면 초기화 (한 번만 실행)
+  Future<void> _initializeScreen() async {
+    if (_selectedImageUrl == null) {
+      // 이미지가 선택되지 않은 경우에만 템플릿 로드
+      await _loadColoringTemplates();
+    }
+  }
+
+  // 🎯 새 템플릿 생성 후 목록 새로고침
+  Future<void> _refreshTemplatesAfterDelay() async {
+    // 잠시 대기 후 템플릿 목록 새로고침 (서버 처리 시간 고려)
+    await Future.delayed(Duration(milliseconds: 500));
+    await _loadColoringTemplates();
   }
 
   // 🎯 템플릿 삭제 기능
@@ -192,29 +227,78 @@ class _ColoringScreenState extends State<ColoringScreen> {
     setState(() => _currentScale = 1.0);
   }
 
-  // 템플릿 로드
+  // 템플릿 로드 (개선된 버전)
   Future<void> _loadColoringTemplates() async {
     setState(() => _isLoading = true);
+
     try {
+      print('🔍 색칠공부 템플릿 로드 시작');
+
       final templatesData = await ApiService.getColoringTemplates(page: 0, size: 20);
+
       if (templatesData != null && templatesData.isNotEmpty) {
+        final templates = templatesData.map((json) => ColoringTemplate.fromJson(json)).toList();
+
         setState(() {
-          _templates = templatesData.map((json) => ColoringTemplate.fromJson(json)).toList();
+          _templates = templates;
         });
+
+        print('✅ 색칠공부 템플릿 ${templates.length}개 로드 성공');
+
+        // 🔍 템플릿 정보 디버깅
+        for (var template in templates) {
+          print('📋 템플릿: ${template.title}');
+          print('   - imageUrl: ${template.imageUrl}');
+          print('   - blackWhiteImageUrl: ${template.blackWhiteImageUrl}');
+          print('   - originalImageUrl: ${template.originalImageUrl}');
+        }
       } else {
         setState(() {
           _templates = [];
         });
+        print('⚠️ 로드된 색칠공부 템플릿이 없음');
       }
     } catch (e) {
       print('❌ 템플릿 로드 실패: $e');
       setState(() {
         _templates = [];
       });
+
+      // 🔍 오류 상세 정보 표시
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('템플릿 로드 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
   }
+
+// 🎯 개선된 템플릿 선택 처리
+  void _selectTemplate(ColoringTemplate template) {
+    print('🎨 템플릿 선택: ${template.title}');
+    print('🔍 선택된 이미지 URL: ${template.imageUrl}');
+
+    setState(() {
+      // 🎯 흑백 이미지를 우선적으로 사용
+      _selectedImageUrl = template.blackWhiteImageUrl ?? template.imageUrl;
+      _templateData = {
+        'id': template.id,
+        'storyId': template.storyId,
+        'title': template.title,
+        'originalImageUrl': template.originalImageUrl,
+        'blackWhiteImageUrl': template.blackWhiteImageUrl,
+        'imageUrl': template.imageUrl,
+      };
+      _drawingPoints.clear();
+      _isBlackAndWhite = true; // 색칠용은 항상 흑백
+    });
+
+    print('✅ 템플릿 선택 완료 - 최종 URL: $_selectedImageUrl');
+  }
+
 
 // 🎨 색칠 완성작 저장 메서드 (완전히 새로운 버전)
   Future<void> _saveColoredImage() async {

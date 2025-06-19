@@ -301,6 +301,15 @@ class ApiService {
     return null;
   }
 
+  // ApiService.dart에 디버깅 메서드 추가
+  static Future<void> debugColoringTemplates() async {
+    final token = await getStoredAccessToken();
+    print('🔐 저장된 JWT 토큰: ${token?.substring(0, 20)}...');
+
+    final templates = await getColoringTemplates();
+    print('📋 조회된 템플릿 개수: ${templates?.length ?? 0}');
+  }
+
   // 🎨 색칠 완성작 저장
   static Future<Map<String, dynamic>?> saveColoredImage({
     required Map<String, dynamic> coloringData,
