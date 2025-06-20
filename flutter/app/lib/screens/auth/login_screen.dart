@@ -67,7 +67,8 @@ class LoginScreen extends StatelessWidget {
 
       // ⭐ 카카오 개발자 콘솔에 등록된 설정 사용
       const clientId = '9b0881fcab5b67f9f17c9dd43b08fb7a'; // JavaScript 키
-      const redirectUri = 'http://localhost:8081/auth/kakao/callback'; // 콘솔에 등록된 URI
+      const redirectUri =
+          'http://localhost:8081/auth/kakao/callback'; // 콘솔에 등록된 URI
 
       final loginUrl =
           'https://kauth.kakao.com/oauth/authorize?'
@@ -95,7 +96,8 @@ class LoginScreen extends StatelessWidget {
         if (request.uri.path == '/auth/kakao/callback') {
           final authCode = request.uri.queryParameters['code'];
           final error = request.uri.queryParameters['error'];
-          final errorDescription = request.uri.queryParameters['error_description'];
+          final errorDescription =
+              request.uri.queryParameters['error_description'];
 
           if (error != null) {
             print('❌ 카카오 로그인 오류: $error');
@@ -188,10 +190,10 @@ class LoginScreen extends StatelessWidget {
 
   // 🆕 카카오 Access Token 획득
   Future<String?> _getKakaoAccessToken(
-      String authCode,
-      String clientId,
-      String redirectUri,
-      ) async {
+    String authCode,
+    String clientId,
+    String redirectUri,
+  ) async {
     try {
       print('🔍 ===== 토큰 요청 시작 =====');
       print('🔍 authCode: $authCode');
@@ -236,36 +238,93 @@ class LoginScreen extends StatelessWidget {
     }
   }
 
-  // ✅ 구글 로그인 (🔧 Access Token 우선 반환)
+  // google login accessToken
   Future<String?> _loginWithGoogle() async {
     try {
       print('🔍 구글 로그인 시작');
+      print('🔍 현재 플랫폼: ${Platform.operatingSystem}');
+      print('🔍 현재 시간: ${DateTime.now()}');
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
         clientId:
-        Platform.isMacOS
-            ? '910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com'
-            : null,
+            Platform.isMacOS
+                ? '910828369145-0b44tjdtgl37p23h0k3joul6eue18k6s.apps.googleusercontent.com'
+                : null,
       );
 
-      final GoogleSignInAccount? account = await googleSignIn.signIn();
+      print('🔍 GoogleSignIn 객체 생성 완료');
+      print('🔍 Client ID 설정: ${googleSignIn.clientId}');
+      print('🔍 Scopes 설정: ${googleSignIn.scopes}');
+
+      // ⭐ 현재 로그인 상태 확인
+      GoogleSignInAccount? currentUser = googleSignIn.currentUser;
+      print('🔍 현재 로그인된 사용자: ${currentUser?.email ?? "없음"}');
+
+      // ⭐ 기존 로그인이 있다면 로그아웃 후 재시도
+      if (currentUser != null) {
+        print('🔍 기존 로그인 발견 - 로그아웃 후 재시도');
+        await googleSignIn.signOut();
+        await googleSignIn.disconnect();
+      }
+
+      print('🔍 signIn() 호출 시작...');
+
+      // ⭐ 타임아웃 설정으로 무한 대기 방지
+      final GoogleSignInAccount? account = await googleSignIn.signIn().timeout(
+        Duration(seconds: 30),
+        onTimeout: () {
+          print('❌ 구글 로그인 타임아웃 (30초)');
+          return null;
+        },
+      );
+
+      print('🔍 signIn() 결과: ${account?.email ?? "null"}');
+
       if (account == null) {
-        print("❌ 구글 로그인 취소됨");
+        print("❌ 구글 로그인 취소됨 또는 실패");
+
+        // ⭐ 실패 원인 추가 분석
+        try {
+          bool isSignedIn = await googleSignIn.isSignedIn();
+          print('🔍 현재 로그인 상태: $isSignedIn');
+        } catch (e) {
+          print('❌ 로그인 상태 확인 오류: $e');
+        }
+
         return null;
       }
 
+      print("✅ 구글 계정 정보:");
+      print("   - Email: ${account.email}");
+      print("   - Display Name: ${account.displayName}");
+      print("   - ID: ${account.id}");
+
+      print('🔍 인증 토큰 요청 시작...');
       final GoogleSignInAuthentication auth = await account.authentication;
+
       final accessToken = auth.accessToken;
       final idToken = auth.idToken;
 
-      print("✅ 구글 Access Token 획득: ${accessToken?.substring(0, 20)}...");
-      print("✅ 구글 ID Token 획득: ${idToken?.substring(0, 20)}...");
+      print("✅ 토큰 획득 결과:");
+      print(
+        "   - Access Token: ${accessToken != null ? '${accessToken.substring(0, 20)}...' : 'null'}",
+      );
+      print(
+        "   - ID Token: ${idToken != null ? '${idToken.substring(0, 20)}...' : 'null'}",
+      );
 
-      // 🔧 Access Token을 우선적으로 반환 (서버에서 Google API 호출용)
+      if (accessToken == null && idToken == null) {
+        print("❌ 모든 토큰이 null입니다!");
+        return null;
+      }
+
       return accessToken ?? idToken;
-    } catch (e) {
-      print('❌ 구글 로그인 오류: $e');
+    } catch (e, stackTrace) {
+      print('❌ 구글 로그인 상세 오류:');
+      print('   - 오류 타입: ${e.runtimeType}');
+      print('   - 오류 메시지: $e');
+      print('   - 스택 트레이스: $stackTrace');
       return null;
     }
   }
@@ -306,15 +365,14 @@ class LoginScreen extends StatelessWidget {
       final dio = Dio();
       final userResponse = await dio.get(
         'https://kapi.kakao.com/v2/user/me',
-        options: Options(
-          headers: {'Authorization': 'Bearer $kakaoToken'},
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $kakaoToken'}),
       );
 
       if (userResponse.statusCode == 200) {
         final userData = userResponse.data;
         final email = userData['kakao_account']?['email'] ?? '';
-        final nickname = userData['kakao_account']?['profile']?['nickname'] ?? '';
+        final nickname =
+            userData['kakao_account']?['profile']?['nickname'] ?? '';
 
         print('✅ 카카오 사용자 정보: email=$email, nickname=$nickname');
 
@@ -379,11 +437,7 @@ class LoginScreen extends StatelessWidget {
       print('✅ [LoginScreen] 다음 화면으로 이동: $nextRoute');
 
       // 모든 이전 화면 제거하고 이동
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        nextRoute,
-            (route) => false,
-      );
+      Navigator.pushNamedAndRemoveUntil(context, nextRoute, (route) => false);
     } catch (e) {
       print('❌ [LoginScreen] 네비게이션 오류: $e');
       // 오류 시 아이 정보 입력 화면으로 (안전장치)
@@ -397,15 +451,15 @@ class LoginScreen extends StatelessWidget {
       context: context,
       builder:
           (_) => AlertDialog(
-        title: const Text('로그인 오류'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('확인'),
+            title: const Text('로그인 오류'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('확인'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -425,7 +479,10 @@ class LoginScreen extends StatelessWidget {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Color(0xFF8B5A6B)),
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: Color(0xFF8B5A6B),
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                   Expanded(
@@ -476,11 +533,14 @@ class LoginScreen extends StatelessWidget {
                         showDialog(
                           context: context,
                           barrierDismissible: false,
-                          builder: (context) => Center(
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5A6B)),
-                            ),
-                          ),
+                          builder:
+                              (context) => Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Color(0xFF8B5A6B),
+                                  ),
+                                ),
+                              ),
                         );
 
                         try {
@@ -532,18 +592,23 @@ class LoginScreen extends StatelessWidget {
                         showDialog(
                           context: context,
                           barrierDismissible: false,
-                          builder: (context) => Center(
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B5A6B)),
-                            ),
-                          ),
+                          builder:
+                              (context) => Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Color(0xFF8B5A6B),
+                                  ),
+                                ),
+                              ),
                         );
 
                         try {
                           final googleToken = await _loginWithGoogle();
 
                           if (googleToken != null) {
-                            final result = await _handleGoogleLogin(googleToken);
+                            final result = await _handleGoogleLogin(
+                              googleToken,
+                            );
 
                             // 로딩 다이얼로그 닫기
                             Navigator.pop(context);
@@ -590,7 +655,6 @@ class LoginScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       textAlign: TextAlign.center,
                     ),
-
                   ],
                 ),
               ),

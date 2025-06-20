@@ -9,7 +9,7 @@ import 'package:http_parser/http_parser.dart';
 class ApiService {
   // 🚀 플랫폼에 따라 자동으로 서버 주소 선택
   static String get baseUrl {
-      return 'http://3.36.41.71:8080'; // EC2 서버 IP
+    return 'http://3.36.41.71:8080'; // EC2 서버 IP
     // if (Platform.isAndroid) {
     //   return 'http://10.0.2.2:8080'; // Android 에뮬레이터
     // } else if (Platform.isIOS) {
@@ -67,7 +67,7 @@ class ApiService {
 
   // ApiService.dart에 추가할 메서드
 
-// 🎨 색칠공부 템플릿 생성 (새로 추가)
+  // 🎨 색칠공부 템플릿 생성 (새로 추가)
   static Future<Map<String, dynamic>?> createColoringTemplate({
     required String storyId,
     required String title,
@@ -127,7 +127,6 @@ class ApiService {
         print('❌ [ApiService] 색칠공부 템플릿 생성 실패: ${response.statusCode}');
         return {'success': false, 'error': '서버 오류: ${response.statusCode}'};
       }
-
     } on DioException catch (e) {
       print('❌ [ApiService] 색칠공부 템플릿 생성 네트워크 오류:');
       print('  - 오류 타입: ${e.type}');
@@ -155,7 +154,7 @@ class ApiService {
     }
   }
 
-// 🗑️ 색칠공부 템플릿 삭제 (새로 추가)
+  // 🗑️ 색칠공부 템플릿 삭제 (새로 추가)
   static Future<bool> deleteColoringTemplate(int templateId) async {
     try {
       print('🗑️ [ApiService] 색칠공부 템플릿 삭제 요청 - ID: $templateId');
@@ -190,7 +189,6 @@ class ApiService {
 
       print('❌ [ApiService] 색칠공부 템플릿 삭제 실패');
       return false;
-
     } on DioException catch (e) {
       print('❌ [ApiService] 색칠공부 템플릿 삭제 오류: ${e.message}');
 
@@ -205,7 +203,7 @@ class ApiService {
     }
   }
 
-// 🎨 색칠공부 템플릿 목록 조회 (JWT 토큰 추가)
+  // 🎨 색칠공부 템플릿 목록 조회 (JWT 토큰 추가)
   static Future<List<Map<String, dynamic>>?> getColoringTemplates({
     int page = 0,
     int size = 20,
@@ -250,9 +248,9 @@ class ApiService {
           final List<dynamic> templatesJson = responseData['templates'] ?? [];
 
           final templates =
-          templatesJson
-              .map((json) => Map<String, dynamic>.from(json))
-              .toList();
+              templatesJson
+                  .map((json) => Map<String, dynamic>.from(json))
+                  .toList();
 
           print('✅ 색칠공부 템플릿 ${templates.length}개 조회 성공');
           return templates;
@@ -262,9 +260,9 @@ class ApiService {
           // 🎯 만약 응답이 배열이라면 직접 반환
           if (responseData is List) {
             final templates =
-            responseData
-                .map((json) => Map<String, dynamic>.from(json))
-                .toList();
+                responseData
+                    .map((json) => Map<String, dynamic>.from(json))
+                    .toList();
             print('✅ 직접 배열로 받은 템플릿 ${templates.length}개');
             return templates;
           }
@@ -464,9 +462,9 @@ class ApiService {
           final List<dynamic> templatesJson = responseData['templates'] ?? [];
 
           final templates =
-          templatesJson
-              .map((json) => Map<String, dynamic>.from(json))
-              .toList();
+              templatesJson
+                  .map((json) => Map<String, dynamic>.from(json))
+                  .toList();
 
           print('✅ [ApiService] 색칠공부 템플릿 검색 결과 ${templates.length}개');
           return templates;
@@ -486,8 +484,8 @@ class ApiService {
 
   // 🎯 특정 템플릿 상세 조회 - 새로 추가
   static Future<Map<String, dynamic>?> getColoringTemplateDetail(
-      int templateId,
-      ) async {
+    int templateId,
+  ) async {
     try {
       print('🎨 [ApiService] 색칠공부 템플릿 상세 조회 - ID: $templateId');
 
@@ -513,8 +511,8 @@ class ApiService {
 
   // 🎯 동화 ID로 색칠공부 템플릿 조회 - 새로 추가
   static Future<Map<String, dynamic>?> getColoringTemplateByStoryId(
-      String storyId,
-      ) async {
+    String storyId,
+  ) async {
     try {
       print('🎨 [ApiService] 동화별 색칠공부 템플릿 조회 - StoryId: $storyId');
 
@@ -590,7 +588,9 @@ class ApiService {
   }
 
   // 사용자 프로필 조회
-  static Future<Map<String, dynamic>?> getUserProfile({required int userId}) async {
+  static Future<Map<String, dynamic>?> getUserProfile({
+    required int userId,
+  }) async {
     try {
       print('🔍 [ApiService] 사용자 프로필 조회: userId=$userId');
 
@@ -604,11 +604,7 @@ class ApiService {
 
       final response = await _dio.get(
         '/api/user/profile/$userId',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $accessToken',
-          },
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
       );
 
       print('✅ [ApiService] 사용자 프로필 조회 응답: ${response.statusCode}');
@@ -788,7 +784,6 @@ class ApiService {
     }
   }
 
-
   // 로그인 상태 확인
   static Future<bool> isLoggedIn() async {
     final token = await getStoredAccessToken();
@@ -850,7 +845,9 @@ class ApiService {
     required String fileType,
   }) async {
     try {
-      print('🔍 [ApiService] Presigned URL 요청 - userId: $userId, fileType: $fileType');
+      print(
+        '🔍 [ApiService] Presigned URL 요청 - userId: $userId, fileType: $fileType',
+      );
 
       // JWT 토큰 가져오기
       String? accessToken = await getStoredAccessToken();
@@ -864,10 +861,7 @@ class ApiService {
 
       final response = await _dio.post(
         '/api/upload/profile-image/presigned-url',
-        data: {
-          'userId': userId,
-          'fileType': fileType,
-        },
+        data: {'userId': userId, 'fileType': fileType},
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -913,7 +907,6 @@ class ApiService {
     return null;
   }
 
-
   // S3에 직접 파일 업로드 (Presigned URL 사용)
   static Future<bool> uploadFileToS3({
     required String presignedUrl,
@@ -950,9 +943,7 @@ class ApiService {
         presignedUrl,
         data: formData,
         options: Options(
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: {'Content-Type': 'multipart/form-data'},
           followRedirects: false,
           validateStatus: (status) => status! < 400,
         ),
@@ -960,7 +951,6 @@ class ApiService {
 
       print('✅ [ApiService] S3 업로드 성공: ${response.statusCode}');
       return true;
-
     } on DioException catch (e) {
       print('❌ [ApiService] S3 업로드 실패: ${e.message}');
       if (e.response != null) {
@@ -992,10 +982,7 @@ class ApiService {
 
       final response = await _dio.put(
         '/api/user/profile-image',
-        data: {
-          'userId': userId,
-          'profileImageKey': profileImageKey,
-        },
+        data: {'userId': userId, 'profileImageKey': profileImageKey},
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -1038,11 +1025,11 @@ class ApiService {
     return null;
   }
 
-// ApiService.dart의 uploadProfileImage 메서드를 이것으로 교체하세요
+  // ApiService.dart의 uploadProfileImage 메서드를 이것으로 교체하세요
 
-// ApiService.dart의 uploadProfileImage 메서드를 이것으로 교체하세요
+  // ApiService.dart의 uploadProfileImage 메서드를 이것으로 교체하세요
 
-// 전체 프로필 이미지 업로드 프로세스 (편의 메서드) - 수정된 버전
+  // 전체 프로필 이미지 업로드 프로세스 (편의 메서드) - 수정된 버전
   static Future<Map<String, dynamic>?> uploadProfileImage({
     required int userId,
     required File imageFile,
@@ -1128,16 +1115,13 @@ class ApiService {
         print('❌ [ApiService] fileName이 응답에 없습니다');
         return {'success': false, 'error': 'fileName을 받지 못했습니다'};
       }
-
     } catch (e) {
       print('❌ [ApiService] 프로필 이미지 업로드 프로세스 오류: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
 
-
-
-// S3에 직접 파일 업로드 (PUT 방식)
+  // S3에 직접 파일 업로드 (PUT 방식)
   static Future<bool> uploadFileToS3Direct({
     required String presignedUrl,
     required File file,
@@ -1156,16 +1140,13 @@ class ApiService {
         presignedUrl,
         data: fileBytes,
         options: Options(
-          headers: {
-            'Content-Type': contentType,
-          },
+          headers: {'Content-Type': contentType},
           validateStatus: (status) => status! < 400,
         ),
       );
 
       print('✅ [ApiService] S3 업로드 성공: ${response.statusCode}');
       return true;
-
     } on DioException catch (e) {
       print('❌ [ApiService] S3 업로드 실패: ${e.message}');
       if (e.response != null) {
