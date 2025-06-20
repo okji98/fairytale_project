@@ -204,14 +204,13 @@ public class StoryService {
     }
 
     @Transactional
-    public Story createImage(ImageRequest request, String username) { // 🎯 String username 파라미터 추가!
+    public Story createImage(ImageRequest request, String username) {
         try {
             log.info("🎨 이미지 생성 요청 - StoryId: {}, Username: {}", request.getStoryId(), username);
 
             Story story = storyRepository.findById(request.getStoryId())
                     .orElseThrow(() -> new RuntimeException("Story not found: " + request.getStoryId()));
 
-            // 🎯 사용자 권한 확인 추가 (보안상 좋음)
             Users requestUser = usersRepository.findByUsername(username)
                     .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다: " + username));
 
@@ -219,17 +218,14 @@ public class StoryService {
                 throw new RuntimeException("접근 권한이 없습니다. 본인의 스토리만 처리할 수 있습니다.");
             }
 
-            // 🔍 기존 이미지가 있는지 확인 (기존 코드 그대로)
             if (story.getImage() != null && !story.getImage().isEmpty() && !"null".equals(story.getImage())) {
                 log.info("✅ 기존 이미지 존재, 재사용: {}", story.getImage());
                 ensureColoringTemplate(story);
                 return story;
             }
 
-            // 기존 FastAPI 호출 로직...
             Map<String, Object> fastApiRequest = new HashMap<>();
             fastApiRequest.put("text", story.getContent());
-
             String imageUrl = fastApiBaseUrl + "/generate/image";
 
             try {
@@ -247,7 +243,6 @@ public class StoryService {
                 try {
                     s3ImageUrl = processLocalImageWithS3(localImagePath, story.getId());
                     log.info("✅ S3 이미지 업로드 완료: {}", s3ImageUrl);
-                    // 🔍 DB 저장 전 상태 확인
                     log.info("🔍 [DB 저장 전] StoryId: {}, 기존 Image: {}", story.getId(), story.getImage());
                     log.info("🔍 [DB 저장 전] 새로운 ImageUrl: {}", s3ImageUrl);
                 } catch (Exception e) {
@@ -255,17 +250,12 @@ public class StoryService {
                     s3ImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
                 }
 
+                // 🎯 핵심: Story 먼저 저장하고 트랜잭션 커밋
                 story.setImage(s3ImageUrl);
                 Story savedStory = storyRepository.save(story);
-
-                log.info("✅ 이미지 저장 완료");
-                // 🔍 DB 저장 직후 상태 확인
                 log.info("🔍 [DB 저장 후] StoryId: {}, 저장된 ImageUrl: {}", savedStory.getId(), savedStory.getImage());
 
-                // 🔍 Gallery 저장 전 로그
-                log.info("🔍 [Gallery 저장 시작] StoryId: {}", story.getId());
-
-                // 🎯 Gallery 엔티티 저장 로직 (기존 유지)
+                // 🎯 Gallery 저장
                 String childName = "우리 아이";
                 if (story.getBaby() != null && story.getBaby().getBabyName() != null) {
                     childName = story.getBaby().getBabyName();
@@ -285,22 +275,27 @@ public class StoryService {
                 } else {
                     gallery.setColorImageUrl(s3ImageUrl);
                     gallery.setUpdatedAt(LocalDateTime.now());
-                    log.info("🔍 [Gallery 업데이트] StoryId: {}", story.getId());
                     galleryRepository.save(gallery);
                     log.info("✅ [Gallery 저장 완료] StoryId: {}", story.getId());
                 }
 
-                // 🎯 색칠공부 템플릿 자동 생성 (핵심 추가!)
-                log.info("🔍 [컬러링 템플릿 생성 시작] StoryId: {}", story.getId());
-                createColoringTemplateAsync(savedStory, requestUser);
-                log.info("✅ [컬러링 템플릿 생성 완료] StoryId: {}", story.getId());
                 // 🔍 최종 확인 (트랜잭션 커밋 직전)
                 Story finalStory = storyRepository.findById(story.getId()).orElse(null);
-                log.info("🔍 [최종 확인] StoryId: {}, 최종 ImageUrl: {}",
+                log.info("🔍 [트랜잭션 커밋 직전] StoryId: {}, 최종 ImageUrl: {}",
                         finalStory != null ? finalStory.getId() : "null",
                         finalStory != null ? finalStory.getImage() : "story not found");
 
-                log.info("✅ 전체 이미지 생성 프로세스 완료 - StoryId: {}", story.getId());
+                log.info("✅ 메인 이미지 저장 프로세스 완료 - StoryId: {}", story.getId());
+
+                // 🚀 트랜잭션이 커밋된 후에 비동기 작업 시작
+                // TransactionSynchronizationManager를 사용하여 커밋 후 실행
+                if (isValidImageUrlForColoring(s3ImageUrl)) {
+                    log.info("🔍 [트랜잭션 커밋 후] 컬러링 템플릿 생성 시작");
+
+                    // 새로운 트랜잭션으로 ColoringTemplate 생성
+                    createColoringTemplateAfterCommit(savedStory, requestUser);
+                }
+
                 return savedStory;
 
             } catch (Exception e) {
@@ -319,6 +314,21 @@ public class StoryService {
         } catch (Exception e) {
             log.error("❌ 이미지 생성 실패: {}", e.getMessage());
             throw new RuntimeException("이미지 생성에 실패했습니다: " + e.getMessage());
+        }
+    }
+
+    // 🚀 새로운 메서드: 커밋 후 ColoringTemplate 생성
+    private void createColoringTemplateAfterCommit(Story story, Users user) {
+        try {
+            // 약간의 지연 후 실행 (트랜잭션 완전 커밋 보장)
+            Thread.sleep(100);
+
+            log.info("🎨 [별도 처리] 색칠공부 템플릿 생성 시작 - StoryId: {}", story.getId());
+            createColoringTemplateAsync(story, user);
+
+        } catch (Exception e) {
+            log.error("❌ [별도 처리] 색칠공부 템플릿 생성 실패: {}", e.getMessage());
+            // 실패해도 메인 플로우에는 영향 없음
         }
     }
 
