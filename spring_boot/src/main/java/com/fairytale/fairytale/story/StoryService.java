@@ -156,6 +156,7 @@ public class StoryService {
     }
 
     // ====== 스토리 조회 ======
+    @Transactional(readOnly = true)
     public Story getStoryById(Long id, String username) {
         Users user = usersRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
@@ -355,7 +356,7 @@ public class StoryService {
 
     // ====== 음성 생성 ======
 // StoryService.java - createVoice 메서드 수정
-
+    @Transactional
     public Story createVoice(VoiceRequest request) {
         log.info("🔍 음성 생성 시작 - StoryId: {}", request.getStoryId());
 
@@ -1122,6 +1123,7 @@ public class StoryService {
         }
     }
 
+    @Transactional(readOnly = true)
     public String generateTemporaryVoiceUrl(Long storyId, int expirationMinutes) {
         try {
             Story story = storyRepository.findById(storyId)
