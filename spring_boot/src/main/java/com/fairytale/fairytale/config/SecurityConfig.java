@@ -72,7 +72,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/lullaby/**").permitAll()
 
                         // FastAPI 경로 허용
-                        .requestMatchers("/api/fairytale/**").permitAll()
+                        .requestMatchers("/api/fairytale/**").authenticated()
 
                         // 헬스체크 및 관리 경로
                         .requestMatchers("/health", "/actuator/**", "/h2-console/**").permitAll()

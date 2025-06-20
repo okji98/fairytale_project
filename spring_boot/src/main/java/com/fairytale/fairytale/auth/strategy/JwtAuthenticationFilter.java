@@ -36,7 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 path.equals("/health") ||
                 path.startsWith("/actuator/") ||
                 path.startsWith("/h2-console/") ||
-                path.startsWith("/api/fairytale/") ||
+//                path.startsWith("/api/fairytale/") ||
                 path.startsWith("/api/lullaby/")) {
             log.info("🔍 [JwtFilter] 공개 경로로 건너뛰기");
             filterChain.doFilter(request, response);
