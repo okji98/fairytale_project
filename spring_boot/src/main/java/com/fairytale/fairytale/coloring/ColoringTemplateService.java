@@ -20,7 +20,6 @@ import java.nio.file.Paths;
 import java.util.Optional;
 
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class ColoringTemplateService {
     private final ColoringTemplateRepository coloringTemplateRepository;
@@ -33,6 +32,7 @@ public class ColoringTemplateService {
     private final UsersRepository usersRepository;
 
     // 🎯 색칠공부 템플릿 생성 (사용자 정보 포함)
+    @Transactional
     public ColoringTemplate createColoringTemplate(String storyId, String title,
                                                    String originalImageUrl, String blackWhiteImageUrl,
                                                    Users user) { // 🎯 user 파라미터 추가
@@ -83,6 +83,7 @@ public class ColoringTemplateService {
     // ====== 사용자별 조회 메서드들 ======
 
     // 🎯 사용자별 모든 색칠공부 템플릿 조회
+    @Transactional(readOnly = true)
     public Page<ColoringTemplate> getAllTemplatesByUser(String username, Pageable pageable) {
         System.out.println("🔍 [ColoringTemplateService] 사용자별 색칠공부 템플릿 목록 조회 - User: " + username);
 
@@ -121,6 +122,7 @@ public class ColoringTemplateService {
     }
 
     // 🎯 사용자별 템플릿 삭제
+    @Transactional
     public void deleteTemplateByUser(Long templateId, String username) {
         System.out.println("🗑️ [ColoringTemplateService] 사용자별 색칠공부 템플릿 삭제 - ID: " + templateId + ", User: " + username);
 
