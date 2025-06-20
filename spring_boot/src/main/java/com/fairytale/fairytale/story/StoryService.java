@@ -244,6 +244,9 @@ public class StoryService {
                 try {
                     s3ImageUrl = processLocalImageWithS3(localImagePath, story.getId());
                     log.info("✅ S3 이미지 업로드 완료: {}", s3ImageUrl);
+                    // 🔍 DB 저장 전 상태 확인
+                    log.info("🔍 [DB 저장 전] StoryId: {}, 기존 Image: {}", story.getId(), story.getImage());
+                    log.info("🔍 [DB 저장 전] 새로운 ImageUrl: {}", s3ImageUrl);
                 } catch (Exception e) {
                     log.error("❌ S3 이미지 업로드 실패: {}", e.getMessage());
                     s3ImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
@@ -253,6 +256,11 @@ public class StoryService {
                 Story savedStory = storyRepository.save(story);
 
                 log.info("✅ 이미지 저장 완료");
+                // 🔍 DB 저장 직후 상태 확인
+                log.info("🔍 [DB 저장 후] StoryId: {}, 저장된 ImageUrl: {}", savedStory.getId(), savedStory.getImage());
+
+                // 🔍 Gallery 저장 전 로그
+                log.info("🔍 [Gallery 저장 시작] StoryId: {}", story.getId());
 
                 // 🎯 Gallery 엔티티 저장 로직 (기존 유지)
                 String childName = "우리 아이";
@@ -270,20 +278,31 @@ public class StoryService {
                     gallery.setChildName(childName);
                     gallery.setCreatedAt(LocalDateTime.now());
                     galleryRepository.save(gallery);
+                    log.info("🔍 [Gallery 새로 생성] StoryId: {}", story.getId());
                 } else {
                     gallery.setColorImageUrl(s3ImageUrl);
                     gallery.setUpdatedAt(LocalDateTime.now());
+                    log.info("🔍 [Gallery 업데이트] StoryId: {}", story.getId());
                     galleryRepository.save(gallery);
+                    log.info("✅ [Gallery 저장 완료] StoryId: {}", story.getId());
                 }
 
                 // 🎯 색칠공부 템플릿 자동 생성 (핵심 추가!)
+                log.info("🔍 [컬러링 템플릿 생성 시작] StoryId: {}", story.getId());
                 createColoringTemplateAsync(savedStory, requestUser);
+                log.info("✅ [컬러링 템플릿 생성 완료] StoryId: {}", story.getId());
+                // 🔍 최종 확인 (트랜잭션 커밋 직전)
+                Story finalStory = storyRepository.findById(story.getId()).orElse(null);
+                log.info("🔍 [최종 확인] StoryId: {}, 최종 ImageUrl: {}",
+                        finalStory != null ? finalStory.getId() : "null",
+                        finalStory != null ? finalStory.getImage() : "story not found");
 
+                log.info("✅ 전체 이미지 생성 프로세스 완료 - StoryId: {}", story.getId());
                 return savedStory;
 
             } catch (Exception e) {
                 log.error("❌ 이미지 생성 실패: {}", e.getMessage());
-
+                log.error("❌ 스택 트레이스: ", e);
                 String dummyImageUrl = "https://picsum.photos/800/600?random=" + System.currentTimeMillis();
                 story.setImage(dummyImageUrl);
                 Story savedStory = storyRepository.save(story);
@@ -372,7 +391,6 @@ public class StoryService {
     // ====== ColoringTemplateService용 공개 메서드 ======
 
     @Async
-    @Transactional
     public void createColoringTemplateAsync(Story story, Users user) { // 🎯 Users user 파라미터 추가!
         try {
             log.info("🎨 색칠공부 템플릿 자동 생성 시작 - StoryId: {}, Username: {}",
