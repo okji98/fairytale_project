@@ -57,6 +57,7 @@ public class StoryService {
     private ColoringTemplateRepository coloringTemplateRepository;
 
     // ====== 스토리 생성 ======
+    @Transactional
     public Story createStory(StoryCreateRequest request, String username) {
         log.info("🔍 스토리 생성 시작 - Username: {}", username);
         log.info("🔍 받은 요청: theme={}, voice={}, babyId={}",
@@ -133,6 +134,7 @@ public class StoryService {
     }
 
     // ====== 스토리 삭제 ======
+    @Transactional
     public void deleteStoryWithVoiceFile(Long storyId, String username) {
         try {
             Story story = getStoryById(storyId, username);
