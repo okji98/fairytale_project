@@ -24,12 +24,16 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        System.out.println("🔍 [SecurityConfig] AuthenticationManager 빈 생성됨!");
         return config.getAuthenticationManager();
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
+        System.out.println("🔍 [SecurityConfig] SecurityFilterChain 빈 생성 시작!");
+        System.out.println("🔍 [SecurityConfig] jwtAuthStrategy: " + jwtAuthStrategy);
+
+        SecurityFilterChain result = http
                 // ⭐ CSRF 완전 비활성화
                 .csrf(AbstractHttpConfigurer::disable)
 
@@ -79,5 +83,8 @@ public class SecurityConfig {
                 .addFilterBefore(new JwtAuthenticationFilter(jwtAuthStrategy), UsernamePasswordAuthenticationFilter.class)
 
                 .build();
+
+        System.out.println("🔍 [SecurityConfig] SecurityFilterChain 빈 생성 완료!");
+        return result;
     }
 }

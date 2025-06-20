@@ -17,12 +17,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     public JwtAuthenticationFilter(JwtAuthStrategy jwtAuthStrategy) {
         this.jwtAuthStrategy = jwtAuthStrategy;
+        System.out.println("🔍 [JwtAuthenticationFilter] 필터 생성됨!");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String path = request.getRequestURI();
         String method = request.getMethod();
+
+        System.out.println("🔍 [JwtFilter] doFilterInternal 실행 - 경로: " + path + ", 메서드: " + method);
 
         // 🔧 OAuth 경로와 기타 공개 경로는 JWT 필터를 건너뛰기
         if (path.startsWith("/oauth/") ||
@@ -33,6 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 path.startsWith("/h2-console/") ||
                 path.startsWith("/api/fairytale/") ||
                 path.startsWith("/api/lullaby/")) {
+            System.out.println("🔍 [JwtFilter] 공개 경로로 건너뛰기");
             filterChain.doFilter(request, response);
             return;
         }
@@ -57,6 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // 그러고 시큐리티컨텍스트홀더에 담아준다. 담게 되면 인증을 통과한 객체라고 인식한다.
             SecurityContextHolder.getContext().setAuthentication(auth);
+            System.out.println("🔍 [JwtFilter] SecurityContext에 인증 정보 저장 완료");
         } else {
             System.out.println("❌ [JwtFilter] 토큰이 없거나 유효하지 않음");
 
@@ -72,6 +77,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // 다음 요청을 처리하도록 넘긴다.
+        System.out.println("🔍 [JwtFilter] 다음 필터로 넘어감");
         filterChain.doFilter(request, response);
     }
 
