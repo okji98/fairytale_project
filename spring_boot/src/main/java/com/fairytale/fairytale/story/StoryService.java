@@ -37,7 +37,6 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class StoryService {
     private final S3Service s3Service;
     private final StoryRepository storyRepository;
