@@ -363,38 +363,110 @@ public class StoryService {
     }
 
     // ====== 음성 생성 ======
-// StoryService.java - createVoice 메서드 수정
     @Transactional
     public Story createVoice(VoiceRequest request) {
-        log.info("🔍 음성 생성 시작 - StoryId: {}", request.getStoryId());
+        try {
+            log.info("🎵 음성 생성 시작 - StoryId: {}", request.getStoryId());
 
-        Story story = storyRepository.findById(request.getStoryId())
-                .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
+            // 1. 스토리 조회 및 최신 데이터 확인
+            Story story = storyRepository.findById(request.getStoryId())
+                    .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다."));
 
-        log.info("🔍 스토리 조회 성공 - Content 길이: {}", story.getContent().length());
+            log.info("🔍 스토리 조회 성공 - Content 길이: {}", story.getContent().length());
 
-        FastApiVoiceRequest fastApiRequest = new FastApiVoiceRequest();
-        fastApiRequest.setText(story.getContent());
-        fastApiRequest.setVoice(request.getVoice() != null ? request.getVoice() : "alloy");
+            // 🔥 핵심: 기존 이미지 URL 안전하게 백업!
+            String existingImageUrl = story.getImage();
+            log.info("🖼️ [백업] 기존 이미지 URL: {}", existingImageUrl);
+            log.info("🎵 [백업] 기존 음성 URL: {}", story.getVoiceContent());
 
-        // 🎯 중요: 실제 요청받은 속도 사용!
-        Double requestedSpeed = request.getSpeed();
-        if (requestedSpeed == null || requestedSpeed <= 0) {
-            requestedSpeed = 1.0; // 기본값
+            // 2. 이미지가 있는지 확인 (선택사항 - 경고만)
+            if (existingImageUrl == null || existingImageUrl.trim().isEmpty() || "null".equals(existingImageUrl.trim())) {
+                log.warn("⚠️ 이미지가 없는 상태에서 음성 생성 - StoryId: {}", request.getStoryId());
+            }
+
+            // 3. FastAPI 음성 생성 요청 준비
+            FastApiVoiceRequest fastApiRequest = new FastApiVoiceRequest();
+            fastApiRequest.setText(story.getContent());
+            fastApiRequest.setVoice(request.getVoice() != null ? request.getVoice() : "alloy");
+
+            // 속도 설정
+            Double requestedSpeed = request.getSpeed();
+            if (requestedSpeed == null || requestedSpeed <= 0) {
+                requestedSpeed = 1.0; // 기본값
+            }
+            fastApiRequest.setSpeed(requestedSpeed);
+
+            log.info("🔍 FastAPI 음성 요청 - text 길이: {}, voice: {}, speed: {}",
+                    fastApiRequest.getText().length(), fastApiRequest.getVoice(), fastApiRequest.getSpeed());
+
+            // 4. FastAPI 호출 및 음성 생성
+            String url = fastApiBaseUrl + "/generate/voice";
+            String fastApiResponse = callFastApi(url, fastApiRequest);
+
+            String voiceUrl = processBase64VoiceWithS3(fastApiResponse, story.getId());
+            log.info("✅ S3 음성 업로드 완료: {}", voiceUrl);
+
+            // 5. 🎯 핵심: 안전한 데이터 업데이트
+            log.info("💾 [업데이트 시작] 기존 Image: {}, 새 Voice: {}", existingImageUrl, voiceUrl);
+
+            // 음성 URL 설정
+            story.setVoiceContent(voiceUrl);
+
+            // 🔥 이미지 URL 명시적 복원 (절대 사라지지 않도록!)
+            if (existingImageUrl != null && !existingImageUrl.trim().isEmpty() && !"null".equals(existingImageUrl.trim())) {
+                story.setImage(existingImageUrl);
+                log.info("🔒 이미지 URL 명시적 복원 완료: {}", existingImageUrl);
+            } else {
+                log.warn("⚠️ 복원할 이미지 URL이 없음 - 기존값: '{}'", existingImageUrl);
+            }
+
+            // 6. 저장 전 최종 확인
+            log.info("💾 [저장 전 최종 확인]");
+            log.info("  - Image URL: {}", story.getImage());
+            log.info("  - Voice URL: {}", story.getVoiceContent());
+            log.info("  - Image 길이: {}", story.getImage() != null ? story.getImage().length() : 0);
+            log.info("  - Voice 길이: {}", story.getVoiceContent() != null ? story.getVoiceContent().length() : 0);
+
+            // 7. DB 저장
+            Story savedStory = storyRepository.save(story);
+
+            // 8. 저장 후 검증
+            log.info("✅ [저장 완료 검증]");
+            log.info("  - StoryId: {}", savedStory.getId());
+            log.info("  - 저장된 Image URL: {}", savedStory.getImage());
+            log.info("  - 저장된 Voice URL: {}", savedStory.getVoiceContent());
+
+            // 9. 추가 안전 검증 (DB에서 다시 조회)
+            Story reloadedStory = storyRepository.findById(savedStory.getId()).orElse(null);
+            if (reloadedStory != null) {
+                log.info("🔍 [DB 재조회 검증]");
+                log.info("  - 재조회 Image URL: {}", reloadedStory.getImage());
+                log.info("  - 재조회 Voice URL: {}", reloadedStory.getVoiceContent());
+
+                // 🚨 이미지 URL이 사라졌는지 확인
+                if (existingImageUrl != null && !existingImageUrl.trim().isEmpty() &&
+                        (reloadedStory.getImage() == null || reloadedStory.getImage().trim().isEmpty())) {
+                    log.error("🚨 경고: 이미지 URL이 사라졌습니다!");
+                    log.error("  - 원래 Image: {}", existingImageUrl);
+                    log.error("  - 현재 Image: {}", reloadedStory.getImage());
+
+                    // 🔧 긴급 복구 시도
+                    reloadedStory.setImage(existingImageUrl);
+                    Story emergencyFixed = storyRepository.save(reloadedStory);
+                    log.warn("🔧 긴급 복구 완료 - Image URL: {}", emergencyFixed.getImage());
+
+                    return emergencyFixed;
+                }
+            }
+
+            log.info("🎉 음성 생성 전체 프로세스 완료 - StoryId: {}", savedStory.getId());
+            return savedStory;
+
+        } catch (Exception e) {
+            log.error("❌ 음성 생성 실패 - StoryId: {}, Error: {}", request.getStoryId(), e.getMessage());
+            log.error("❌ 스택 트레이스: ", e);
+            throw new RuntimeException("음성 생성에 실패했습니다: " + e.getMessage());
         }
-        fastApiRequest.setSpeed(requestedSpeed);
-
-        log.info("🔍 FastAPI 음성 요청: text 길이 = {}, voice = {}, speed = {}",
-                fastApiRequest.getText().length(), fastApiRequest.getVoice(), fastApiRequest.getSpeed());
-
-        String url = fastApiBaseUrl + "/generate/voice";
-        String fastApiResponse = callFastApi(url, fastApiRequest);
-
-        String voiceUrl = processBase64VoiceWithS3(fastApiResponse, story.getId());
-        log.info("🔍 S3 처리된 음성 URL: {}", voiceUrl);
-
-        story.setVoiceContent(voiceUrl);
-        return storyRepository.save(story);
     }
 
     // ====== ColoringTemplateService용 공개 메서드 ======
