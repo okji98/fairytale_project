@@ -37,7 +37,7 @@ public class ShareService {
     private final CommentRepository commentRepository;
     private final ColoringWorkRepository coloringWorkRepository; // 추가
     /**
-     * Stories에서 비디오 생성 및 공유
+     * Stories에서 비디오 생성 및 공유 - 수정된 버전
      */
     public SharePostDTO shareFromStory(Long storyId, String username) {
         log.info("🎬 Stories에서 공유 시작 - StoryId: {}, 사용자: {}", storyId, username);
@@ -49,47 +49,139 @@ public class ShareService {
         Story story = storyRepository.findByIdAndUser(storyId, user)
                 .orElseThrow(() -> new RuntimeException("스토리를 찾을 수 없습니다: " + storyId));
 
-        // 2. 필수 데이터 검증
-        if (story.getImage() == null || story.getImage().isEmpty()) {
-            throw new RuntimeException("이미지가 없는 스토리는 공유할 수 없습니다.");
+        // 2. 개선된 필수 데이터 검증
+        String imageUrl = story.getImage();
+        String voiceUrl = story.getVoiceContent();
+
+        log.info("🔍 공유 데이터 검증 - StoryId: {}", storyId);
+        log.info("🔍 ImageUrl: {}", imageUrl);
+        log.info("🔍 VoiceUrl: {}", voiceUrl);
+
+        // 🎯 이미지 검증 (더 관대하게)
+        if (imageUrl == null || imageUrl.trim().isEmpty() || "null".equals(imageUrl.trim())) {
+            log.error("❌ 이미지 URL이 없음 - StoryId: {}, ImageUrl: '{}'", storyId, imageUrl);
+            throw new RuntimeException("이미지가 없는 스토리는 공유할 수 없습니다. 이미지를 먼저 생성해주세요.");
         }
 
-        if (story.getVoiceContent() == null || story.getVoiceContent().isEmpty()) {
-            throw new RuntimeException("음성이 없는 스토리는 공유할 수 없습니다.");
+        // 🎯 음성 검증 (더 관대하게)
+        if (voiceUrl == null || voiceUrl.trim().isEmpty() || "null".equals(voiceUrl.trim())) {
+            log.error("❌ 음성 URL이 없음 - StoryId: {}, VoiceUrl: '{}'", storyId, voiceUrl);
+            throw new RuntimeException("음성이 없는 스토리는 공유할 수 없습니다. 음성을 먼저 생성해주세요.");
         }
 
-        // 3. 비디오 생성
-        String videoUrl = videoService.createVideoFromImageAndAudio(
-                story.getImage(),
-                story.getVoiceContent(),
-                story.getTitle()
-        );
+        // 🎯 URL 유효성 추가 검증
+        if (!isValidUrl(imageUrl)) {
+            log.error("❌ 유효하지 않은 이미지 URL - StoryId: {}, ImageUrl: {}", storyId, imageUrl);
+            throw new RuntimeException("유효하지 않은 이미지 URL입니다.");
+        }
+
+        if (!isValidUrl(voiceUrl)) {
+            log.error("❌ 유효하지 않은 음성 URL - StoryId: {}, VoiceUrl: {}", storyId, voiceUrl);
+            throw new RuntimeException("유효하지 않은 음성 URL입니다.");
+        }
+
+        log.info("✅ 공유 데이터 검증 통과 - StoryId: {}", storyId);
+
+        // 3. 비디오 생성 (안전하게 처리)
+        String videoUrl;
+        try {
+            log.info("🎬 비디오 생성 시작 - StoryId: {}", storyId);
+            videoUrl = videoService.createVideoFromImageAndAudio(
+                    imageUrl,
+                    voiceUrl,
+                    story.getTitle()
+            );
+            log.info("✅ 비디오 생성 완료 - VideoUrl: {}", videoUrl);
+        } catch (Exception e) {
+            log.error("❌ 비디오 생성 실패 - StoryId: {}, Error: {}", storyId, e.getMessage());
+            // 비디오 생성 실패 시 이미지를 대신 사용
+            videoUrl = imageUrl;
+            log.info("🔄 비디오 대신 이미지 사용 - StoryId: {}, ImageUrl: {}", storyId, videoUrl);
+        }
 
         // 4. 썸네일 생성 (실패해도 진행)
-        String thumbnailUrl = story.getImage(); // 기본적으로 스토리 이미지 사용
+        String thumbnailUrl = imageUrl; // 기본적으로 스토리 이미지 사용
         try {
+            log.info("🖼️ 썸네일 생성 시작 - StoryId: {}", storyId);
             String generatedThumbnail = videoService.createThumbnail(videoUrl);
-            if (generatedThumbnail != null) {
+            if (generatedThumbnail != null && !generatedThumbnail.trim().isEmpty()) {
                 thumbnailUrl = generatedThumbnail;
+                log.info("✅ 썸네일 생성 완료 - ThumbnailUrl: {}", thumbnailUrl);
+            } else {
+                log.info("🔄 썸네일 생성 실패, 원본 이미지 사용 - StoryId: {}", storyId);
             }
         } catch (Exception e) {
-            log.warn("⚠️ 썸네일 생성 실패, 원본 이미지 사용: {}", e.getMessage());
+            log.warn("⚠️ 썸네일 생성 실패, 원본 이미지 사용 - StoryId: {}, Error: {}", storyId, e.getMessage());
         }
 
         // 5. SharePost 생성 및 저장
-        SharePost sharePost = new SharePost();
-        sharePost.setUser(user);
-        sharePost.setStoryTitle(story.getTitle());
-        sharePost.setVideoUrl(videoUrl);
-        sharePost.setThumbnailUrl(thumbnailUrl);
-        sharePost.setSourceType("STORY");
-        sharePost.setSourceId(storyId);
-        // sharePost.setChildName(story.getChildName()); // Story에 childName이 없을 수 있으므로 주석
+        try {
+            log.info("💾 SharePost 생성 및 저장 시작 - StoryId: {}", storyId);
 
-        SharePost savedPost = sharePostRepository.save(sharePost);
-        log.info("✅ Stories 공유 완료 - SharePostId: {}", savedPost.getId());
+            SharePost sharePost = new SharePost();
+            sharePost.setUser(user);
+            sharePost.setStoryTitle(story.getTitle());
+            sharePost.setVideoUrl(videoUrl);
+            sharePost.setImageUrl(imageUrl); // 🎯 이미지 URL도 설정
+            sharePost.setThumbnailUrl(thumbnailUrl);
+            sharePost.setSourceType("STORY");
+            sharePost.setSourceId(storyId);
 
-        return convertToDTO(savedPost, user);
+            // 🎯 아이 이름 설정 (Baby 정보에서 가져오기)
+            String childName = getChildNameFromStory(story);
+            String displayName = childName != null ? childName + "의 부모" : user.getUsername() + "님";
+            sharePost.setUserName(displayName);
+
+            SharePost savedPost = sharePostRepository.save(sharePost);
+            log.info("✅ SharePost 저장 완료 - SharePostId: {}, StoryId: {}", savedPost.getId(), storyId);
+
+            SharePostDTO result = convertToDTO(savedPost, user);
+            log.info("✅ Stories 공유 전체 프로세스 완료 - SharePostId: {}, StoryId: {}", savedPost.getId(), storyId);
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("❌ SharePost 저장 실패 - StoryId: {}, Error: {}", storyId, e.getMessage());
+            throw new RuntimeException("공유 게시물 저장에 실패했습니다: " + e.getMessage());
+        }
+    }
+
+    /**
+     * URL 유효성 검증 헬퍼 메서드
+     */
+    private boolean isValidUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+
+        // 기본 URL 형식 검증
+        String trimmedUrl = url.trim();
+        if (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
+            // S3 URL 패턴 검증
+            return trimmedUrl.contains("amazonaws.com") ||
+                    trimmedUrl.contains("cloudfront.net") ||
+                    trimmedUrl.length() > 10; // 최소 길이 검증
+        }
+
+        return false;
+    }
+
+    /**
+     * Story에서 아이 이름 추출 헬퍼 메서드
+     */
+    private String getChildNameFromStory(Story story) {
+        try {
+            if (story.getBaby() != null && story.getBaby().getBabyName() != null) {
+                String babyName = story.getBaby().getBabyName().trim();
+                if (!babyName.isEmpty()) {
+                    return babyName;
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.debug("Baby 정보 조회 실패: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
