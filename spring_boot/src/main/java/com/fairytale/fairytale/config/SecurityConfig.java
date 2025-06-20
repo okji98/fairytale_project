@@ -66,7 +66,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/gallery/**").authenticated()
 
                         // 정적 리소스 경로 허용
-                        .requestMatchers("/coloring/**").permitAll()
+                        .requestMatchers("coloring/**").permitAll()
 
                         // 자장가 허용
                         .requestMatchers("/api/lullaby/**").permitAll()

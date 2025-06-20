@@ -36,9 +36,8 @@ public class ColoringController {
     @GetMapping("/templates")
     public ResponseEntity<Map<String, Object>> getMyColoringTemplates(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            Authentication authentication) {
-
+            @RequestParam(defaultValue = "10") int size) {
+        System.err.println("=== 컨트롤러 실행됨 ===");
         // 🎯 임시 하드코딩으로 문제 우회
         String username = "kakao_4287771333"; // 로그에서 확인된 실제 사용자명
 
