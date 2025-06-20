@@ -3,6 +3,7 @@ package com.fairytale.fairytale.config;
 import com.fairytale.fairytale.auth.strategy.JwtAuthStrategy;
 import com.fairytale.fairytale.auth.strategy.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -15,6 +16,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -24,14 +26,14 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        System.out.println("🔍 [SecurityConfig] AuthenticationManager 빈 생성됨!");
+        SecurityConfig.log.info("🔍 [SecurityConfig] AuthenticationManager 빈 생성됨!");
         return config.getAuthenticationManager();
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        System.out.println("🔍 [SecurityConfig] SecurityFilterChain 빈 생성 시작!");
-        System.out.println("🔍 [SecurityConfig] jwtAuthStrategy: " + jwtAuthStrategy);
+        SecurityConfig.log.info("🔍 [SecurityConfig] SecurityFilterChain 빈 생성 시작!");
+        SecurityConfig.log.info("🔍 [SecurityConfig] jwtAuthStrategy: " + jwtAuthStrategy);
 
         SecurityFilterChain result = http
                 // ⭐ CSRF 완전 비활성화
@@ -84,7 +86,7 @@ public class SecurityConfig {
 
                 .build();
 
-        System.out.println("🔍 [SecurityConfig] SecurityFilterChain 빈 생성 완료!");
+        SecurityConfig.log.info("🔍 [SecurityConfig] SecurityFilterChain 빈 생성 완료!");
         return result;
     }
 }
