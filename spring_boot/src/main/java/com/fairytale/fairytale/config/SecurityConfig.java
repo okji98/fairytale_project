@@ -52,7 +52,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
 
                         // 🎯 색칠공부 API 임시 전체 허용 (임시 해결)
-                        .requestMatchers("/api/coloring/**").permitAll()
+                        .requestMatchers("/api/coloring/**").authenticated()
 
                         // 업로드 관련 경로
                         .requestMatchers("/api/upload/**").authenticated()

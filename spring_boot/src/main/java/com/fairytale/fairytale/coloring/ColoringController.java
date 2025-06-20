@@ -36,16 +36,17 @@ public class ColoringController {
     @GetMapping("/templates")
     public ResponseEntity<Map<String, Object>> getMyColoringTemplates(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            Authentication auth) {
         System.err.println("=== 컨트롤러 실행됨 ===");
         // 🎯 임시 하드코딩으로 문제 우회
-        String username = "kakao_4287771333"; // 로그에서 확인된 실제 사용자명
+        // 로그에서 확인된 실제 사용자명
 
-        log.info("🔍 [임시] 색칠공부 템플릿 목록 조회 - User: {}, page: {}, size: {}", username, page, size);
+        log.info("🔍 [임시] 색칠공부 템플릿 목록 조회 - User: {}, page: {}, size: {}", auth.getName(), page, size);
 
         try {
             Page<ColoringTemplate> templates = coloringTemplateService
-                    .getAllTemplatesByUser(username, PageRequest.of(page, size));
+                    .getAllTemplatesByUser(auth.getName(), PageRequest.of(page, size));
 
             List<Map<String, Object>> templateList = templates.getContent()
                     .stream()
