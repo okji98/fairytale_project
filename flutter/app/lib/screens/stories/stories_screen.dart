@@ -1718,7 +1718,7 @@ class _StoriesScreenState extends State<StoriesScreen> {
                             SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                '음성 생성 중... 완료되면 이미지 생성 버튼이 나타납니다.',
+                                '음성 생성 중...',
                                 style: TextStyle(color: Colors.grey[600]),
                                 textAlign: TextAlign.center,
                               ),

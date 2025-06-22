@@ -285,123 +285,137 @@ class _ShareScreenState extends State<ShareScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return BaseScaffold(
-      child: SafeArea(
-        child: Column(
-          children: [
-            // 상단 앱바
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: screenWidth * 0.05,
-                vertical: screenHeight * 0.02,
-              ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: Colors.black54,
-                      size: screenWidth * 0.06,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '우리의 기록일지',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.05,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  // + 버튼 (새 게시물 작성)
-                  GestureDetector(
-                    onTap: _showCreateOptions,
-                    child: Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFFF9F8D),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
+    return WillPopScope(
+      onWillPop: () async {
+        // 🎯 뒤로가기 시 홈화면으로 이동
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        return false; // 기본 뒤로가기 동작 방지
+      },
+      child: BaseScaffold(
+        child: SafeArea(
+          child: Column(
+            children: [
+              // 상단 앱바
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.05,
+                  vertical: screenHeight * 0.02,
+                ),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        // 🎯 뒤로가기 버튼도 홈으로 이동
+                        Navigator.pushNamedAndRemoveUntil(
+                            context,
+                            '/home',
+                                (route) => false
+                        );
+                      },
                       child: Icon(
-                        Icons.add,
-                        color: Colors.white,
-                        size: screenWidth * 0.05,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 게시물 피드
-            Expanded(
-              child: _isLoading
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      color: Color(0xFFFF9F8D),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      '기록일지를 불러오는 중...',
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.04,
+                        Icons.arrow_back,
                         color: Colors.black54,
+                        size: screenWidth * 0.06,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '우리의 기록일지',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.05,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    // + 버튼 (새 게시물 작성)
+                    GestureDetector(
+                      onTap: _showCreateOptions,
+                      child: Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFF9F8D),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          Icons.add,
+                          color: Colors.white,
+                          size: screenWidth * 0.05,
+                        ),
                       ),
                     ),
                   ],
-                ),
-              )
-                  : _errorMessage != null
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.grey,
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 16,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: _loadPosts,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFFFF9F8D),
-                      ),
-                      child: Text('다시 시도'),
-                    ),
-                  ],
-                ),
-              )
-                  : _posts.isEmpty
-                  ? _buildEmptyState(screenWidth, screenHeight)
-                  : RefreshIndicator(
-                onRefresh: _onRefresh,
-                color: Color(0xFFFF9F8D),
-                child: ListView.builder(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _posts.length,
-                  itemBuilder: (context, index) {
-                    return _buildPostCard(_posts[index], screenWidth, screenHeight);
-                  },
                 ),
               ),
-            ),
-          ],
+
+              // 게시물 피드
+              Expanded(
+                child: _isLoading
+                    ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        color: Color(0xFFFF9F8D),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        '기록일지를 불러오는 중...',
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.04,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+                    : _errorMessage != null
+                    ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadPosts,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFFFF9F8D),
+                        ),
+                        child: Text('다시 시도'),
+                      ),
+                    ],
+                  ),
+                )
+                    : _posts.isEmpty
+                    ? _buildEmptyState(screenWidth, screenHeight)
+                    : RefreshIndicator(
+                  onRefresh: _onRefresh,
+                  color: Color(0xFFFF9F8D),
+                  child: ListView.builder(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _posts.length,
+                    itemBuilder: (context, index) {
+                      return _buildPostCard(_posts[index], screenWidth, screenHeight);
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
