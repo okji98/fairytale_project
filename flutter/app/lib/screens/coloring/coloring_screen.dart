@@ -1182,7 +1182,7 @@ class _ColoringScreenState extends State<ColoringScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: _drawingPoints.isNotEmpty ? _clearCanvas : null,
-                  child: Text('전체지우기'),
+                  child: Text('전체삭제'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
