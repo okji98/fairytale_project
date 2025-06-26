@@ -157,7 +157,7 @@
     ↕️  
 🧠 Python FastAPI Server (AI Processing)
     ↕️
-☁️ AWS S3 + PostgreSQL + OpenAI API
+☁️ AWS S3 + AWS RDS(PostgreSQL) + OpenAI API
 ```
 
 ---
