@@ -1,284 +1,489 @@
-# 엄빠, 읽어도! - Spring Boot Backend
+<div align="center">
+  <img src="./images/bear.png" width="100" height="100" alt="Bear">
+  <h1>
+    <img src="https://capsule-render.vercel.app/api?type=rect&color=0:FFF8DC,100:F0E68C&height=100&section=header&text=Fairytale%20App&fontSize=35&fontColor=8B4513&fontAlignY=50" alt="header" />
+  </h1>
+  <p><em>🌟 아이만을 위한 특별한 동화를 만들어주는 AI 앱</em></p>
+</div>
 
-> AI 기반 맞춤형 동화 생성 서비스의 백엔드 시스템
+## 👀 About Project
+#### :raising_hand: AI 기반 개인화 동화생성 모바일 애플리케이션 "엄빠, 읽어도!"<br/>
+#### :fire: 아이만을 위한 맞춤형 동화와 색칠공부를 제공하는 풀스택 프로젝트<br/>
+#### :mortar_board: 1조 팀 협업 프로젝트 - Flutter + Spring Boot + Python FastAPI
 
-## 프로젝트 개요
+---
 
-**엄빠, 읽어도!**는 아이의 이름을 주인공으로 하는 맞춤형 동화를 AI가 자동으로 생성해주는 서비스입니다. Spring Boot 기반의 RESTful API 서버로, Flutter 모바일 앱과 Python FastAPI AI 서버 간의 중계 역할을 담당합니다.
+## 🚀 시연 영상 및 주요 결과
 
-### 개발 기간
-2025.05.26 ~ 2025.06.20 (약 4주)
+### 🎬 [전체 기능 시연 영상 보러가기](https://drive.google.com/file/d/1XXKdtG4rx2Q8TNCUGCAxraOUFC_E01TU/preview) 
+> 📱 실제 앱 사용 모습을 영상으로 확인해보세요!
 
-### 담당 역할
-- Spring Boot 기반 REST API 설계 및 구현
-- OAuth 2.0 소셜 로그인 시스템 구축
-- AI 모델 연동 및 데이터 파이프라인 구축
-- AWS S3 기반 파일 스토리지 시스템 구현
-- PostgreSQL 데이터베이스 설계 및 최적화
+### 📊 [프로젝트 발표 자료 보러가기](https://drive.google.com/file/d/1RoQF4mNE1gvWeFgRVHXDASi0m9Vq_XL0/view?usp=sharing)
+> 📋 프로젝트 기획서 및 발표 자료를 확인해보세요!
 
-<h2 align="center">
-  <a href="https://drive.google.com/file/d/1ZQlYuZHxGLPDVm8vBhs119AdJ2-UDbcF/view?usp=drive_link">
-    🐻 발표 프레젠테이션 바로가기 🐻
-  </a>
-</h2>
-**🎬 [전체 기능 시연 영상 보러가기 (Google Drive)](https://drive.google.com/file/d/1HkP3rK_5qtfcg8hXmDyoQNy0OKI3PBoe/preview?autoplay=1)**
+---
 
-## 기술 스택
-
-### Backend
-- Java 17
-- Spring Boot 3.x
-- Spring Security + JWT
-- Spring Data JPA / Hibernate
-- PostgreSQL
-- Gradle
-
-### Infrastructure
-- AWS EC2 (t3.large, Ubuntu 20.04)
-- AWS RDS (PostgreSQL 14)
-- AWS S3
-
-### External Integration
-- OAuth 2.0 (Google, Kakao)
-- OpenAI API (GPT-4, TTS)
-- Stable Diffusion API
-- Python FastAPI Server
-
-## 프로젝트 구조
-
+## 📱 앱 스크린샷
+<img src="./images/app_screen.jpg" width="700" height="400" alt="홈 화면">
 <details>
-<summary><strong>⚙️ 백엔드 (RestfulAPI) 폴더 구조 보기</strong></summary>
+<summary>
 
-```
-src/main/java/com/fairytale/
-├── 📁 auth/                    # 인증/인가 시스템
-│   ├── 📁 controller/          # OAuth 엔드포인트
-│   ├── 📁 dto/                 # 토큰 관련 DTO
-│   ├── 📁 repository/          # Refresh Token 저장소
-│   ├── 📁 service/             # 인증 비즈니스 로직
-│   └── 📁 strategy/            # 인증 전략 패턴 구현
-│       ├── AuthStrategy.java   # 전략 인터페이스
-│       ├── JwtAuthStrategy.java # JWT 구현체
-│       └── JwtAuthenticationFilter.java # 보안 필터
-│
-├── 📁 story/                   # 동화 생성 관리
-│   ├── Story.java              # 동화 엔티티
-│   ├── StoryController.java    # REST API 엔드포인트
-│   ├── StoryService.java       # 비즈니스 로직
-│   └── 📁 dto/                 # FastAPI 통신 DTO
-│       ├── FastApiStoryRequest.java
-│       ├── FastApiImageRequest.java
-│       └── FastApiVoiceRequest.java
-│
-├── 📁 coloring/                # 색칠 기능
-│   ├── ColoringTemplate.java   # 색칠 템플릿 엔티티
-│   ├── ColoringWork.java       # 사용자 작품 엔티티
-│   └── ColoringTemplateService.java # 이미지 변환 로직
-│
-├── 📁 share/                   # 커뮤니티 기능
-│   ├── SharePost.java          # 공유 게시물 엔티티
-│   ├── ShareService.java       # 좋아요, 권한 관리
-│   └── 📁 dto/
-│
-├── 📁 gallery/                 # 갤러리 시스템
-│   └── 📁 dto/
-│       └── GalleryStatsDTO.java # 통계 정보
-│
-├── 📁 service/                 # 공통 서비스
-│   ├── S3Service.java          # AWS S3 파일 업로드
-│   └── VideoService.java       # 동영상 처리
-│
-└── 📁 config/                  # 설정 파일
-    ├── SecurityConfig.java     # Spring Security 설정
-    ├── S3Config.java           # AWS S3 설정
-    └── WebConfig.java          # CORS 설정
-```
+#### 📋 앱 스크린샷 디테일 보기
 
+</summary>
+<br>
+<details>
+<summary>🏠 홈 화면</summary>
+<br>  
+> 온보딩 및 홈 화면
+  <br>
+<p align="center">
+  <img src="./images/onboarding_screen.png" width="195" height="390" alt="온보딩 화면">
+  <img src="./images/home_screen.png" width="200" height="400" alt="홈 화면">
+</p>
+</details>
+<details>
+<summary>👤 프로필 설정 화면</summary>
+<br>
+> 프로필 관리
+  <br>
+<p align="center">
+  <img src="./images/setting_screen.png" width="200" height="400" alt="프로필 화면">
+</p>
+</details>
+<details>
+<summary>📚 동화생성 화면</summary>
+<br>
+> 동화 생성 및 목록
+<br>
+<p align="center">
+  <img src="./images/stories_screen.png" width="200" height="400" alt="동화 메인">
+  <img src="./images/stories_screen2.png" width="200" height="400" alt="동화 목록">
+</p>
+</details>
+<details>
+<summary>🎨 색칠공부 화면</summary>
+<br>
+> 디지털 색칠공부
+  <br>
+<p align="center">
+  <img src="./images/coloring_screen.png" width="200" height="400" alt="색칠 화면">
+</p>
+</details>
+<details>
+<summary>🎵 자장가 화면</summary>
+<br>
+> 자장가 음악 및 영상
+  <br>
+<p align="center">
+  <img src="./images/sleep_screen.png" width="200" height="400" alt="자장가 화면">
+  <img src="./images/sleep_music_screen.png" width="200" height="400" alt="자장가 음악 화면">
+  <img src="./images/sleep_movie_screen.png" width="200" height="400" alt="자장가 영상 화면">
+  <img src="./images/sleep_movie_screen2.png" width="200" height="400" alt="자장가 영상 연결화면">
+</p>
+</details>
+<details>
+<summary>📖 우리들의 기록일지 화면</summary>
+<br>
+> 커뮤니티 공유
+  <br>
+<p align="center">
+  <img src="./images/share_screen.png" width="200" height="400" alt="기록일지 화면">
+</p>
+</details>
+<details>
+<summary>📱 태블릿 지원 화면</summary>
+<br>
+> 반응형 UI (iPad Pro)
+  <br>
+<p align="center">
+  <img src="./images/ipad_pro_screen.png" width="420" height="400" alt="iPad Pro 화면">
+</p>
+</details>
 </details>
 
-## 핵심 구현 사항
 
-### 1. OAuth 2.0 소셜 로그인 시스템
+## 🧱 Tech Stack
 
-#### Strategy Pattern을 활용한 확장 가능한 인증 구조
-```java
-public interface AuthStrategy {
-    String authenticate(Users user, Long durationMs);
-    boolean isValid(String token);
-    String getUsername(String token);
-    Authentication getAuthentication(String token);
-}
+### Frontend
+![Flutter](https://img.shields.io/badge/Flutter-02569B?style=flat-square&logo=flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-0175C2?style=flat-square&logo=dart&logoColor=white)
+
+### Backend
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-6DB33F?style=flat-square&logo=spring-boot&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=FastAPI&logoColor=white)
+
+### Database & Storage
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Amazon S3](https://img.shields.io/badge/Amazon_S3-FF9900?style=flat-square&logo=amazon-s3&logoColor=white)
+![AWS EC2](https://img.shields.io/badge/AWS_EC2-FF9900?style=flat-square&logo=amazon-ec2&logoColor=white)
+![AWS RDS](https://img.shields.io/badge/AWS_RDS-527FFF?style=flat-square&logo=amazon-rds&logoColor=white)
+
+### AI & APIs
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white)
+![Stability AI](https://img.shields.io/badge/Stability_AI-000000?style=flat-square&logo=stability-ai&logoColor=white)
+![YouTube API](https://img.shields.io/badge/YouTube_API-FF0000?style=flat-square&logo=youtube&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-5C3EE8?style=flat-square&logo=opencv&logoColor=white)
+
+### Tools
+![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat-square&logo=github&logoColor=white)
+![Notion](https://img.shields.io/badge/Notion-000000?style=flat-square&logo=notion&logoColor=white)
+![Figma](https://img.shields.io/badge/Figma-F24E1E?style=flat-square&logo=figma&logoColor=white)
+
+---
+
+## ✨ 주요 특징 (Key Features)
+🎨 **AI 동화 생성**: OpenAI GPT를 활용한 개인화된 동화 창작  
+🖼️ **AI 이미지 생성**: Stability AI로 동화 일러스트 자동 생성  
+🎵 **TTS 음성 합성**: 9가지 목소리로 동화 읽어주기  
+🎨 **색칠공부**: 생성된 이미지를 흑백 변환하여 디지털 색칠  
+📱 **갤러리**: 동화와 색칠 작품 저장 및 관리  
+🎬 **커뮤니티 공유**: 동영상 생성 후 사용자간 공유  
+🎵 **스마트 자장가**: YouTube API 기반 테마별 자장가 추천  
+
+---
+
+## 🗺️ 전체 아키텍처
+
+<p align="center">
+  <img src="./images/Architecture.png" width="700" alt="시스템 아키텍처">
+</p>
+
 ```
-
-#### 특징
-- Google, Kakao OAuth 2.0 구현
-- JWT 기반 토큰 관리 (Access Token: 1시간, Refresh Token: 14일)
-- 중복 가입 방지 로직 (동일 이메일 체크)
-- RestTemplate을 활용한 사용자 정보 조회
-
-### 2. AI 모델 통합 시스템
-
-#### 동화 생성 파이프라인
-```java
-@Transactional
-public Story createStory(StoryCreateRequest request, String username) {
-    // 1. 아이 정보 조회
-    Baby baby = babyRepository.findById(request.getBabyId())
-        .orElseThrow(() -> new RuntimeException("아이 정보를 찾을 수 없습니다"));
-    
-    // 2. FastAPI로 동화 생성 요청
-    String storyContent = callFastApi(fastApiBaseUrl + "/generate/story", 
-                                     createStoryRequest(baby, request));
-    
-    // 3. 이미지 생성 (비동기)
-    CompletableFuture<String> imageFuture = generateImage(storyContent);
-    
-    // 4. 음성 생성 (비동기)
-    CompletableFuture<String> voiceFuture = generateVoice(storyContent);
-    
-    // 5. 결과 저장 및 반환
-    return saveStory(story, imageFuture.get(), voiceFuture.get());
-}
-```
-
-#### 이미지 처리 최적화
-- Stable Diffusion API를 통한 고품질 이미지 생성
-- OpenCV 기반 흑백 변환으로 색칠 템플릿 자동 생성
-- 비동기 처리로 응답 시간 단축
-
-### 3. 파일 스토리지 시스템
-
-#### S3 업로드 서비스
-```java
-@Service
-public class S3Service {
-    public String uploadFile(MultipartFile file, String folder) {
-        String fileName = generateUniqueFileName(file);
-        ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentType(file.getContentType());
-        
-        amazonS3.putObject(new PutObjectRequest(
-            bucketName, 
-            folder + "/" + fileName, 
-            file.getInputStream(), 
-            metadata
-        ));
-        
-        return amazonS3.getUrl(bucketName, folder + "/" + fileName).toString();
-    }
-}
-```
-
-#### 특징
-- 이미지, 음성 파일 안전한 저장
-- 폴더 구조로 체계적 관리
-- 메타데이터 보존
-
-### 4. 커뮤니티 기능
-
-#### 좋아요 시스템
-```java
-@Entity
-public class SharePost {
-    @ManyToMany
-    @JoinTable(name = "share_post_likes")
-    private Set<Users> likedUsers = new HashSet<>();
-    
-    private Integer likeCount = 0;
-}
-```
-
-#### 특징
-- Set 자료구조로 중복 좋아요 방지
-- 카운트 필드로 조회 성능 최적화
-- 작성자 권한 검증 시스템
-
-## 성능 최적화
-
-### 1. JPA N+1 문제 해결
-```java
-@Query("SELECT s FROM Story s JOIN FETCH s.baby WHERE s.user = :user")
-List<Story> findAllByUserWithBaby(@Param("user") Users user);
-```
-
-### 2. 비동기 처리
-- 이미지/음성 생성 시 `@Async` 활용
-- CompletableFuture로 병렬 처리
-
-### 3. 데이터베이스 인덱싱
-- 자주 조회되는 user_id, baby_id에 인덱스 추가
-- 복합 인덱스로 조회 성능 개선
-
-## 트러블슈팅
-
-### 1. 소셜 로그인 토큰 처리 문제
-**문제**: OAuth accessToken으로 사용자 정보 조회 실패  
-**원인**: Provider별 API 엔드포인트와 응답 형식 차이  
-**해결**: RestTemplate을 활용한 Provider별 처리 로직 구현
-
-### 2. 대용량 이미지 처리로 인한 타임아웃
-**문제**: 동기 처리로 인한 응답 지연 (30초 이상)  
-**원인**: 이미지 생성 + 흑백 변환 + S3 업로드 순차 처리  
-**해결**: @Async + CompletableFuture로 비동기 병렬 처리
-
-### 3. 동시성 이슈로 인한 중복 좋아요
-**문제**: 빠른 클릭 시 중복 좋아요 발생  
-**원인**: 트랜잭션 격리 수준 문제  
-**해결**: Set 자료구조 + @Transactional 격리 수준 조정
-
-## API 문서
-
-### 인증 관련
-| Method | Endpoint | Description | Request Body |
-|--------|----------|-------------|--------------|
-| POST | `/api/auth/login` | 소셜 로그인 | `{accessToken, provider}` |
-| POST | `/api/auth/refresh` | 토큰 갱신 | `{refreshToken}` |
-
-### 동화 관리
-| Method | Endpoint | Description | Request Body |
-|--------|----------|-------------|--------------|
-| POST | `/api/stories` | 동화 생성 | `{babyId, theme}` |
-| GET | `/api/stories` | 동화 목록 조회 | - |
-| GET | `/api/stories/{id}` | 동화 상세 조회 | - |
-| DELETE | `/api/stories/{id}` | 동화 삭제 | - |
-
-### 커뮤니티
-| Method | Endpoint | Description | Request Body |
-|--------|----------|-------------|--------------|
-| GET | `/api/share` | 공유 게시물 목록 | - |
-| POST | `/api/share/{id}/like` | 좋아요 토글 | - |
-| DELETE | `/api/share/{id}` | 게시물 삭제 | - |
-
-## 프로젝트 성과
-
-- **동화 생성 시간 단축**: 동기 처리 대비 60% 단축 (30초 → 12초)
-- **API 응답 시간**: 평균 200ms 이하 유지
-- **동시 접속자 처리**: 100명 동시 접속 안정적 처리
-- **코드 재사용성**: Strategy Pattern으로 인증 모듈 확장성 확보
-
-## 향후 개선 사항
-
-- Redis 도입으로 캐싱 시스템 구축
-- WebSocket을 활용한 실시간 동화 생성 진행률 표시
-- 마이크로서비스 아키텍처로 전환
-- 테스트 커버리지 80% 이상 달성
-
-## 로컬 실행 방법
-
-```bash
-# 1. 저장소 클론
-git clone https://github.com/okji98/fairytale_project.git
-
-# 2. 환경 변수 설정
-cp application.yml.example application.yml
-
-# 3. 빌드 및 실행
-./gradlew build
-./gradlew bootRun
+📱 Flutter App (Client)
+    ↕️
+🌐 Spring Boot Server (API Gateway & Auth)
+    ↕️  
+🧠 Python FastAPI Server (AI Processing)
+    ↕️
+☁️ AWS S3 + PostgreSQL + OpenAI API
 ```
 
 ---
 
-**개발자**: 옥현우  
-**이메일**: dnflsmstltk10@gmail.com  
-**GitHub**: [github.com/okji98](https://github.com/okji98)
+## 📂 프로젝트 구조
+
+<details>
+<summary>📋 전체 프로젝트 구조 보기</summary>
+
+<div style="display: flex; align-items: flex-start; gap: 20px;">
+  <div style="flex: 1;">
+    <img src="./images/directory.png" width="500" alt="전체 디렉토리 구조">
+  </div>
+  <div style="flex: 1;">
+
+```
+fairytale_app/
+├── 📱 fairytale_flutter/          # Flutter 모바일 앱
+├── 🌐 fairytale_backend/          # Spring Boot API 서버  
+├── 🧠 fairytale_python/           # Python AI 서버
+├── ☁️ fairytale_infrastructure/   # AWS 인프라 설정
+├── 📄 docs/                      # 문서 및 기획서
+└── 🗃️ database/                  # DB 스키마 및 초기 데이터
+```
+
+  </div>
+</div>
+
+</details>
+
+<details>
+<summary>📱 Flutter 앱 구조 보기</summary>
+
+<div style="display: flex; align-items: flex-start; gap: 40px;">
+  <div style="flex: 1;">
+    <img src="./images/flutter_directory.png" width="800" alt="Flutter 디렉토리 구조">
+  </div>
+  <div style="flex: 1;">
+
+```
+lib/
+├── 📄 main.dart                   # 앱 진입점
+├── 📦 models/                     # 데이터 모델
+│   ├── user_model.dart
+│   ├── story_model.dart
+│   └── coloring_model.dart
+├── 🖥️ screens/                    # 화면 구성
+│   ├── 🏠 home_screen.dart         # 홈 화면
+│   ├── 📚 stories_screen.dart      # 동화 메인
+│   ├── 🎨 coloring/               # 색칠공부
+│   │   ├── coloring_screen.dart
+│   │   └── coloring_canvas.dart
+│   ├── 📱 gallery/                # 갤러리
+│   ├── 🎵 lullaby/                # 자장가
+│   ├── 👤 profile/                # 프로필 관리
+│   ├── 🌐 service/                # API 통신
+│   └── 🤝 share/                  # 커뮤니티
+├── 🎨 widgets/                    # 재사용 위젯
+├── 🔧 utils/                      # 유틸리티
+└── 🎭 theme/                      # 테마 설정
+```
+
+  </div>
+</div>
+
+</details>
+
+<details>
+<summary>⚙️ Spring Boot 백엔드 구조 보기</summary>
+
+<div style="display: flex; align-items: flex-start; gap: 40px;">
+  <div style="flex: 1;">
+    <img src="./images/spring_directory.png" width="800" alt="Spring Boot 디렉토리 구조">
+  </div>
+  <div style="flex: 1;">
+
+```
+src/main/java/com/fairytale/fairytale/
+├── 🔐 auth/                       # 인증/인가
+│   ├── controller/
+│   ├── service/
+│   ├── jwt/                       # JWT 토큰 관리
+│   └── oauth/                     # 소셜 로그인
+├── 👶 baby/                       # 아이 정보 관리
+│   ├── controller/
+│   ├── service/
+│   ├── repository/
+│   └── entity/
+├── 🎨 coloring/                   # 색칠공부 기능
+├── 📱 gallery/                    # 갤러리 관리
+├── 🎵 lullaby/                    # 자장가 서비스
+├── 🤝 share/                      # 커뮤니티 공유
+├── 📚 story/                      # 동화 생성 관리
+├── 🌐 config/                     # 설정 파일들
+├── 🛠️ common/                     # 공통 유틸리티
+└── 📊 FairytaleApplication.java   # 메인 클래스
+```
+
+  </div>
+</div>
+
+</details>
+
+<details>
+<summary>🧠 Python AI 서버 구조 보기</summary>
+
+<div style="display: flex; align-items: flex-start; gap: 40px;">
+  <div style="flex: 1;">
+    <img src="./images/python_directory.png" width="800" alt="Python 디렉토리 구조">
+  </div>
+  <div style="flex: 1;">
+
+```
+python/
+├── 🚀 ai_server.py                # FastAPI 메인 서버
+├── 🎮 controllers/                # API 컨트롤러
+│   ├── 🎵 music_controller.py     # 자장가 추천 AI
+│   ├── 📚 story_controller.py     # 동화 생성 AI
+│   └── 🎬 video_controller.py     # 영상 생성 AI
+├── 🧠 services/                   # AI 서비스 로직
+│   ├── openai_service.py          # OpenAI GPT 연동
+│   ├── stability_service.py       # Stability AI 연동
+│   └── youtube_service.py         # YouTube API 연동
+├── 🔧 utils/                      # 유틸리티 함수
+│   ├── image_processor.py         # 이미지 처리 (OpenCV)
+│   └── audio_processor.py         # 음성 처리
+├── 📦 models/                     # 데이터 모델
+├── ⚙️ config/                     # 설정 파일
+└── 📋 requirements.txt            # Python 패키지 목록
+```
+
+  </div>
+</div>
+
+</details>
+
+---
+
+## 📊 ERD (Entity Relationship Diagram)
+
+<p align="center">
+  <img src="./images/ERD.png" width="800" alt="데이터베이스 ERD">
+</p>
+
+> 🗄️ PostgreSQL 기반으로 설계된 데이터베이스 구조입니다.
+
+---
+
+## 🛠️ 로컬 개발 환경 설정 (Getting Started)
+
+이 프로젝트는 Docker를 사용하여 간편하게 개발 환경을 설정할 수 있습니다.
+
+### 📋 사전 요구사항
+- Git
+- Docker & Docker Compose
+- Flutter SDK (3.0 이상)
+- Java 17 (Spring Boot용)
+- Python 3.9+ (AI 서버용)
+- PostgreSQL (로컬 DB용)
+
+### 🚀 설정 단계
+
+#### 1. **저장소 클론**
+```bash
+# 전체 프로젝트 클론
+git clone https://github.com/ansdud923/fairytale_app.git
+cd fairytale_app
+
+# 또는 개별 저장소 클론
+git clone https://github.com/ansdud923/fairytale_flutter.git
+git clone https://github.com/ansdud923/fairytale_backend.git  
+git clone https://github.com/ansdud923/fairytale_python.git
+```
+
+#### 2. **환경 변수 파일 생성**
+```bash
+# Spring Boot 백엔드
+cd fairytale_backend
+cp application.properties.example application.properties
+# 필요한 환경 변수를 설정합니다 (DB, AWS, OpenAI API 키 등)
+
+# Python AI 서버
+cd ../fairytale_python
+cp .env.example .env
+# OpenAI API 키, Stability AI 키 등을 설정합니다
+
+# Flutter 앱
+cd ../fairytale_flutter
+# lib/config/config.dart 파일에서 API 엔드포인트를 설정합니다
+```
+
+#### 3. **데이터베이스 설정**
+```bash
+# PostgreSQL 실행 (Docker 사용)
+docker run --name fairytale-db \
+  -e POSTGRES_DB=fairytale \
+  -e POSTGRES_USER=fairytale \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  -d postgres:15
+```
+
+#### 4. **백엔드 서버 실행**
+```bash
+cd fairytale_backend
+
+# 의존성 설치 및 빌드
+./gradlew build
+
+# Spring Boot 서버 실행
+./gradlew bootRun
+```
+
+#### 5. **AI 서버 실행**
+```bash
+cd fairytale_python
+
+# Python 가상환경 생성
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 의존성 설치
+pip install -r requirements.txt
+
+# FastAPI 서버 실행
+uvicorn ai_server:app --host 0.0.0.0 --port 8001 --reload
+```
+
+#### 6. **Flutter 앱 실행**
+```bash
+cd fairytale_flutter
+
+# Flutter 의존성 설치
+flutter pub get
+
+# 앱 실행 (시뮬레이터 또는 실제 기기)
+flutter run
+```
+
+### 🌐 접속 확인
+- **📱 Flutter 앱**: 에뮬레이터 또는 실제 기기에서 실행
+- **🌐 Spring Boot API**: http://localhost:8080
+- **🧠 Python AI API**: http://localhost:8001
+- **📄 API 문서**: http://localhost:8080/swagger-ui.html
+
+### 🔧 개발 도구 추천
+- **IDE**: IntelliJ IDEA (백엔드), VS Code (Flutter, Python)
+- **데이터베이스 도구**: pgAdmin, DBeaver
+- **API 테스트**: Postman, Thunder Client
+- **모바일 테스트**: Android Studio Emulator, iOS Simulator
+
+### 🐳 Docker Compose 사용 (선택사항)
+전체 환경을 한 번에 실행하려면:
+
+```bash
+# 루트 디렉토리에서
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f
+
+# 서비스 중지
+docker-compose down
+```
+
+---
+
+## 💻 My Main Technologies
+📱 **Frontend**: Flutter/Dart - 크로스플랫폼 모바일 앱 개발  
+🌐 **Backend**: Spring Boot/Java - RESTful API 서버 및 인증 시스템  
+🧠 **AI Server**: Python/FastAPI - AI 모델 통합 및 처리  
+🗄️ **Database**: PostgreSQL - 관계형 데이터베이스 설계 및 관리  
+☁️ **DevOps**: AWS (EC2, RDS, S3) - 클라우드 인프라 구축  
+
+---
+
+## 🚀 Key Technologies & Features
+
+### 🧠 AI Integration
+- **Text Generation**: OpenAI GPT-4o-mini로 개인화 동화 생성
+- **Image Generation**: Stability AI (Stable Diffusion)로 동화 일러스트 생성
+- **Image Processing**: OpenCV로 흑백 변환 및 색칠공부 템플릿 제작
+- **Text-to-Speech**: OpenAI TTS API로 9가지 음성 지원
+
+### 🔐 Authentication & Security
+- **소셜 로그인**: 카카오, 구글 OAuth 2.0 연동
+- **JWT 토큰**: Access Token (1시간) + Refresh Token (14일)
+- **Strategy Pattern**: 확장 가능한 인증 시스템 설계
+
+### ☁️ Cloud & Infrastructure
+- **AWS S3**: Presigned URL을 통한 안전한 파일 스토리지
+- **AWS RDS**: PostgreSQL 기반 관계형 데이터베이스
+- **AWS EC2**: 백엔드 서버 호스팅
+
+### 📱 Mobile Development
+- **Flutter**: 크로스플랫폼 네이티브 성능
+- **반응형 UI**: MediaQuery를 활용한 다양한 화면 크기 대응
+- **CustomPainter**: 실시간 디지털 색칠 기능
+- **오디오 플레이어**: 동화 음성 재생 기능
+
+### 🎵 External APIs
+- **YouTube Data API**: 테마별 자장가 추천
+- **영상 생성**: 이미지와 음성을 결합한 동화 영상 제작
+
+---
+
+## 📋 Development Info
+📅 **개발기간**: 2025년 5월 19일 ~ 6월 23일 (총 36일)  
+👥 **팀구성**: 1조 <일단해조> (3명 풀스택 협업)  
+📱 **버전**: v1.0.0  
+🎯 **타겟**: 부모와 아이를 위한 교육 앱  
+
+---
+
+## 🤔 Project Stats
+[![GitHub stats](https://github-readme-stats.vercel.app/api?username=ansdud923&show_icons=true&theme=sunset-gradient&title_color=FF6B6B&text_color=8B4513&bg_color=0,FFCCCB,FFFFE0&border_color=FF6B6B)](https://github.com/anuraghazra/github-readme-stats)
+
+[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=ansdud923&layout=compact&theme=sunset-gradient&title_color=FF6B6B&text_color=8B4513&bg_color=0,FFCCCB,FFFFE0&border_color=FF6B6B&include_repos=fairytale_app&langs_count=8)](https://github.com/anuraghazra/github-readme-stats)
+
+---
+
+## 🤝 Team Contribution
+이 프로젝트에서 **Flutter 모바일 앱 개발**, **Spring Boot 백엔드 API**, 
+**데이터베이스 설계** 등 전 영역에 걸쳐 기여했습니다.
+
+---
+
+> 🎭 **"엄빠, 읽어도!"**는 AI 기술을 활용해
+> 아이만을 위한 특별한 동화를 만들어주는 혁신적인 교육 앱입니다.
