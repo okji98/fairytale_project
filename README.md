@@ -46,6 +46,9 @@
 
 ## 프로젝트 구조
 
+<details>
+<summary><strong>⚙️ 백엔드 (RestfulAPI) 폴더 구조 보기</strong></summary>
+
 ```
 src/main/java/com/fairytale/
 ├── 📁 auth/                    # 인증/인가 시스템
@@ -90,6 +93,8 @@ src/main/java/com/fairytale/
     ├── S3Config.java           # AWS S3 설정
     └── WebConfig.java          # CORS 설정
 ```
+
+</details>
 
 ## 핵심 구현 사항
 
