@@ -323,29 +323,29 @@ python/
 #### 1. **저장소 클론**
 ```bash
 # 전체 프로젝트 클론
-git clone https://github.com/ansdud923/fairytale_app.git
-cd fairytale_app
+git clone https://github.com/okji98/fairytale_project.git
+cd fairytale_project
 
 # 또는 개별 저장소 클론
-git clone https://github.com/ansdud923/fairytale_flutter.git
-git clone https://github.com/ansdud923/fairytale_backend.git  
-git clone https://github.com/ansdud923/fairytale_python.git
+git clone https://github.com/okji98/flutter.git
+git clone https://github.com/okji98/spring_boot.git  
+git clone https://github.com/okji98/python.git
 ```
 
 #### 2. **환경 변수 파일 생성**
 ```bash
 # Spring Boot 백엔드
-cd fairytale_backend
-cp application.properties.example application.properties
+cd spring_boot
+cp application.yml.example application.yml
 # 필요한 환경 변수를 설정합니다 (DB, AWS, OpenAI API 키 등)
 
 # Python AI 서버
-cd ../fairytale_python
+cd ../python
 cp .env.example .env
 # OpenAI API 키, Stability AI 키 등을 설정합니다
 
 # Flutter 앱
-cd ../fairytale_flutter
+cd ../flutter
 # lib/config/config.dart 파일에서 API 엔드포인트를 설정합니다
 ```
 
@@ -409,28 +409,12 @@ flutter run
 - **API 테스트**: Postman, Thunder Client
 - **모바일 테스트**: Android Studio Emulator, iOS Simulator
 
-### 🐳 Docker Compose 사용 (선택사항)
-전체 환경을 한 번에 실행하려면:
-
-```bash
-# 루트 디렉토리에서
-docker-compose up -d
-
-# 로그 확인
-docker-compose logs -f
-
-# 서비스 중지
-docker-compose down
-```
-
 ---
 
 ## 💻 My Main Technologies
 📱 **Frontend**: Flutter/Dart - 크로스플랫폼 모바일 앱 개발  
 🌐 **Backend**: Spring Boot/Java - RESTful API 서버 및 인증 시스템  
-🧠 **AI Server**: Python/FastAPI - AI 모델 통합 및 처리  
 🗄️ **Database**: PostgreSQL - 관계형 데이터베이스 설계 및 관리  
-☁️ **DevOps**: AWS (EC2, RDS, S3) - 클라우드 인프라 구축  
 
 ---
 
