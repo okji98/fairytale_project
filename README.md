@@ -362,7 +362,7 @@ docker run --name fairytale-db \
 
 #### 4. **백엔드 서버 실행**
 ```bash
-cd fairytale_backend
+cd spring_boot
 
 # 의존성 설치 및 빌드
 ./gradlew build
@@ -373,7 +373,7 @@ cd fairytale_backend
 
 #### 5. **AI 서버 실행**
 ```bash
-cd fairytale_python
+cd python
 
 # Python 가상환경 생성
 python -m venv venv
@@ -388,7 +388,7 @@ uvicorn ai_server:app --host 0.0.0.0 --port 8001 --reload
 
 #### 6. **Flutter 앱 실행**
 ```bash
-cd fairytale_flutter
+cd flutter
 
 # Flutter 의존성 설치
 flutter pub get
@@ -400,7 +400,7 @@ flutter run
 ### 🌐 접속 확인
 - **📱 Flutter 앱**: 에뮬레이터 또는 실제 기기에서 실행
 - **🌐 Spring Boot API**: http://localhost:8080
-- **🧠 Python AI API**: http://localhost:8001
+- **🧠 Python AI API**: http://localhost:8000
 - **📄 API 문서**: http://localhost:8080/swagger-ui.html
 
 ### 🔧 개발 도구 추천
